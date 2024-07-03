@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
 import glob
-import re
 import os
 import pandas
+import re
 import subprocess
 
 def main():
     # Destination path
     log_path = "/Volumes/volume0/rv/data_log"
     
-    # Create subfolders
+    # Create destination subfolders
     os.makedirs(log_path + "/config", exist_ok=True)
     os.makedirs(log_path + "/flight", exist_ok=True)
     os.makedirs(log_path + "/taxi", exist_ok=True)
@@ -48,20 +48,24 @@ def main():
         # Parse CSV
         df = pandas.read_csv(log, skiprows=[0,2])
         
-        # If file has zero data, recommend deleting
         if df.empty:
+            # If file has zero data, recommend deleting, for now just skip
             print("empty: ", log)
         else:
             if df["Oil Press (PSI)"].max() < 1:
+                # If no oil pressure in all of log, assume this session was testing/configuration
                 dest_path = log_path + "/config/"
                 print("config:", log)
             elif df["GPS Ground Speed (kt)"].max() < 50:
+                # If airplane did not achieve a ground speed sufficient for flight, assume taxi-only
                 dest_path = log_path + "/taxi/"
                 print("taxi:  ", log)
             else:
+                # Otherwise, the airplane was flying
                 dest_path = log_path + "/flight/"
                 print("flight:", log)
 
+            # Call rsync to copy the file into the correct destination path
             subprocess.call(["rsync", "-t", "--ignore-existing", log, dest_path])
 
 if __name__ == "__main__":
