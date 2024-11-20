@@ -7,13 +7,12 @@ import pyproj
 import sqlite3
 
 class router(astar.AStar):
-    def __init__(self, filename, route_preferences, max_leg_length):
-        # Store the database connection and cursor
-        self.db = sqlite3.connect(filename)
-        self.cur = self.db.cursor()
-
+    def __init__(self, waypoints, route_preferences, max_leg_length):
         # Using WGS84
         self.geod = pyproj.Geod(ellps='WGS84')
+
+        # Store the waypoints
+        self.waypoints = waypoints
 
         # Store the route preferences
         self.route_preferences = route_preferences
@@ -21,10 +20,6 @@ class router(astar.AStar):
 
         # Set costs
         self.costs = { "PREFER": 0.8, "INCLUDE": 1.0, "AVOID": 1.25, "REJECT": 1000.0 }
-
-        # Build an in-memory cache of ids to waypoint data
-        self.cur.execute("SELECT rowid, waypoint_id, waypoint_type, lat_decimal, long_decimal FROM waypoints")
-        self.waypoints = {id: (waypoint_id, waypoint_type, lat, lon) for id, waypoint_id, waypoint_type, lat, lon in self.cur.fetchall()}
 
     def __del__(self):
         self.db.close()
@@ -154,30 +149,34 @@ def main():
     # Calculate maximum leg length in meters
     max_leg_length = args.max_leg_length * 1852
 
+    # Ingest waypoints table
+    with sqlite3.connect(args.db) as db:
+        cur = db.cursor()
+
+        # Build an in-memory cache of ids to waypoint data
+        cur.execute("SELECT rowid, waypoint_id, waypoint_type, lat_decimal, long_decimal FROM waypoints")
+        waypoints = {id: (waypoint_id, waypoint_type, lat, lon) for id, waypoint_id, waypoint_type, lat, lon in cur.fetchall()}
+
     # Initialize the router
-    r = router(args.db, route_preferences, max_leg_length)
+    r = router(waypoints, route_preferences, max_leg_length)
 
     # Get the origin id, and print an error if it does not exist
-    r.cur.execute('SELECT rowid FROM waypoints WHERE waypoint_id=? AND waypoint_type IN ("A", "B", "C", "G", "H", "U")', (args.origin,))
-    origin_id = r.cur.fetchone()
-    if origin_id:
-        origin_id = origin_id[0]
-    else:
+    origin_id = next((id for id, (waypoint_id, waypoint_type, _, _) in r.waypoints.items() if waypoint_id == args.origin and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
+    if not origin_id:
         parser.error(f"Origin airport '{args.origin}' not found")
 
     # Get the destination id, and print an error if it does not exist
-    r.cur.execute('SELECT rowid FROM waypoints WHERE waypoint_id=? AND waypoint_type IN ("A", "B", "C", "G", "H", "U")', (args.destination,))
-    destination_id = r.cur.fetchone()
-    if destination_id:
-        destination_id = destination_id[0]
-    else:
+    destination_id = next((id for id, (waypoint_id, waypoint_type, _, _) in r.waypoints.items() if waypoint_id == args.destination and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
+    if not destination_id:
         parser.error(f"Destination airport '{args.destination}' not found")
 
     # Map waypoint_id to id all vias
-    r.cur.execute('SELECT rowid FROM waypoints WHERE waypoint_id IN ({}) AND waypoint_type NOT IN ("MR", "RP", "WP")'.format(','.join('?' for _ in args.via)), args.via)
-    via_ids = [id[0] for id in r.cur.fetchall()]
-    if len(via_ids) != len(args.via):
-        parser.error(f"One or more vias not found")
+    via_ids = []
+    for via in args.via:
+        via_id = next((id for id, (waypoint_id, waypoint_type, _, _) in r.waypoints.items() if waypoint_id == via and waypoint_type not in ("MR", "RP", "WP")), None)
+        if not via_id:
+            parser.error(f"Via waypoint '{via}' not found")
+        via_ids.append(via_id)
 
     # Calculate candidate route list
     candidate_routes = [[origin_id] + list(perm) + [destination_id] for perm in itertools.permutations(via_ids)]
