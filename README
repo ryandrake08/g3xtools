@@ -1,0 +1,34 @@
+# Getting Started
+
+Welcome to the FPlan project! This guide will help you get started with setting up and running the project.
+
+## Prerequisites
+
+Before you begin, ensure you have met the following requirements:
+- You have installed a recent version of [Python](https://www.python.org/downloads/).
+- You have a working internet connection.
+- You have the following Python dependencies installed, recommend using pip in a venv:
+    - `astar`
+    - `pyproj`
+    - `beautifulsoup4`
+
+## Initial Setup
+
+To set up the project's database, you need to:
+
+1. Download current NASR data from FAA:
+    ```sh
+    python3 nasr.py --current
+    ```
+
+2. Build an initial database from the NASR data. This should take about 45 seconds and generate about 90MB of data:
+    ```sh
+    python3 makedb.py <filename downloaded above>
+    ```
+
+## Usage
+
+Try some routes:
+    ```sh
+    python3 plan.py KHAF KUAO
+    ```

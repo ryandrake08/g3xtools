@@ -7,7 +7,7 @@ import pyproj
 import sqlite3
 
 class router(astar.AStar):
-    def __init__(self, filename):
+    def __init__(self, filename, route_preferences, max_leg_length):
         # Store the database connection and cursor
         self.db = sqlite3.connect(filename)
         self.cur = self.db.cursor()
@@ -15,56 +15,116 @@ class router(astar.AStar):
         # Using WGS84
         self.geod = pyproj.Geod(ellps='WGS84')
 
+        # Store the route preferences
+        self.route_preferences = route_preferences
+        self.max_leg_length = max_leg_length
+
+        # Set costs
+        self.costs = { "PREFER": 0.8, "INCLUDE": 1.0, "AVOID": 1.25, "REJECT": 1000.0 }
+
         # Build an in-memory cache of ids to waypoint data
-        self.cur.execute("SELECT id, waypoint_id, lat_decimal, long_decimal FROM waypoints")
-        self.waypoints = {id: (waypoint_id, lat, lon) for id, waypoint_id, lat, lon in self.cur.fetchall()}
+        self.cur.execute("SELECT id, waypoint_id, waypoint_type, lat_decimal, long_decimal FROM waypoints")
+        self.waypoints = {id: (waypoint_id, waypoint_type, lat, lon) for id, waypoint_id, waypoint_type, lat, lon in self.cur.fetchall()}
 
     def __del__(self):
         self.db.close()
 
+    def node_string(self, id):
+        return self.waypoints[id][0] + " (" + self.waypoints[id][1] + ")"
+
     def neighbors(self, node):
-        print(f"neighbors node: {node}")
+        print(f"neighbors: {node}: ", end="")
+
+        # Get the neighbors of the current node
         self.cur.execute("SELECT id1, id2 FROM neighbors WHERE id1=? OR id2=?", (node, node))
         neighbors = [id2 if id1 == node else id1 for id1, id2 in self.cur.fetchall()]
+
+        print(f"{len(neighbors)} -> ", end="")
+
+        # Filter out neighbors based on route preferences
+        neighbors = [n for n in neighbors if self.route_preferences[self.waypoints[n][1]] != 'REJECT']
+
+        print(len(neighbors))
         return neighbors
 
     def distance_between(self, n1, n2):
+        print(f"distance_between {self.node_string(n1)} -> {self.node_string(n2)}: ", end="")
+
+        # Trivial case: same node
         if n1 == n2:
+            print(0)
             return 0
-        # Get position of each node from the cache
-        _, lat1, lon1 = self.waypoints[n1]
-        _, lat2, lon2 = self.waypoints[n2]
-        return self.geod.inv(lon1, lat1, lon2, lat2)[2]
+
+        # Get information about each node from the cache
+        _, type1, lat1, lon1 = self.waypoints[n1]
+        _, type2, lat2, lon2 = self.waypoints[n2]
+
+        # Calculate the distance between the two points
+        distance = self.geod.inv(lon1, lat1, lon2, lat2)[2]
+
+        # Calculate total cost
+        if distance > self.max_leg_length:
+            cost = self.costs["REJECT"]
+        else:
+            cost = self.costs[self.route_preferences[type1]] * self.costs[self.route_preferences[type2]]
+
+        print(f"{distance} (cost: {cost})")
+        return distance * cost
 
     def heuristic_cost_estimate(self, n1, n2):
-        return self.distance_between(n1, n2)
+        print(f"heuristic_cost_estimate {self.node_string(n1)} -> {self.node_string(n2)}: ", end="")
+
+        # Trivial case: same node
+        if n1 == n2:
+            print(0)
+            return 0
+
+        # Get information about each node from the cache
+        _, _, lat1, lon1 = self.waypoints[n1]
+        _, _, lat2, lon2 = self.waypoints[n2]
+
+        # Calculate the distance between the two points and adjust based on the cost
+        distance = self.geod.inv(lon1, lat1, lon2, lat2)[2]
+
+        # Use most favorable possible cost
+        cost = self.costs["PREFER"] * self.costs["PREFER"]
+
+        print(f"{distance} (cost: {cost})")
+        return distance * cost
 
     def is_goal_reached(self, current, goal):
-        print(f"current: {current}, goal: {goal}")
+        print(f"is_goal_reached: current: {self.node_string(current)}, goal: {self.node_string(goal)}")
         return current == goal
 
 def main():
+    # Choices for route preferences
+    route_choices = ['PREFER', 'INCLUDE', 'AVOID', 'REJECT']
+
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Download NASR data.')
     parser.add_argument('--db', default='fplan.db', help='Specify the database filename. Uses fpaln.db if not provided.')
-    parser.add_argument('--direct', action='store_true', help='Generate a direct flight plan. This is the default if no other route type is specified.')
-    parser.add_argument('--p2p', action='store_true', help='Generate a point-to-point flight plan')
-    parser.add_argument('--airway', action='store_true', help='Generate a flight plan using airways')
-    parser.add_argument('--include-airport', action='store_true', help='Include airports in point-to-point flight plan')
-    parser.add_argument('--include-balloonport', action='store_true', help='Include balloonports in point-to-point flight plan')
-    parser.add_argument('--include-gliderport', action='store_true', help='Include gliderports in point-to-point flight plan')
-    parser.add_argument('--include-heliport', action='store_true', help='Include heliports in point-to-point flight plan')
-    parser.add_argument('--include-seaplane-base', action='store_true', help='Include seaplane bases in point-to-point flight plan')
-    parser.add_argument('--include-ultralight', action='store_true', help='Include ultralight aerodromes in point-to-point flight plan')
-    parser.add_argument('--include-dme', action='store_true', help='Include DMEs in point-to-point flight plan')
-    parser.add_argument('--include-ndb', action='store_true', help='Include NDBs, NDB/DMEs, and UHF/NDBs in point-to-point flight plan')
-    parser.add_argument('--include-vortac', action='store_true', help='Include VORTACs and TACANs in point-to-point flight plan')
-    parser.add_argument('--include-vor', action='store_true', help='Include VORs in point-to-point flight plan')
-    parser.add_argument('--include-cns', action='store_true', help='Include CNSs in point-to-point flight plan')
-    parser.add_argument('--include-reporting-point', action='store_true', help='Include reporting points in point-to-point flight plan')
-    parser.add_argument('--include-vfr-waypoint', action='store_true', help='Include VFR waypoints in point-to-point flight plan')
-    parser.add_argument('--include-waypoint', action='store_true', help='Include waypoints in point-to-point flight plan')
-    parser.add_argument('--via', action='append', help='Create a route via a specific waypoint', default=[])
+
+    parser.add_argument('--route-airport',       choices=route_choices, default='INCLUDE', help='Specify how to handle airports in the route')
+    parser.add_argument('--route-balloonport',   choices=route_choices, default='REJECT',  help='Specify how to handle balloonports in the route')
+    parser.add_argument('--route-seaplane-base', choices=route_choices, default='REJECT',  help='Specify how to handle seaplane bases in the route')
+    parser.add_argument('--route-gliderport',    choices=route_choices, default='REJECT',  help='Specify how to handle gliderports in the route')
+    parser.add_argument('--route-heliport',      choices=route_choices, default='REJECT',  help='Specify how to handle heliports in the route')
+    parser.add_argument('--route-ultralight',    choices=route_choices, default='REJECT',  help='Specify how to handle ultralight aerodromes in the route')
+    parser.add_argument('--route-cns',           choices=route_choices, default='REJECT',  help='Specify how to handle CNSs in the route')
+    parser.add_argument('--route-vfr-waypoint',  choices=route_choices, default='INCLUDE', help='Specify how to handle VFR waypoints in the route')
+    parser.add_argument('--route-dme',           choices=route_choices, default='REJECT',  help='Specify how to handle DMEs in the route')
+    parser.add_argument('--route-ndb',           choices=route_choices, default='REJECT',  help='Specify how to handle NDBs in the route')
+    parser.add_argument('--route-ndbdme',        choices=route_choices, default='REJECT',  help='Specify how to handle NDBs in the route')
+    parser.add_argument('--route-tacan',         choices=route_choices, default='REJECT',  help='Specify how to handle VORTACs in the route')
+    parser.add_argument('--route-uhfndb',        choices=route_choices, default='REJECT',  help='Specify how to handle UHF/NDBs in the route')
+    parser.add_argument('--route-vor',           choices=route_choices, default='INCLUDE', help='Specify how to handle VORs in the route')
+    parser.add_argument('--route-vortac',        choices=route_choices, default='INCLUDE', help='Specify how to handle VORTACs in the route')
+    parser.add_argument('--route-vordme',        choices=route_choices, default='INCLUDE', help='Specify how to handle VORs in the route')
+
+    parser.add_argument('--max-leg-length', type=float, default=100, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
+
+    parser.add_argument('--direct', action='store_true', help='Generate a direct flight plan between origin and destination, via any optional vias')
+    parser.add_argument('--via', action='append', help='Generated route must include this waypoint', default=[])
     parser.add_argument('origin', help='Origin airport code')
     parser.add_argument('destination', help='Destination airport code')
     args = parser.parse_args()
@@ -73,23 +133,59 @@ def main():
     if not args.origin or not args.destination:
         parser.error("You must specify an origin and destination")
 
+    # Create a mapping from waypoint type to route preference
+    route_preferences = {
+        'A': args.route_airport,
+        'B': args.route_balloonport,
+        'C': args.route_seaplane_base,
+        'G': args.route_gliderport,
+        'H': args.route_heliport,
+        'U': args.route_ultralight,
+        'CN': args.route_cns,
+        'MR': "INCLUDE",
+        'RP': "INCLUDE",
+        'VFR': args.route_vfr_waypoint,
+        'WP': "INCLUDE",
+        'DME': args.route_dme,
+        'NDB': args.route_ndb,
+        'NDB/DME': args.route_ndbdme,
+        'TACAN': args.route_tacan,
+        'UHF/NDB': args.route_uhfndb,
+        'VOR': args.route_vor,
+        'VORTAC': args.route_vortac,
+        'VOR/DME': args.route_vordme
+    }
+
+    # Calculate maximum leg length in meters
+    max_leg_length = args.max_leg_length * 1852
+
     # Initialize the router
-    r = router(args.db)
+    r = router(args.db, route_preferences, max_leg_length)
 
-    # Map waypoint_id to id for origin, destination, and all vias
-    waypoint_ids = [args.origin, args.destination] + args.via
-    r.cur.execute('SELECT id, waypoint_id FROM waypoints WHERE waypoint_id IN ({})'.format(','.join('?' for _ in waypoint_ids)), waypoint_ids)
-    waypoint_map = {waypoint_id: id for id, waypoint_id in r.cur.fetchall()}
+    # Get the origin id, and print an error if it does not exist
+    r.cur.execute('SELECT id FROM waypoints WHERE waypoint_id=? AND waypoint_type IN ("A", "B", "C", "G", "H", "U")', (args.origin,))
+    origin_id = r.cur.fetchone()
+    if origin_id:
+        origin_id = origin_id[0]
+    else:
+        parser.error(f"Origin airport '{args.origin}' not found")
 
-    origin = waypoint_map[args.origin]
-    destination = waypoint_map[args.destination]
-    vias = [waypoint_map[waypoint_id] for waypoint_id in args.via]
+    # Get the destination id, and print an error if it does not exist
+    r.cur.execute('SELECT id FROM waypoints WHERE waypoint_id=? AND waypoint_type IN ("A", "B", "C", "G", "H", "U")', (args.destination,))
+    destination_id = r.cur.fetchone()
+    if destination_id:
+        destination_id = destination_id[0]
+    else:
+        parser.error(f"Destination airport '{args.destination}' not found")
+
+    # Map waypoint_id to id all vias
+    r.cur.execute('SELECT id FROM waypoints WHERE waypoint_id IN ({}) AND waypoint_type NOT IN ("MR", "RP", "WP")'.format(','.join('?' for _ in args.via)), args.via)
+    via_ids = [id[0] for id in r.cur.fetchall()]
+    if len(via_ids) != len(args.via):
+        parser.error(f"One or more vias not found")
 
     # Calculate candidate route list
-    candidate_routes = [[origin, destination]]
-    if vias:
-        # Put each permutation of via between origin and destination
-        candidate_routes = [[origin] + list(perm) + [destination] for perm in itertools.permutations(vias)]
+    candidate_routes = [[origin_id] + list(perm) + [destination_id] for perm in itertools.permutations(via_ids)]
 
     # For each candidate route, calculate the total distance
     routes_and_distances = [(route, sum(r.distance_between(start, end) for start, end in itertools.pairwise(route))) for route in candidate_routes]
@@ -98,7 +194,7 @@ def main():
     route, _ = min(routes_and_distances, key=lambda x: x[1])
 
     # Generate a point-to-point flight plan
-    if args.p2p:
+    if not args.direct:
         # Find the route between each pair of waypoints
         for start, end in itertools.pairwise(route):
             subroute = r.astar(start, end)
@@ -108,8 +204,7 @@ def main():
 
     # Output the flight plan
     if route:
-        waypoint_ids = [r.waypoints[id][0] for id in route]
-        print(" ".join(waypoint_ids))
+        print(" ".join(r.waypoints[id][0] for id in route))
     else:
         print("No route found")
 

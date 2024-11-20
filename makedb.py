@@ -1,11 +1,13 @@
  #!/usr/bin/env python3
 
 """
-This script processes NASR data and stores it in an SQLite database.
+This script processes NASR data and stores it in an SQLite database. It also builds a neighbors table
+to track connections between waypoints.
 
 Database tables:
     - waypoints: Stores waypoint data with columns for waypoint ID, type, latitude, and longitude.
     - airways: Stores airway data with columns for airway ID, location, designation, and airway string.
+    - neighbors: Stores connections between waypoints with columns for two waypoint IDs and a type.
 
 CSV files processed:
     - APT_BASE.csv: Contains airport waypoint data.
@@ -16,10 +18,13 @@ CSV files processed:
 Command line arguments:
     --filename: Specify the NASR data filename.
     --db: Specify the database filename. Uses 'fplan.db' if not provided.
+    --max-leg-length: Specify the maximum leg length for direct neighbors, in nautical miles. Default is 100.
+                      Note: This value largely drives the size of the database and the performance of flight planning.
 
 Usage:
     python makedb.py --filename <filename>
     python makedb.py --filename <filename> --db <database>
+    python makedb.py --filename <filename> --max-leg-length <length>
 
 Raises:
     FileNotFoundError: If the specified NASR data file is not found.
@@ -30,7 +35,9 @@ import argparse
 import csv
 import io
 import os
+import pyproj
 import sqlite3
+import itertools
 import zipfile
 
 def main():
@@ -38,10 +45,14 @@ def main():
     parser = argparse.ArgumentParser(description='Download NASR data.')
     parser.add_argument('--filename', help='Specify the NASR data filename.')
     parser.add_argument('--db', default='fplan.db', help='Specify the database filename. Uses fpaln.db if not provided.')
+    parser.add_argument('--max-leg-length', type=float, default=100, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
     args = parser.parse_args()
 
     # Set filename
     filename = args.filename if args.filename else None
+
+    # Calculate maximum leg length in meters
+    max_leg_length = args.max_leg_length * 1852
 
     # Delete old db file if it exists
     os.remove(args.db) if os.path.exists(args.db) else None
@@ -52,35 +63,38 @@ def main():
 
         # waypoint_type:
 
-        # A = Airport
-        # B = Balloonport
-        # C = Seaplane Base
-        # G = Gliderport
-        # H = Heliport
-        # U = Ultralight
+        # [-] means type is not included in database
+        # [/] means type is not direct-routeable
 
-        # CN = Computer Navigation Fix
-        # MR = Military Reporting Point
-        # MW = Military Waypoint
-        # NRS = NRS Waypoint
-        # RADAR = Radar
-        # RP = Reporting Point
-        # VFR = VFR Waypoint
-        # WP = Waypoint
+        #     A = Airport
+        #     B = Balloonport
+        #     C = Seaplane Base
+        #     G = Gliderport
+        #     H = Heliport
+        #     U = Ultralight
 
-        # CONSOLAN = A Low Frequency, Long-Distance NAVAID Used Principally for Transoceanic navigation.
-        # DME = Distance Measuring Equipment only.
-        # FAN MARKER = There are 3 types of EN ROUTE Market Beacons. FAN MARKER, Low powered FAN MARKERS and Z MARKERS. A FAN MARKER Is used to provide a positive identification of positions at Definite points along the airways.
-        # MARINE NDB = A NON Directional Beacon used primarily for Marine (surface) Navigation.
-        # MARINE NDB/DME = A NON Directional Beacon with associated Distance measuring Equipment; used primarily for Marine (surface) Navigation.
-        # NDB = A NON Directional Beacon
-        # NDB/DME = Non Directional Beacon with associated Distance Measuring Equipment.
-        # TACAN = A Tactical Air Navigation System providing Azimuth and Slant Range Distance.
-        # UHF/NDB = Ultra High Frequency/NON Directional Beacon.
-        # VOR = A VHF OMNI-Directional Range providing Azimuth only.
-        # VORTAC = A Facility consisting of two components, VOR and TACAN, Which provides three individual services: VOR AZIMITH, TACAN AZIMUTH and TACAN Distance (DME) at one site.
-        # VOR/DME = VHF OMNI-DIRECTIONAL Range with associated Distance Measuring equipment.
-        # VOT = A FAA VOR Test Facility.
+        #     CN = Computer Navigation Fix
+        # [/] MR = Military Reporting Point
+        # [-] MW = Military Waypoint
+        # [-] NRS = NRS Waypoint
+        # [-] RADAR = Radar
+        # [/] RP = Reporting Point
+        #     VFR = VFR Waypoint
+        # [/] WP = Waypoint
+
+        # [-] CONSOLAN = A Low Frequency, Long-Distance NAVAID Used Principally for Transoceanic navigation.
+        #     DME = Distance Measuring Equipment only.
+        # [-] FAN MARKER = There are 3 types of EN ROUTE Market Beacons. FAN MARKER, Low powered FAN MARKERS and Z MARKERS. A FAN MARKER Is used to provide a positive identification of positions at Definite points along the airways.
+        # [-] MARINE NDB = A NON Directional Beacon used primarily for Marine (surface) Navigation.
+        # [-] MARINE NDB/DME = A NON Directional Beacon with associated Distance measuring Equipment; used primarily for Marine (surface) Navigation.
+        #     NDB = A NON Directional Beacon
+        #     NDB/DME = Non Directional Beacon with associated Distance Measuring Equipment.
+        #     TACAN = A Tactical Air Navigation System providing Azimuth and Slant Range Distance.
+        #     UHF/NDB = Ultra High Frequency/NON Directional Beacon.
+        #     VOR = A VHF OMNI-Directional Range providing Azimuth only.
+        #     VORTAC = A Facility consisting of two components, VOR and TACAN, Which provides three individual services: VOR AZIMITH, TACAN AZIMUTH and TACAN Distance (DME) at one site.
+        #     VOR/DME = VHF OMNI-DIRECTIONAL Range with associated Distance Measuring equipment.
+        # [-] VOT = A FAA VOR Test Facility.
 
         # Create waypoint table
         cur.execute('''
@@ -92,6 +106,26 @@ def main():
                 long_decimal REAL NOT NULL
             )
         ''')
+
+        # airway_location:
+
+        #     A = Alaska
+        #     C = Contiguous U.S.
+        #     H = Hawaii
+
+        # airway_designation:
+
+        #     A = Amber colored airway
+        #     AT = Atlantic airway
+        #     B = Blue colored airway
+        #     BF = Bahama airway
+        #     G = Green colored airway
+        #     J = Jet airway
+        #     PA = Pacific airway
+        #     PR = Puerto Rico airway
+        #     R = Red colored airway
+        #     RN = RNAV airway (tango and quebec airways)
+        #     V = Victor airway
 
         # Create airway table
         cur.execute('''
@@ -146,9 +180,67 @@ def main():
                     for file_name, table_name, columns in files_to_process:
                         process_csv_file(csv_archive, file_name, table_name, columns)
 
-                    # Delete unneeded waypoint_types
-                    cur.execute('DELETE FROM waypoints WHERE waypoint_type IN ("MW", "NRS", "RADAR", "CONSOLAN", "FAN MARKER", "MARINE NDB", "MARINE NDB/DME", "VOT")')
                     db.commit()
+
+        # Using WGS84
+        geod = pyproj.Geod(ellps='WGS84')
+
+        # Delete unneeded waypoint_types
+        cur.execute('DELETE FROM waypoints WHERE waypoint_type IN ("MW", "NRS", "RADAR", "CONSOLAN", "FAN MARKER", "MARINE NDB", "MARINE NDB/DME", "VOT")')
+
+        # Create the neighbors table if it does not exist
+        cur.execute('CREATE TABLE neighbors (id1 INTEGER NOT NULL, id2 INTEGER NOT NULL, type INTEGER)')
+
+        # Fetch all direct-routeable waypoints
+        cur.execute('SELECT id, lat_decimal, long_decimal FROM waypoints WHERE waypoint_type NOT IN ("MR", "RP", "WP")')
+        waypoints = cur.fetchall()
+
+        # Generate dictionary of bounding boxes
+        bounding_boxes = {}
+        for id, lat, lon in waypoints:
+            # Construct bounding box around the current waypoint
+            (east, north, _) = geod.fwd(lon, lat, 45, max_leg_length * 1.414213562373095)
+            (west, south, _) = geod.fwd(lon, lat, 225, max_leg_length * 1.414213562373095)
+            bounding_boxes[id] = (south, north, west, east)
+
+        # Calculate distances and insert into ways table
+        neighbors_to_insert = []
+        for (id, lat, lon), (nid, neighbor_lat, neighbor_lon) in itertools.combinations(waypoints, 2):
+            # Bounding box around current waypoint
+            (south, north, west, east) = bounding_boxes[id]
+
+            # Find neighbors within the bounding box
+            if south <= neighbor_lat <= north and west <= neighbor_lon <= east:
+                neighbors_to_insert.append((id, nid, None))
+
+        # Insert into neighbors table
+        if neighbors_to_insert:
+            cur.executemany('INSERT INTO neighbors (id1, id2, type) VALUES (?, ?, ?)', neighbors_to_insert)
+
+        # Commit changes
+        db.commit()
+
+        # Fetch all waypoints
+        cur.execute('SELECT id, waypoint_id FROM waypoints')
+        waypoint_id_to_id = {waypoint_id: id for id, waypoint_id in cur.fetchall()}
+
+        # Fetch all airways
+        cur.execute('SELECT id, airway_string FROM airways')
+        airways = cur.fetchall()
+
+        # For each airway
+        for aid, airway_string in airways:
+            # Build the list of row ids from waypoint ids while preserving order
+            wids = [waypoint_id_to_id[waypoint_id] for waypoint_id in airway_string.split()]
+
+            # Insert each neighbor pairwise
+            neighbors_to_insert = [(wid1, wid2, aid) for wid1, wid2 in itertools.pairwise(wids)]
+
+            # Insert into neighbors table
+            cur.executemany('INSERT INTO neighbors (id1, id2, type) VALUES (?, ?, ?)', neighbors_to_insert)
+
+        # Commit changes
+        db.commit()
 
 if __name__ == '__main__':
     main()
