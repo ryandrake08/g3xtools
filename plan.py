@@ -23,7 +23,7 @@ class router(astar.AStar):
         self.costs = { "PREFER": 0.8, "INCLUDE": 1.0, "AVOID": 1.25, "REJECT": 1000.0 }
 
         # Build an in-memory cache of ids to waypoint data
-        self.cur.execute("SELECT id, waypoint_id, waypoint_type, lat_decimal, long_decimal FROM waypoints")
+        self.cur.execute("SELECT rowid, waypoint_id, waypoint_type, lat_decimal, long_decimal FROM waypoints")
         self.waypoints = {id: (waypoint_id, waypoint_type, lat, lon) for id, waypoint_id, waypoint_type, lat, lon in self.cur.fetchall()}
 
     def __del__(self):
@@ -38,6 +38,9 @@ class router(astar.AStar):
         # Get the neighbors of the current node
         self.cur.execute("SELECT id1, id2 FROM neighbors WHERE id1=? OR id2=?", (node, node))
         neighbors = [id2 if id1 == node else id1 for id1, id2 in self.cur.fetchall()]
+
+        # Filter our duplicate neighbors
+        neighbors = list(set(neighbors))
 
         print(f"{len(neighbors)} -> ", end="")
 
@@ -163,7 +166,7 @@ def main():
     r = router(args.db, route_preferences, max_leg_length)
 
     # Get the origin id, and print an error if it does not exist
-    r.cur.execute('SELECT id FROM waypoints WHERE waypoint_id=? AND waypoint_type IN ("A", "B", "C", "G", "H", "U")', (args.origin,))
+    r.cur.execute('SELECT rowid FROM waypoints WHERE waypoint_id=? AND waypoint_type IN ("A", "B", "C", "G", "H", "U")', (args.origin,))
     origin_id = r.cur.fetchone()
     if origin_id:
         origin_id = origin_id[0]
@@ -171,7 +174,7 @@ def main():
         parser.error(f"Origin airport '{args.origin}' not found")
 
     # Get the destination id, and print an error if it does not exist
-    r.cur.execute('SELECT id FROM waypoints WHERE waypoint_id=? AND waypoint_type IN ("A", "B", "C", "G", "H", "U")', (args.destination,))
+    r.cur.execute('SELECT rowid FROM waypoints WHERE waypoint_id=? AND waypoint_type IN ("A", "B", "C", "G", "H", "U")', (args.destination,))
     destination_id = r.cur.fetchone()
     if destination_id:
         destination_id = destination_id[0]
@@ -179,7 +182,7 @@ def main():
         parser.error(f"Destination airport '{args.destination}' not found")
 
     # Map waypoint_id to id all vias
-    r.cur.execute('SELECT id FROM waypoints WHERE waypoint_id IN ({}) AND waypoint_type NOT IN ("MR", "RP", "WP")'.format(','.join('?' for _ in args.via)), args.via)
+    r.cur.execute('SELECT rowid FROM waypoints WHERE waypoint_id IN ({}) AND waypoint_type NOT IN ("MR", "RP", "WP")'.format(','.join('?' for _ in args.via)), args.via)
     via_ids = [id[0] for id in r.cur.fetchall()]
     if len(via_ids) != len(args.via):
         parser.error(f"One or more vias not found")

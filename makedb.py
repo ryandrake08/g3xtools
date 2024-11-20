@@ -99,7 +99,6 @@ def main():
         # Create waypoint table
         cur.execute('''
             CREATE TABLE IF NOT EXISTS waypoints (
-                id INTEGER PRIMARY KEY,
                 waypoint_id TEXT NOT NULL,
                 waypoint_type TEXT NOT NULL,
                 lat_decimal REAL NOT NULL,
@@ -130,7 +129,6 @@ def main():
         # Create airway table
         cur.execute('''
             CREATE TABLE IF NOT EXISTS airways (
-                id INTEGER PRIMARY KEY,
                 airway_id TEXT NOT NULL,
                 airway_location TEXT NOT NULL,
                 airway_designation TEXT NOT NULL,
@@ -192,7 +190,7 @@ def main():
         cur.execute('CREATE TABLE neighbors (id1 INTEGER NOT NULL, id2 INTEGER NOT NULL, type INTEGER)')
 
         # Fetch all direct-routeable waypoints
-        cur.execute('SELECT id, lat_decimal, long_decimal FROM waypoints WHERE waypoint_type NOT IN ("MR", "RP", "WP")')
+        cur.execute('SELECT rowid, lat_decimal, long_decimal FROM waypoints WHERE waypoint_type NOT IN ("MR", "RP", "WP")')
         waypoints = cur.fetchall()
 
         # Generate dictionary of bounding boxes
@@ -221,11 +219,11 @@ def main():
         db.commit()
 
         # Fetch all waypoints
-        cur.execute('SELECT id, waypoint_id FROM waypoints')
+        cur.execute('SELECT rowid, waypoint_id FROM waypoints')
         waypoint_id_to_id = {waypoint_id: id for id, waypoint_id in cur.fetchall()}
 
         # Fetch all airways
-        cur.execute('SELECT id, airway_string FROM airways')
+        cur.execute('SELECT rowid, airway_string FROM airways')
         airways = cur.fetchall()
 
         # For each airway
