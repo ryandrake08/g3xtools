@@ -164,8 +164,6 @@ def main():
                                 values = tuple(values)
                                 cur.execute(f'INSERT INTO {table_name} ({', '.join(col for _, col in columns)}) VALUES ({', '.join(['?' for _ in columns])})', values)
 
-                            db.commit()
-
                     # Define the files and their corresponding table and columns
                     files_to_process = [
                         ('APT_BASE.csv', 'waypoints', [('ARPT_ID', 'waypoint_id'), ('SITE_TYPE_CODE', 'waypoint_type'), ('LAT_DECIMAL', 'lat_decimal'), ('LONG_DECIMAL', 'long_decimal')]),
@@ -177,8 +175,6 @@ def main():
                     # Process each file
                     for file_name, table_name, columns in files_to_process:
                         process_csv_file(csv_archive, file_name, table_name, columns)
-
-                    db.commit()
 
         # Using WGS84
         geod = pyproj.Geod(ellps='WGS84')
@@ -215,9 +211,6 @@ def main():
         if neighbors_to_insert:
             cur.executemany('INSERT INTO neighbors (id1, id2, type) VALUES (?, ?, ?)', neighbors_to_insert)
 
-        # Commit changes
-        db.commit()
-
         # Fetch all waypoints
         cur.execute('SELECT rowid, waypoint_id FROM waypoints')
         waypoint_id_to_id = {waypoint_id: id for id, waypoint_id in cur.fetchall()}
@@ -236,9 +229,6 @@ def main():
 
             # Insert into neighbors table
             cur.executemany('INSERT INTO neighbors (id1, id2, type) VALUES (?, ?, ?)', neighbors_to_insert)
-
-        # Commit changes
-        db.commit()
 
 if __name__ == '__main__':
     main()
