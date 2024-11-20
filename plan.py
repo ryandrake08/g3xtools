@@ -33,29 +33,19 @@ class router(astar.AStar):
         return self.waypoints[id][0] + " (" + self.waypoints[id][1] + ")"
 
     def neighbors(self, node):
-        print(f"neighbors: {node}: ", end="")
+        # Construct bounding box around the current waypoint
+        _, _, lat, lon = self.waypoints[node]
+        (east, north, _) = self.geod.fwd(lon, lat, 45, self.max_leg_length * 1.414213562373095)
+        (west, south, _) = self.geod.fwd(lon, lat, 225, self.max_leg_length * 1.414213562373095)
 
         # Get the neighbors of the current node
-        self.cur.execute("SELECT id1, id2 FROM neighbors WHERE id1=? OR id2=?", (node, node))
-        neighbors = [id2 if id1 == node else id1 for id1, id2 in self.cur.fetchall()]
+        neighbors = [id for id, (_, waypoint_type, lat, lon) in self.waypoints.items() if south <= lat <= north and west <= lon <= east and self.route_preferences[waypoint_type] != 'REJECT']
 
-        # Filter our duplicate neighbors
-        neighbors = list(set(neighbors))
-
-        print(f"{len(neighbors)} -> ", end="")
-
-        # Filter out neighbors based on route preferences
-        neighbors = [n for n in neighbors if self.route_preferences[self.waypoints[n][1]] != 'REJECT']
-
-        print(len(neighbors))
         return neighbors
 
     def distance_between(self, n1, n2):
-        print(f"distance_between {self.node_string(n1)} -> {self.node_string(n2)}: ", end="")
-
         # Trivial case: same node
         if n1 == n2:
-            print(0)
             return 0
 
         # Get information about each node from the cache
@@ -71,15 +61,11 @@ class router(astar.AStar):
         else:
             cost = self.costs[self.route_preferences[type1]] * self.costs[self.route_preferences[type2]]
 
-        print(f"{distance} (cost: {cost})")
         return distance * cost
 
     def heuristic_cost_estimate(self, n1, n2):
-        print(f"heuristic_cost_estimate {self.node_string(n1)} -> {self.node_string(n2)}: ", end="")
-
         # Trivial case: same node
         if n1 == n2:
-            print(0)
             return 0
 
         # Get information about each node from the cache
@@ -92,11 +78,9 @@ class router(astar.AStar):
         # Use most favorable possible cost
         cost = self.costs["PREFER"] * self.costs["PREFER"]
 
-        print(f"{distance} (cost: {cost})")
         return distance * cost
 
     def is_goal_reached(self, current, goal):
-        print(f"is_goal_reached: current: {self.node_string(current)}, goal: {self.node_string(goal)}")
         return current == goal
 
 def main():
@@ -146,17 +130,25 @@ def main():
         'U': args.route_ultralight,
         'CN': args.route_cns,
         'MR': "INCLUDE",
+        'MW': "REJECT",
+        'NRS': "REJECT",
+        'RADAR': "REJECT",
         'RP': "INCLUDE",
         'VFR': args.route_vfr_waypoint,
         'WP': "INCLUDE",
+        'CONSOLAN': "REJECT",
         'DME': args.route_dme,
+        'FAN MARKER': "REJECT",
+        'MARINE NDB': "REJECT",
+        'MARINE NDB/DME': "REJECT",
         'NDB': args.route_ndb,
         'NDB/DME': args.route_ndbdme,
         'TACAN': args.route_tacan,
         'UHF/NDB': args.route_uhfndb,
         'VOR': args.route_vor,
         'VORTAC': args.route_vortac,
-        'VOR/DME': args.route_vordme
+        'VOR/DME': args.route_vordme,
+        'VOT': "REJECT"
     }
 
     # Calculate maximum leg length in meters
