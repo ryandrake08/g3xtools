@@ -23,6 +23,7 @@ Raises:
 import argparse
 import csv
 import io
+import itertools
 import pickle
 import zipfile
 
@@ -61,6 +62,25 @@ def main():
                 # Read airway data
                 read_csv_file(csv_archive, 'AWY_BASE.csv', ['AWY_ID', 'AWY_LOCATION', 'AWY_DESIGNATION', 'AIRWAY_STRING'], airways)
 
+    # Build a lookup table of waypoint_id to waypoint_index
+    waypoint_lookup = {waypoint[0]: i for i, waypoint in enumerate(waypoints)}
+
+    # Build a dictionary of airway connections: waypoint_index -> [(neighbor_index, airway_index)]
+    connections = {}
+    for i, airway in enumerate(airways):
+        airway_string = airway[3]
+        airway_waypoints = airway_string.split(' ')
+        waypoint_indices = [waypoint_lookup.get(wp) for wp in airway_waypoints]
+
+        # For each pair of waypoints in the airway, add a connection in both directions
+        for waypoint_index, neighbor_index in itertools.pairwise(waypoint_indices):
+            if waypoint_index not in connections:
+                connections[waypoint_index] = []
+            connections[waypoint_index].append((neighbor_index, i))
+            if neighbor_index not in connections:
+                connections[neighbor_index] = []
+            connections[neighbor_index].append((waypoint_index, i))
+
     # Serialize waypoints
     with open('waypoints.pickle', 'wb') as f:
         pickle.dump(waypoints, f)
@@ -68,6 +88,10 @@ def main():
     # Serialize airways
     with open('airways.pickle', 'wb') as f:
         pickle.dump(airways, f)
+
+    # Serialize connections
+    with open('connections.pickle', 'wb') as f:
+        pickle.dump(connections, f)
 
 if __name__ == '__main__':
     main()

@@ -76,22 +76,28 @@ def bounding_box(lat1, lon1, distance):
     return (math.degrees(lat2), math.degrees(lon2), math.degrees(lat3), math.degrees(lon3))
 
 class router(astar.AStar):
-    def __init__(self, waypoints, route_preferences, max_leg_length):
+    def __init__(self, route_preferences, max_leg_length):
         """
         Initialize all the state needed to implement the a-star pathfinding algorithm.
 
         Args:
-            waypoints (list): A list of waypoints where each waypoint is a tuple containing
-                              (id, waypoint_type, latitude, longitude).
-
             route_preferences (dict): A dictionary mapping waypoint types to routing preferences.
                                       Possible values are "PREFER", "INCLUDE", "AVOID", and "REJECT".
 
             max_leg_length (float): The maximum allowable length for any leg of the route.
         """
 
-        # Store the waypoints
-        self.waypoints = waypoints
+        # Deserialize waypoints
+        with open("waypoints.pickle", "rb") as f:
+            self.waypoints = pickle.load(f)
+
+        # Deserialize airways
+        with open("airways.pickle", "rb") as f:
+            self.airways = pickle.load(f)
+
+        # Deserialize connections
+        with open("connections.pickle", "rb") as f:
+            self.connections = pickle.load(f)
 
         # Store the route preferences
         self.route_preferences = route_preferences
@@ -154,7 +160,13 @@ class router(astar.AStar):
         north, east, south, west = bounding_box(lat, lon, self.max_leg_length)
 
         # Query the index for neighbors
-        neighbors = self.waypoints_idx.intersection((west, south, east, north))
+        neighbors = list(self.waypoints_idx.intersection((west, south, east, north)))
+
+        # Find airway neighbors, which should always be included
+        airway_neighbors = self.connections.get(node, [])
+
+        # Add airway connections to neighbors
+        neighbors.extend(neighbor for neighbor, _ in airway_neighbors if neighbor not in neighbors)
 
         return neighbors
 
@@ -182,9 +194,17 @@ class router(astar.AStar):
         # Calculate actual distance
         distance = self.actual_distance_between(n1, n2)
 
+        # If n1 and n2 are on the same airway, additionally factor in the airway cost modifier
+        airway_cost_modifier = 1.0
+        if n1 in self.connections:
+            for neighbor, airway in self.connections[n1]:
+                if neighbor == n2:
+                    airway_cost_modifier = self.costs[self.route_preferences["AIRWAY"]]
+
         # Calculate total cost
         cost = self.costs["REJECT"] if distance > self.max_leg_length else self.costs[self.route_preferences[type1]] * self.costs[self.route_preferences[type2]]
-        return distance * cost
+
+        return distance * cost * airway_cost_modifier
 
     def heuristic_cost_estimate(self, n1, n2):
         """
@@ -208,7 +228,7 @@ class router(astar.AStar):
         distance = self.actual_distance_between(n1, n2)
 
         # Use most favorable possible cost, heuristic_cost_estimate must always underestimate
-        cost = self.costs["PREFER"] * self.costs["PREFER"]
+        cost = self.costs["PREFER"] * self.costs["PREFER"] * self.costs["PREFER"]
         return distance * cost
 
 def main():
@@ -233,7 +253,7 @@ def main():
     parser.add_argument('--route-vor',           choices=route_choices, default='INCLUDE', help='Specify how to handle VORs in the route')
     parser.add_argument('--route-vortac',        choices=route_choices, default='INCLUDE', help='Specify how to handle VORTACs in the route')
     parser.add_argument('--route-vordme',        choices=route_choices, default='INCLUDE', help='Specify how to handle VORs in the route')
-    parser.add_argument('--route-airway',        choices=route_choices, default='AVOID',   help='Specify how to handle airways in the route')
+    parser.add_argument('--route-airway',        choices=route_choices, help='Specify how to handle airways in the route. If set, this will override the setting for DME, NDB, NDB/DME, TACAN, UHF/NDB, VOR, VORTAC, and VOR/DME.')
 
     parser.add_argument('--max-leg-length', type=float, default=100, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
 
@@ -256,52 +276,49 @@ def main():
         'H': args.route_heliport,
         'U': args.route_ultralight,
         'CN': args.route_cns,
-        'MR': args.route_airway,
+        'VFR': args.route_vfr_waypoint,
+        'MR': args.route_airway if args.route_airway else "REJECT",
+        'RP': args.route_airway if args.route_airway else "REJECT",
+        'WP': args.route_airway if args.route_airway else "REJECT",
+        'DME': args.route_airway if args.route_airway else args.route_dme,
+        'NDB': args.route_airway if args.route_airway else args.route_ndb,
+        'NDB/DME': args.route_airway if args.route_airway else args.route_ndbdme,
+        'TACAN': args.route_airway if args.route_airway else args.route_tacan,
+        'UHF/NDB': args.route_airway if args.route_airway else args.route_uhfndb,
+        'VOR': args.route_airway if args.route_airway else args.route_vor,
+        'VORTAC': args.route_airway if args.route_airway else args.route_vortac,
+        'VOR/DME': args.route_airway if args.route_airway else args.route_vordme,
         'MW': "REJECT",
         'NRS': "REJECT",
         'RADAR': "REJECT",
-        'RP': args.route_airway,
-        'VFR': args.route_vfr_waypoint,
-        'WP': args.route_airway,
         'CONSOLAN': "REJECT",
-        'DME': args.route_dme,
         'FAN MARKER': "REJECT",
         'MARINE NDB': "REJECT",
         'MARINE NDB/DME': "REJECT",
-        'NDB': args.route_ndb,
-        'NDB/DME': args.route_ndbdme,
-        'TACAN': args.route_tacan,
-        'UHF/NDB': args.route_uhfndb,
-        'VOR': args.route_vor,
-        'VORTAC': args.route_vortac,
-        'VOR/DME': args.route_vordme,
-        'VOT': "REJECT"
+        'VOT': "REJECT",
+        'AIRWAY': args.route_airway if args.route_airway else "REJECT"
     }
 
     # Calculate maximum leg length in meters
     max_leg_length = args.max_leg_length * 1852
 
-    # Deserialize waypoints
-    with open("waypoints.pickle", "rb") as f:
-        waypoints = pickle.load(f)
-
     # Initialize the router
-    r = router(waypoints, route_preferences, max_leg_length)
+    r = router(route_preferences, max_leg_length)
 
     # Get the origin id, and print an error if it does not exist
-    origin_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(waypoints) if waypoint_id == args.origin and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
+    origin_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.origin and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
     if not origin_id:
         parser.error(f"Origin airport '{args.origin}' not found")
 
     # Get the destination id, and print an error if it does not exist
-    destination_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(waypoints) if waypoint_id == args.destination and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
+    destination_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.destination and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
     if not destination_id:
         parser.error(f"Destination airport '{args.destination}' not found")
 
     # Map waypoint_id to id all vias
     via_ids = []
     for via in args.via:
-        via_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(waypoints) if waypoint_id == via), None)
+        via_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == via), None)
         if not via_id:
             parser.error(f"Via waypoint '{via}' not found")
         via_ids.append(via_id)
@@ -326,7 +343,7 @@ def main():
 
     # Output the flight plan
     if route:
-        print(" ".join(waypoints[id][0] for id in route))
+        print(" ".join(r.waypoints[id][0] for id in route))
     else:
         print("No route found")
 
