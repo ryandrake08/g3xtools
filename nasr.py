@@ -4,16 +4,18 @@
 This script downloads NASR (National Airspace System Resource) data from the FAA website.
 
 Command Line Arguments:
-    --list: Lists the available NASR data in the Archive section.
-    --name: Downloads archived data by name.
-    --preview: Downloads the Preview data.
     --current: Downloads the Current data.
+    --preview: Downloads the Preview data.
+    --name: Downloads archived data by name.
+    --list: Lists the available NASR data in the Archive section.
     --filename: Specifies the NASR data filename. Uses basename of URL if not provided.
 
 Usage:
+    python nasr.py --current [--filename <filename>]
+    python nasr.py --preview [--filename <filename>]
     python nasr.py --list
-    python nasr.py [ --name <name> | --preview | --current ]
-    python nasr.py [ --name <name> | --preview | --current ] --filename <filename>
+        (then)
+    python nasr.py --name <name> [--filename <filename>]
 
 Raises:
     FileNotFoundError: If no data is found for the specified criteria.
@@ -29,11 +31,11 @@ import urllib.parse
 
 def main():
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Download NASR data.')
-    parser.add_argument('--list', action='store_true', help='List of NASR data in the Archive section.')
-    parser.add_argument('--name', help='Download archived data by name.')
-    parser.add_argument('--preview', action='store_true', help='Download the Preview data.')
+    parser = argparse.ArgumentParser(description='Download NASR data from www.faa.gov.')
     parser.add_argument('--current', action='store_true', help='Download the Current data.')
+    parser.add_argument('--preview', action='store_true', help='Download the Preview data.')
+    parser.add_argument('--name', help='Download archived data by name.')
+    parser.add_argument('--list', action='store_true', help='List of NASR data in the Archive section.')
     parser.add_argument('--filename', help='Specify the NASR data filename. Uses basename of URL if not provided.')
     args = parser.parse_args()
 

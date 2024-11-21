@@ -7,27 +7,59 @@ import itertools
 import pickle
 import rtree
 
-# Haversine formula for calculating distance between two points
 def haversine(lat1, lon1, lat2, lon2):
+    """
+    Calculate the great-circle distance between two points on the Earth's surface using the Haversine formula.
+    This formula assumes a spherical earth, which is accurate enough to calculate a-star neighbors and costs.
+    If we were to use this for actual navigation, we would need to use the Vincenty formula for greater accuracy.
+
+    Args:
+        lat1 (float): Latitude of the first point in degrees.
+        lon1 (float): Longitude of the first point in degrees.
+        lat2 (float): Latitude of the second point in degrees.
+        lon2 (float): Longitude of the second point in degrees.
+
+    Returns:
+        float: Distance between the two points in meters.
+    """
+
     # Convert latitude and longitude from degrees to radians
     lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
 
     # Haversine formula
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
-    c = 2 * math.asin(math.sqrt(a))
-    r = 6371000 # Radius of Earth in meters
-    return c * r
+    a = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
+    d = 2 * math.asin(math.sqrt(a))
 
-# Calculate northeast and southwest bounds around a point
+    # Convert from angular distance to meters
+    r = 6371000 # Radius of Earth in meters
+    return d * r
+
 def bounding_box(lat1, lon1, distance):
+    """
+    Calculate the bounding box coordinates (northeast and southwest corners)
+    given a central point and a distance.
+
+    Args:
+        lat1 (float): Latitude of the central point in degrees.
+        lon1 (float): Longitude of the central point in degrees.
+        distance (float): Distance from the central point in meters.
+
+    Returns:
+        tuple: A tuple containing four float values:
+            - Latitude of the northeast corner in degrees.
+            - Longitude of the northeast corner in degrees.
+            - Latitude of the southwest corner in degrees.
+            - Longitude of the southwest corner in degrees.
+    """
+
     # Convert latitude and longitude from degrees to radians
     lat1, lon1 = map(math.radians, [lat1, lon1])
 
-    # Calculate the destination points
+    # Convert from meters to angular distance
     r = 6371000 # Radius of Earth in meters
     d = distance / r
+
+    # Shortcut for 45 and 225 degree bearings
     root1_2 = 0.7071067811865476 # sqrt(0.5)
 
     # Northeast bearing
@@ -45,8 +77,28 @@ def bounding_box(lat1, lon1, distance):
 
 class router(astar.AStar):
     def __init__(self, waypoints, route_preferences, max_leg_length):
+        """
+        Initialize all the state needed to implement the a-star pathfinding algorithm.
+
+        Args:
+            waypoints (list): A list of waypoints where each waypoint is a tuple containing
+                              (id, waypoint_type, latitude, longitude).
+
+            route_preferences (dict): A dictionary mapping waypoint types to routing preferences.
+                                      Possible values are "PREFER", "INCLUDE", "AVOID", and "REJECT".
+
+            max_leg_length (float): The maximum allowable length for any leg of the route.
+        """
+
         # Store the waypoints
         self.waypoints = waypoints
+
+        # Store the route preferences
+        self.route_preferences = route_preferences
+        self.max_leg_length = max_leg_length
+
+        # Set costs for each route preference
+        self.costs = { "PREFER": 0.8, "INCLUDE": 1.0, "AVOID": 1.25, "REJECT": 1000.0 }
 
         # Construct an rtree index
         def generator_function():
@@ -55,17 +107,48 @@ class router(astar.AStar):
                     yield (id, (lon, lat, lon, lat), None)
         self.waypoints_idx = rtree.index.Index(generator_function())
 
-        # Store the route preferences
-        self.route_preferences = route_preferences
-        self.max_leg_length = max_leg_length
+    def actual_distance_between(self, n1, n2):
+        """
+        Calculate the actual distance in between two waypoints using the Haversine formula.
 
-        # Set costs
-        self.costs = { "PREFER": 0.8, "INCLUDE": 1.0, "AVOID": 1.25, "REJECT": 1000.0 }
+        Args:
+            n1 (int): The index of the first waypoint.
+            n2 (int): The index of the second waypoint.
 
-    def node_string(self, id):
-        return self.waypoints[id][0] + " (" + self.waypoints[id][1] + ")"
+        Returns:
+            float: The distance between the two waypoints in meters.
+        """
+
+        # Trivial case: same node
+        if n1 == n2:
+            return 0
+
+        # Get information about each node from the cache
+        _, _, lat1, lon1 = self.waypoints[n1]
+        _, _, lat2, lon2 = self.waypoints[n2]
+
+        # Calculate the distance between the two points
+        return haversine(lat1, lon1, lat2, lon2)
 
     def neighbors(self, node):
+        """
+        Find and return the neighboring waypoints for a given node.
+        For the purposes of aviation navigation, we will consider waypoints within
+        max_leg_length meters of the given waypoint to be neighbors. To simplify
+        and speed up this lookup, we calculate a bounding box around the waypoint
+        and query the rtree index for waypoints within that bounding box. This will
+        overestimate the neighbors, but that is acceptable for the purposes of the
+        a-star algorithm.
+
+        Required implementation of the abstract method in the astar class.
+
+        Args:
+            node (int): The index of the current waypoint.
+
+        Returns:
+            list: A list of indices of neighboring waypoints within a bounding box.
+        """
+
         # Construct bounding box around the current waypoint
         _, _, lat, lon = self.waypoints[node]
         north, east, south, west = bounding_box(lat, lon, self.max_leg_length)
@@ -76,52 +159,64 @@ class router(astar.AStar):
         return neighbors
 
     def distance_between(self, n1, n2):
-        # Trivial case: same node
-        if n1 == n2:
-            # This should never happen, but return zero anyway
-            return 0
+        """
+        Calculate the a-star weighted distance between two nodes.
 
-        # Get information about each node from the cache
-        _, type1, lat1, lon1 = self.waypoints[n1]
-        _, type2, lat2, lon2 = self.waypoints[n2]
+        This method calculates the distance between two waypoints (nodes) and
+        applies a cost based on the type of each node and the route preferences.
 
-        # Calculate the distance between the two points
-        distance = haversine(lat1, lon1, lat2, lon2)
+        Required implementation of the abstract method in the astar class.
+
+        Args:
+            n1 (int): The index of the first waypoint.
+            n2 (int): The index of the second waypoint.
+
+        Returns:
+            float: The weighted distance between the two nodes.
+        """
+
+        # Get type of each node
+        type1 = self.waypoints[n1][1]
+        type2 = self.waypoints[n2][1]
+
+        # Calculate actual distance
+        distance = self.actual_distance_between(n1, n2)
 
         # Calculate total cost
-        if distance > self.max_leg_length:
-            cost = self.costs["REJECT"]
-        else:
-            cost = self.costs[self.route_preferences[type1]] * self.costs[self.route_preferences[type2]]
-
+        cost = self.costs["REJECT"] if distance > self.max_leg_length else self.costs[self.route_preferences[type1]] * self.costs[self.route_preferences[type2]]
         return distance * cost
 
     def heuristic_cost_estimate(self, n1, n2):
-        # Trivial case: same node
-        if n1 == n2:
-            return 0
+        """
+        Estimated distance from node n1 to goal node n2.
 
-        # Get information about each node from the cache
-        _, _, lat1, lon1 = self.waypoints[n1]
-        _, _, lat2, lon2 = self.waypoints[n2]
+        This method calculates the heuristic cost estimate between two waypoints.
+        The heuristic cost must always underestimate the actual cost to ensure the
+        algorithm finds the least cost path (function is admissible).
 
-        # Calculate the distance between the two points and adjust based on the cost
-        distance = haversine(lat1, lon1, lat2, lon2)
+        Required implementation of the abstract method in the astar class.
 
-        # Use most favorable possible cost
+        Args:
+            n1 (int): The index of the first waypoint.
+            n2 (int): The index of the second waypoint.
+
+        Returns:
+            float: The estimated heuristic cost between the two nodes.
+        """
+
+        # Calculate actual distance
+        distance = self.actual_distance_between(n1, n2)
+
+        # Use most favorable possible cost, heuristic_cost_estimate must always underestimate
         cost = self.costs["PREFER"] * self.costs["PREFER"]
-
         return distance * cost
-
-    def is_goal_reached(self, current, goal):
-        return current == goal
 
 def main():
     # Choices for route preferences
     route_choices = ['PREFER', 'INCLUDE', 'AVOID', 'REJECT']
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Download NASR data.')
+    parser = argparse.ArgumentParser(description='Generate a flight plan from origin to destination, via an optional list of waypoints.')
     parser.add_argument('--route-airport',       choices=route_choices, default='INCLUDE', help='Specify how to handle airports in the route')
     parser.add_argument('--route-balloonport',   choices=route_choices, default='REJECT',  help='Specify how to handle balloonports in the route')
     parser.add_argument('--route-seaplane-base', choices=route_choices, default='REJECT',  help='Specify how to handle seaplane bases in the route')
@@ -138,6 +233,7 @@ def main():
     parser.add_argument('--route-vor',           choices=route_choices, default='INCLUDE', help='Specify how to handle VORs in the route')
     parser.add_argument('--route-vortac',        choices=route_choices, default='INCLUDE', help='Specify how to handle VORTACs in the route')
     parser.add_argument('--route-vordme',        choices=route_choices, default='INCLUDE', help='Specify how to handle VORs in the route')
+    parser.add_argument('--route-airway',        choices=route_choices, default='AVOID',   help='Specify how to handle airways in the route')
 
     parser.add_argument('--max-leg-length', type=float, default=100, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
 
@@ -160,13 +256,13 @@ def main():
         'H': args.route_heliport,
         'U': args.route_ultralight,
         'CN': args.route_cns,
-        'MR': "INCLUDE",
+        'MR': args.route_airway,
         'MW': "REJECT",
         'NRS': "REJECT",
         'RADAR': "REJECT",
-        'RP': "INCLUDE",
+        'RP': args.route_airway,
         'VFR': args.route_vfr_waypoint,
-        'WP': "INCLUDE",
+        'WP': args.route_airway,
         'CONSOLAN': "REJECT",
         'DME': args.route_dme,
         'FAN MARKER': "REJECT",
@@ -205,7 +301,7 @@ def main():
     # Map waypoint_id to id all vias
     via_ids = []
     for via in args.via:
-        via_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(waypoints) if waypoint_id == via and waypoint_type not in ("MR", "RP", "WP")), None)
+        via_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(waypoints) if waypoint_id == via), None)
         if not via_id:
             parser.error(f"Via waypoint '{via}' not found")
         via_ids.append(via_id)
@@ -214,7 +310,7 @@ def main():
     candidate_routes = [[origin_id] + list(perm) + [destination_id] for perm in itertools.permutations(via_ids)]
 
     # For each candidate route, calculate the total distance
-    routes_and_distances = [(route, sum(r.distance_between(start, end) for start, end in itertools.pairwise(route))) for route in candidate_routes]
+    routes_and_distances = [(route, sum(r.actual_distance_between(start, end) for start, end in itertools.pairwise(route))) for route in candidate_routes]
 
     # Pick the shortest direct route
     route, _ = min(routes_and_distances, key=lambda x: x[1])
