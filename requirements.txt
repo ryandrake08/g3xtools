@@ -1,0 +1,4 @@
+astar
+beautifulsoup4
+pyproj
+rtree

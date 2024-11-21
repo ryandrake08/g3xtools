@@ -18,13 +18,10 @@ CSV files processed:
 Command line arguments:
     --filename: Specify the NASR data filename.
     --db: Specify the database filename. Uses 'fplan.db' if not provided.
-    --max-leg-length: Specify the maximum leg length for direct neighbors, in nautical miles. Default is 100.
-                      Note: This value largely drives the size of the database and the performance of flight planning.
 
 Usage:
     python makedb.py --filename <filename>
     python makedb.py --filename <filename> --db <database>
-    python makedb.py --filename <filename> --max-leg-length <length>
 
 Raises:
     FileNotFoundError: If the specified NASR data file is not found.
@@ -43,14 +40,10 @@ def main():
     parser = argparse.ArgumentParser(description='Download NASR data.')
     parser.add_argument('--filename', help='Specify the NASR data filename.')
     parser.add_argument('--db', default='fplan.db', help='Specify the database filename. Uses fpaln.db if not provided.')
-    parser.add_argument('--max-leg-length', type=float, default=100, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
     args = parser.parse_args()
 
     # Set filename
     filename = args.filename if args.filename else None
-
-    # Calculate maximum leg length in meters
-    max_leg_length = args.max_leg_length * 1852
 
     # Delete old db file if it exists
     os.remove(args.db) if os.path.exists(args.db) else None

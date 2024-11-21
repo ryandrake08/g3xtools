@@ -4,15 +4,17 @@ import argparse
 import astar
 import itertools
 import pyproj
+import rtree
 import sqlite3
 
 class router(astar.AStar):
-    def __init__(self, waypoints, route_preferences, max_leg_length):
+    def __init__(self, waypoints, waypoints_idx, route_preferences, max_leg_length):
         # Using WGS84
         self.geod = pyproj.Geod(ellps='WGS84')
 
         # Store the waypoints
         self.waypoints = waypoints
+        self.waypoints_idx = waypoints_idx
 
         # Store the route preferences
         self.route_preferences = route_preferences
@@ -20,9 +22,6 @@ class router(astar.AStar):
 
         # Set costs
         self.costs = { "PREFER": 0.8, "INCLUDE": 1.0, "AVOID": 1.25, "REJECT": 1000.0 }
-
-    def __del__(self):
-        self.db.close()
 
     def node_string(self, id):
         return self.waypoints[id][0] + " (" + self.waypoints[id][1] + ")"
@@ -33,8 +32,11 @@ class router(astar.AStar):
         (east, north, _) = self.geod.fwd(lon, lat, 45, self.max_leg_length * 1.414213562373095)
         (west, south, _) = self.geod.fwd(lon, lat, 225, self.max_leg_length * 1.414213562373095)
 
-        # Get the neighbors of the current node
-        neighbors = [id for id, (_, waypoint_type, lat, lon) in self.waypoints.items() if south <= lat <= north and west <= lon <= east and self.route_preferences[waypoint_type] != 'REJECT']
+        # Query the index for neighbors
+        neighbors = self.waypoints_idx.intersection((west, south, east, north))
+
+        # Filter waypoints based on route preferences
+        neighbors = [id for id in neighbors if self.route_preferences[self.waypoints[id][1]] != 'REJECT']
 
         return neighbors
 
@@ -157,8 +159,13 @@ def main():
         cur.execute("SELECT rowid, waypoint_id, waypoint_type, lat_decimal, long_decimal FROM waypoints")
         waypoints = {id: (waypoint_id, waypoint_type, lat, lon) for id, waypoint_id, waypoint_type, lat, lon in cur.fetchall()}
 
+    # Construct an index
+    waypoints_idx = rtree.index.Index()
+    for id, (_, _, lat, lon) in waypoints.items():
+        waypoints_idx.insert(id, (lon, lat, lon, lat))
+
     # Initialize the router
-    r = router(waypoints, route_preferences, max_leg_length)
+    r = router(waypoints, waypoints_idx, route_preferences, max_leg_length)
 
     # Get the origin id, and print an error if it does not exist
     origin_id = next((id for id, (waypoint_id, waypoint_type, _, _) in r.waypoints.items() if waypoint_id == args.origin and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
