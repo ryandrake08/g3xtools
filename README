@@ -9,8 +9,7 @@ Before you begin, ensure you have met the following requirements:
 - You have a working internet connection.
 - You have the following Python dependencies installed, recommend using pip in a venv:
     - `astar`
-    - `beautifulsoup4`
-    - `pyproj`
+    - `beautifulsoup4` (for NASR downloader)
     - `rtree`
 
 ## Initial Setup

@@ -2,16 +2,49 @@
 
 import argparse
 import astar
+import math
 import itertools
-import pyproj
 import rtree
 import sqlite3
 
+# Haversine formula for calculating distance between two points
+def haversine(lat1, lon1, lat2, lon2):
+    # Convert latitude and longitude from degrees to radians
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+
+    # Haversine formula
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    c = 2 * math.asin(math.sqrt(a))
+    r = 6371000 # Radius of Earth in meters
+    return c * r
+
+# Calculate northeast and southwest bounds around a point
+def bounding_box(lat1, lon1, distance):
+    # Convert latitude and longitude from degrees to radians
+    lat1, lon1 = map(math.radians, [lat1, lon1])
+
+    # Calculate the destination points
+    r = 6371000 # Radius of Earth in meters
+    d = distance / r
+    root1_2 = 0.7071067811865476 # sqrt(0.5)
+
+    # Northeast bearing
+    lat2 = math.asin(math.sin(lat1) * math.cos(d) + math.cos(lat1) * math.sin(d) * root1_2)
+    dlon2 = math.atan2(root1_2 * math.sin(d) * math.cos(lat1), math.cos(d) - math.sin(lat1) * math.sin(lat2))
+    lon2 = lon1 + dlon2
+
+    # Southwest bearing
+    lat3 = math.asin(math.sin(lat1) * math.cos(d) + math.cos(lat1) * math.sin(d) * -root1_2)
+    dlon3 = math.atan2(-root1_2 * math.sin(d) * math.cos(lat1), math.cos(d) - math.sin(lat1) * math.sin(lat3))
+    lon3 = lon1 + dlon3
+
+    # Convert latitude and longitude back to degrees
+    return (math.degrees(lat2), math.degrees(lon2), math.degrees(lat3), math.degrees(lon3))
+
 class router(astar.AStar):
     def __init__(self, waypoints, route_preferences, max_leg_length):
-        # Using WGS84
-        self.geod = pyproj.Geod(ellps='WGS84')
-
         # Store the waypoints
         self.waypoints = waypoints
 
@@ -35,8 +68,7 @@ class router(astar.AStar):
     def neighbors(self, node):
         # Construct bounding box around the current waypoint
         _, _, lat, lon = self.waypoints[node]
-        (east, north, _) = self.geod.fwd(lon, lat, 45, self.max_leg_length, return_back_azimuth=False)
-        (west, south, _) = self.geod.fwd(lon, lat, 225, self.max_leg_length, return_back_azimuth=False)
+        north, east, south, west = bounding_box(lat, lon, self.max_leg_length)
 
         # Query the index for neighbors
         neighbors = self.waypoints_idx.intersection((west, south, east, north))
@@ -54,7 +86,7 @@ class router(astar.AStar):
         _, type2, lat2, lon2 = self.waypoints[n2]
 
         # Calculate the distance between the two points
-        distance = self.geod.inv(lon1, lat1, lon2, lat2, return_back_azimuth=False)[2]
+        distance = haversine(lat1, lon1, lat2, lon2)
 
         # Calculate total cost
         if distance > self.max_leg_length:
@@ -74,7 +106,7 @@ class router(astar.AStar):
         _, _, lat2, lon2 = self.waypoints[n2]
 
         # Calculate the distance between the two points and adjust based on the cost
-        distance = self.geod.inv(lon1, lat1, lon2, lat2, return_back_azimuth=False)[2]
+        distance = haversine(lat1, lon1, lat2, lon2)
 
         # Use most favorable possible cost
         cost = self.costs["PREFER"] * self.costs["PREFER"]
