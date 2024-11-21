@@ -8,13 +8,19 @@ import rtree
 import sqlite3
 
 class router(astar.AStar):
-    def __init__(self, waypoints, waypoints_idx, route_preferences, max_leg_length):
+    def __init__(self, waypoints, route_preferences, max_leg_length):
         # Using WGS84
         self.geod = pyproj.Geod(ellps='WGS84')
 
         # Store the waypoints
         self.waypoints = waypoints
-        self.waypoints_idx = waypoints_idx
+
+        # Construct an rtree index
+        def generator_function():
+            for id, (_, waypoint_type, lat, lon) in waypoints.items():
+                if route_preferences[waypoint_type] != 'REJECT':
+                    yield (id, (lon, lat, lon, lat), None)
+        self.waypoints_idx = rtree.index.Index(generator_function())
 
         # Store the route preferences
         self.route_preferences = route_preferences
@@ -29,20 +35,18 @@ class router(astar.AStar):
     def neighbors(self, node):
         # Construct bounding box around the current waypoint
         _, _, lat, lon = self.waypoints[node]
-        (east, north, _) = self.geod.fwd(lon, lat, 45, self.max_leg_length * 1.414213562373095)
-        (west, south, _) = self.geod.fwd(lon, lat, 225, self.max_leg_length * 1.414213562373095)
+        (east, north, _) = self.geod.fwd(lon, lat, 45, self.max_leg_length, return_back_azimuth=False)
+        (west, south, _) = self.geod.fwd(lon, lat, 225, self.max_leg_length, return_back_azimuth=False)
 
         # Query the index for neighbors
         neighbors = self.waypoints_idx.intersection((west, south, east, north))
-
-        # Filter waypoints based on route preferences
-        neighbors = [id for id in neighbors if self.route_preferences[self.waypoints[id][1]] != 'REJECT']
 
         return neighbors
 
     def distance_between(self, n1, n2):
         # Trivial case: same node
         if n1 == n2:
+            # This should never happen, but return zero anyway
             return 0
 
         # Get information about each node from the cache
@@ -50,7 +54,7 @@ class router(astar.AStar):
         _, type2, lat2, lon2 = self.waypoints[n2]
 
         # Calculate the distance between the two points
-        distance = self.geod.inv(lon1, lat1, lon2, lat2)[2]
+        distance = self.geod.inv(lon1, lat1, lon2, lat2, return_back_azimuth=False)[2]
 
         # Calculate total cost
         if distance > self.max_leg_length:
@@ -70,7 +74,7 @@ class router(astar.AStar):
         _, _, lat2, lon2 = self.waypoints[n2]
 
         # Calculate the distance between the two points and adjust based on the cost
-        distance = self.geod.inv(lon1, lat1, lon2, lat2)[2]
+        distance = self.geod.inv(lon1, lat1, lon2, lat2, return_back_azimuth=False)[2]
 
         # Use most favorable possible cost
         cost = self.costs["PREFER"] * self.costs["PREFER"]
@@ -151,21 +155,14 @@ def main():
     # Calculate maximum leg length in meters
     max_leg_length = args.max_leg_length * 1852
 
-    # Ingest waypoints table
+    # Load waypoint data
     with sqlite3.connect(args.db) as db:
         cur = db.cursor()
-
-        # Build an in-memory cache of ids to waypoint data
         cur.execute("SELECT rowid, waypoint_id, waypoint_type, lat_decimal, long_decimal FROM waypoints")
         waypoints = {id: (waypoint_id, waypoint_type, lat, lon) for id, waypoint_id, waypoint_type, lat, lon in cur.fetchall()}
 
-    # Construct an index
-    waypoints_idx = rtree.index.Index()
-    for id, (_, _, lat, lon) in waypoints.items():
-        waypoints_idx.insert(id, (lon, lat, lon, lat))
-
     # Initialize the router
-    r = router(waypoints, waypoints_idx, route_preferences, max_leg_length)
+    r = router(waypoints, route_preferences, max_leg_length)
 
     # Get the origin id, and print an error if it does not exist
     origin_id = next((id for id, (waypoint_id, waypoint_type, _, _) in r.waypoints.items() if waypoint_id == args.origin and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
