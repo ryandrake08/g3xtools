@@ -4,8 +4,8 @@ import argparse
 import astar
 import math
 import itertools
+import pickle
 import rtree
-import sqlite3
 
 # Haversine formula for calculating distance between two points
 def haversine(lat1, lon1, lat2, lon2):
@@ -50,7 +50,7 @@ class router(astar.AStar):
 
         # Construct an rtree index
         def generator_function():
-            for id, (_, waypoint_type, lat, lon) in waypoints.items():
+            for id, (_, waypoint_type, lat, lon) in enumerate(self.waypoints):
                 if route_preferences[waypoint_type] != 'REJECT':
                     yield (id, (lon, lat, lon, lat), None)
         self.waypoints_idx = rtree.index.Index(generator_function())
@@ -122,8 +122,6 @@ def main():
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Download NASR data.')
-    parser.add_argument('--db', default='fplan.db', help='Specify the database filename. Uses fpaln.db if not provided.')
-
     parser.add_argument('--route-airport',       choices=route_choices, default='INCLUDE', help='Specify how to handle airports in the route')
     parser.add_argument('--route-balloonport',   choices=route_choices, default='REJECT',  help='Specify how to handle balloonports in the route')
     parser.add_argument('--route-seaplane-base', choices=route_choices, default='REJECT',  help='Specify how to handle seaplane bases in the route')
@@ -187,29 +185,27 @@ def main():
     # Calculate maximum leg length in meters
     max_leg_length = args.max_leg_length * 1852
 
-    # Load waypoint data
-    with sqlite3.connect(args.db) as db:
-        cur = db.cursor()
-        cur.execute("SELECT rowid, waypoint_id, waypoint_type, lat_decimal, long_decimal FROM waypoints")
-        waypoints = {id: (waypoint_id, waypoint_type, lat, lon) for id, waypoint_id, waypoint_type, lat, lon in cur.fetchall()}
+    # Deserialize waypoints
+    with open("waypoints.pickle", "rb") as f:
+        waypoints = pickle.load(f)
 
     # Initialize the router
     r = router(waypoints, route_preferences, max_leg_length)
 
     # Get the origin id, and print an error if it does not exist
-    origin_id = next((id for id, (waypoint_id, waypoint_type, _, _) in r.waypoints.items() if waypoint_id == args.origin and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
+    origin_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(waypoints) if waypoint_id == args.origin and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
     if not origin_id:
         parser.error(f"Origin airport '{args.origin}' not found")
 
     # Get the destination id, and print an error if it does not exist
-    destination_id = next((id for id, (waypoint_id, waypoint_type, _, _) in r.waypoints.items() if waypoint_id == args.destination and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
+    destination_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(waypoints) if waypoint_id == args.destination and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
     if not destination_id:
         parser.error(f"Destination airport '{args.destination}' not found")
 
     # Map waypoint_id to id all vias
     via_ids = []
     for via in args.via:
-        via_id = next((id for id, (waypoint_id, waypoint_type, _, _) in r.waypoints.items() if waypoint_id == via and waypoint_type not in ("MR", "RP", "WP")), None)
+        via_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(waypoints) if waypoint_id == via and waypoint_type not in ("MR", "RP", "WP")), None)
         if not via_id:
             parser.error(f"Via waypoint '{via}' not found")
         via_ids.append(via_id)
@@ -234,7 +230,7 @@ def main():
 
     # Output the flight plan
     if route:
-        print(" ".join(r.waypoints[id][0] for id in route))
+        print(" ".join(waypoints[id][0] for id in route))
     else:
         print("No route found")
 

@@ -1,4 +1,3 @@
-astar
 beautifulsoup4
-pyproj
+astar
 rtree
