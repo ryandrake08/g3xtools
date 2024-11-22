@@ -45,6 +45,7 @@ def main():
 
     waypoints = []
     airways = []
+    airway_seg = []
 
     # Open archive
     with zipfile.ZipFile(args.filename) as archive:
@@ -61,18 +62,33 @@ def main():
                 read_csv_file(csv_archive, 'NAV_BASE.csv', ['NAV_ID', 'NAV_TYPE', 'LAT_DECIMAL', 'LONG_DECIMAL'], waypoints)
 
                 # Read airway data
-                read_csv_file(csv_archive, 'AWY_SEG_ALT.csv', ['AWY_ID', 'AWY_LOCATION', 'FROM_POINT', 'FROM_PT_TYPE', 'TO_POINT', 'AWY_SEG_GAP_FLAG'], airways)
+                read_csv_file(csv_archive, 'AWY_BASE.csv', ['AWY_ID', 'AWY_LOCATION', 'AWY_DESIGNATION'], airways)
+                read_csv_file(csv_archive, 'AWY_SEG_ALT.csv', ['AWY_ID', 'AWY_LOCATION', 'FROM_POINT', 'FROM_PT_TYPE', 'TO_POINT', 'AWY_SEG_GAP_FLAG'], airway_seg)
 
     # Build a temporary reverse lookup dictionary of waypoint_id to waypoint_indices
     waypoint_lookup = collections.defaultdict(list)
     for i, waypoint in enumerate(waypoints):
         waypoint_lookup[waypoint[0]].append(i)
 
-    # Build a temporary list of airway_id, airway_location, (waypoint index lists)
+    # Build a temporary dictionary of (airway_id, airway_location) to airway_index
+    airway_lookup = {}
+    for i, row in enumerate(airways):
+        airway_id, airway_location, _ = row
+
+        # Ensure the airway_id, airway_location pair is unique
+        if (airway_id, airway_location) in airway_lookup:
+            raise ValueError(f'Airway {airway_id} ({airway_location}) is not unique')
+
+        airway_lookup[airway_id, airway_location] = i
+
+    # Build a temporary list of airway_index, (waypoint index lists)
     airway_lists = []
     current_waypoint_index_list = []
-    for row in airways:
+    for row in airway_seg:
         airway_id, airway_location, from_point, from_point_type, to_point, gap = row
+
+        # Look up airway index
+        airway_index = airway_lookup[airway_id, airway_location]
 
         # Look up the waypoint index from our temporary reverse lookup dictionary
         waypoint_indices = waypoint_lookup.get(from_point)
@@ -95,19 +111,23 @@ def main():
 
         # If there is a gap, or if we are at the end of the airway, start a new list
         if gap == 'Y' or not to_point:
-            airway_lists.append((airway_id, airway_location, current_waypoint_index_list))
+            airway_lists.append((airway_index, current_waypoint_index_list))
             current_waypoint_index_list = []
 
-    # Go through each list pairwise and build a dictionary of airway connections: waypoint_index to (neighbor_index, airway_id, airway_location)
+    # Go through each list pairwise and build a dictionary of airway connections: waypoint_index to (neighbor_index, airway_index)
     connections = collections.defaultdict(list)
-    for airway_id, airway_location, waypoint_indices in airway_lists:
+    for airway_index, waypoint_indices in airway_lists:
         for i1, i2 in itertools.pairwise(waypoint_indices):
-            connections[i1].append((i2, airway_id, airway_location))
-            connections[i2].append((i1, airway_id, airway_location))
+            connections[i1].append((i2, airway_index))
+            connections[i2].append((i1, airway_index))
 
     # Serialize waypoints
     with open('waypoints.pickle', 'wb') as f:
         pickle.dump(waypoints, f)
+
+    # Serialize airway base
+    with open('airways.pickle', 'wb') as f:
+        pickle.dump(airways, f)
 
     # Serialize connections
     with open('connections.pickle', 'wb') as f:

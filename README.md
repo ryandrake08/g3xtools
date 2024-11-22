@@ -9,8 +9,8 @@ Before you begin, ensure you have met the following requirements:
  - [ ] You have a working internet connection.
  - [ ] You have the following Python dependencies installed, recommend using pip in a venv:
    - `beautifulsoup4` (for NASR downloader)
-   -  `astar`
-   -  `rtree`
+   - `astar`
+   - `rtree`
 
 ## Initial Setup
 
@@ -21,36 +21,57 @@ To set up the project's database, you need to:
     python3 nasr.py --current
     ```
 
-2. Build an initial database from the NASR data. This should take about 45 seconds and generate about 90MB of data:
+2. Build some pre-processed data files from the NASR data, so the planner doesn't have to navigate ZIP and CSV files:
     ```sh
     python3 makedb.py <filename downloaded above>
     ```
 
 # Usage
 
-Try some routes:
+Try some routes.
+
+The defaults will produce a pretty decent VFR plan with under-100NM legs:
     ```sh
     python3 plan.py KHAF KUAO
+    ```
+
+The --direct option is useful to find the shortest way to visit a number of other airports:
+    ```sh
+    python3 plan.py --direct KLVK KAPC --via KVCB --via KHAF --via KCCR
+    ```
+
+The --airway option may include airways in the plan:
+    ```sh
+    python3 plan.py --airway KMOD KPSP
     ```
 
 ## Command line arguments
 
     ```sh
-    python3 plan.py origin_icao destination_icao [options] [routing preferences]
+    python3 plan.py origin destination [options] [routing preferences]
     ```
 
-    origin_icao: Origin airport code.
+    origin: Origin airport ICAO code. Mandatory argument.
 
-    destination_icao: Destination airport code.
+    destination: Destination airport ICAO code. Mandatory argument.
 
-    --via <icao_code>
-        Generated route must include this waypoint. Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.
+    --via <waypoint>
+        Generated route must include this airport, fix, or navaid. Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.
+
+    ROUTE GENERATION PREFERENCES
 
     --direct:
-        Generate a shortest-path direct flight plan between origin and destination, via any optional vias and exit. No intermediate legs are calculated. If --direct is not specified, Route planner will generate intermediate legs using the following criteria:
+        Generate a shortest-path direct flight plan between origin and destination, via any optional vias and exit. No intermediate legs are calculated.
+
+    --airway:
+        Generate a flight plan between origin and destination, via any optional vias, considering airways as well as waypoint-to-waypoint legs.
+
+    If --direct or --airway is not specified, generate a flight plan between origin and destination, via any optional vias, with intermediate legs using the following criteria:
 
     --max-leg-length <distance>:
         Specify the maximum leg length for direct neighbors, in nautical miles. Default is 100.
+
+    WAYPOINT PREFERENCES
 
     --route-airport [PREFER | INCLUDE | AVOID | REJECT]:
         Specify how to handle airports in the route. Default is 'INCLUDE'.
@@ -91,8 +112,22 @@ Try some routes:
     --route-vordme [PREFER | INCLUDE | AVOID | REJECT]:
         Specify how to handle VOR/DMEs in the route. Default is 'REJECT'.
 
-    --route-airway [PREFER | INCLUDE | AVOID | REJECT]:
-        Specify how to handle airways in the route. Overrides settings for DMEs, NDBs, NDB/DMEs, VORs, VORTACs, and VOR/DMEs, and adds other fixes useful for airway routing.
+    AIRWAY PREFERENCES
+
+    --route-airway-victor [PREFER | INCLUDE | AVOID | REJECT]:
+        Specify how to handle Victor airways in the route, only when airway routing is enabled. Default is 'PREFER'
+
+    --route-airway-rnav' [PREFER | INCLUDE | AVOID | REJECT]:
+        Specify how to handle RNAV (T and Q) airways in the route, only when airway routing is enabled. Default is 'INCLUDE'
+
+    --route-airway-jet [PREFER | INCLUDE | AVOID | REJECT]:
+        Specify how to handle Jet airways in the route, only when airway routing is enabled. Default is 'REJECT'
+
+    --route-airway-color [PREFER | INCLUDE | AVOID | REJECT]:
+        Specify how to handle colored airways in the route, only when airway routing is enabled. Default is 'REJECT'
+
+    --route-airway-other [PREFER | INCLUDE | AVOID | REJECT]:
+        Specify how to handle atlantic, bahama, pacific, and puerto rico airways in the route, only when airway routing is enabled. Default is 'REJECT'
 
 # Development Reference
 

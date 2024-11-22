@@ -76,13 +76,13 @@ def bounding_box(lat1, lon1, distance):
     return (math.degrees(lat2), math.degrees(lon2), math.degrees(lat3), math.degrees(lon3))
 
 class router(astar.AStar):
-    def __init__(self, route_preferences, max_leg_length):
+    def __init__(self, waypoint_preferences, airway_preferences, max_leg_length):
         """
         Initialize all the state needed to implement the a-star pathfinding algorithm.
 
         Args:
-            route_preferences (dict): A dictionary mapping waypoint types to routing preferences.
-                                      Possible values are "PREFER", "INCLUDE", "AVOID", and "REJECT".
+            waypoint_preferences (dict): A dictionary mapping waypoint types to routing preferences.
+                                         Possible values are "PREFER", "INCLUDE", "AVOID", and "REJECT".
 
             max_leg_length (float): The maximum allowable length for any leg of the route.
         """
@@ -91,12 +91,17 @@ class router(astar.AStar):
         with open("waypoints.pickle", "rb") as f:
             self.waypoints = pickle.load(f)
 
+        # Deserialize airways
+        with open("airways.pickle", "rb") as f:
+            self.airways = pickle.load(f)
+
         # Deserialize connections
         with open("connections.pickle", "rb") as f:
             self.connections = pickle.load(f)
 
         # Store the route preferences
-        self.route_preferences = route_preferences
+        self.waypoint_preferences = waypoint_preferences
+        self.airway_preferences = airway_preferences
         self.max_leg_length = max_leg_length
 
         # Set costs for each route preference
@@ -105,7 +110,7 @@ class router(astar.AStar):
         # Construct an rtree index
         def generator_function():
             for id, (_, waypoint_type, lat, lon) in enumerate(self.waypoints):
-                if route_preferences[waypoint_type] != 'REJECT':
+                if waypoint_preferences[waypoint_type] != 'REJECT':
                     yield (id, (lon, lat, lon, lat), None)
         self.waypoints_idx = rtree.index.Index(generator_function())
 
@@ -158,11 +163,12 @@ class router(astar.AStar):
         # Query the index for neighbors
         neighbors = list(self.waypoints_idx.intersection((west, south, east, north)))
 
-        # Find airway neighbors, which should always be included
-        airway_neighbors = self.connections.get(node, [])
+        if self.airway_preferences:
+            # Find airway neighbors, which should be included if we are using airways
+            airway_neighbors = self.connections.get(node, [])
 
-        # Add airway connections to neighbors
-        neighbors.extend(neighbor for neighbor, _, _ in airway_neighbors if neighbor not in neighbors)
+            # Add airway connections to neighbors
+            neighbors.extend(neighbor for neighbor, _ in airway_neighbors if neighbor not in neighbors)
 
         return neighbors
 
@@ -191,17 +197,19 @@ class router(astar.AStar):
         type2 = self.waypoints[n2][1]
 
         # The cost associated with the route preferences of the two nodes
-        nodes_cost_modifier = self.costs[self.route_preferences[type1]] * self.costs[self.route_preferences[type2]]
+        nodes_cost_modifier = self.costs[self.waypoint_preferences[type1]] * self.costs[self.waypoint_preferences[type2]]
 
         # The cost modifier for distnaces greater than the max_leg_length
         distance_cost_modifier = self.costs["REJECT"] if distance > self.max_leg_length else 1.0
 
         # If n1 and n2 are adjacent on the same airway, additionally factor in the airway cost modifier
         airway_cost_modifier = 1.0
-        airway_neighbors = self.connections.get(n1, [])
-        for neighbor, _, _ in airway_neighbors:
-            if neighbor == n2:
-                airway_cost_modifier = self.costs[self.route_preferences["AIRWAY"]]
+        if self.airway_preferences:
+            for neighbor, aidx in self.connections.get(n1, []):
+                if neighbor == n2:
+                    # Get the airway type
+                    typea = self.airways[aidx][2]
+                    airway_cost_modifier = self.costs[self.airway_preferences[typea]]
 
         # Combine all cost modifiers to get the weighted distance
         return distance * nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier
@@ -237,27 +245,41 @@ def main():
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Generate a flight plan from origin to destination, via an optional list of waypoints.')
-    parser.add_argument('--route-airport',       choices=route_choices, default='INCLUDE', help='Specify how to handle airports in the route')
-    parser.add_argument('--route-balloonport',   choices=route_choices, default='REJECT',  help='Specify how to handle balloonports in the route')
-    parser.add_argument('--route-seaplane-base', choices=route_choices, default='REJECT',  help='Specify how to handle seaplane bases in the route')
-    parser.add_argument('--route-gliderport',    choices=route_choices, default='REJECT',  help='Specify how to handle gliderports in the route')
-    parser.add_argument('--route-heliport',      choices=route_choices, default='REJECT',  help='Specify how to handle heliports in the route')
-    parser.add_argument('--route-ultralight',    choices=route_choices, default='REJECT',  help='Specify how to handle ultralight aerodromes in the route')
-    parser.add_argument('--route-vfr-waypoint',  choices=route_choices, default='INCLUDE', help='Specify how to handle VFR waypoints in the route')
-    parser.add_argument('--route-dme',           choices=route_choices, default='REJECT',  help='Specify how to handle DMEs in the route')
-    parser.add_argument('--route-ndb',           choices=route_choices, default='REJECT',  help='Specify how to handle NDBs in the route')
-    parser.add_argument('--route-ndbdme',        choices=route_choices, default='REJECT',  help='Specify how to handle NDB/DMEs in the route')
-    parser.add_argument('--route-vor',           choices=route_choices, default='REJECT', help='Specify how to handle VORs in the route')
-    parser.add_argument('--route-vortac',        choices=route_choices, default='REJECT', help='Specify how to handle VORTACs in the route')
-    parser.add_argument('--route-vordme',        choices=route_choices, default='REJECT', help='Specify how to handle VORs in the route')
-    parser.add_argument('--route-airway',        choices=route_choices, help='Specify how to handle airways in the route. If set, this will override the setting for DMEs, NDBs, NDB/DMEs, VORs, VORTACs, and VOR/DMEs, and also add some other fixes that are unly useful for airway routing.')
 
-    parser.add_argument('--max-leg-length', type=float, default=100, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
-
-    parser.add_argument('--direct', action='store_true', help='Generate a direct flight plan between origin and destination, via any optional vias')
-    parser.add_argument('--via', action='append', help='Generated route must include this waypoint', default=[])
+    # Required origin and destination
     parser.add_argument('origin', help='Origin airport code')
     parser.add_argument('destination', help='Destination airport code')
+
+    # Optional via waypoints
+    parser.add_argument('--via', action='append', help='Generated route must include this airport, fix, or navaid. Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.', default=[])
+
+    # Route generation preferences
+    parser.add_argument('--direct', action='store_true', help='Generate a shortest-path direct flight plan between origin and destination, via any optional vias and exit. No intermediate legs are calculated.')
+    parser.add_argument('--airway', action='store_true', help='Generate a flight plan between origin and destination, via any optional vias, considering airways as well as waypoint-to-waypoint legs.')
+    parser.add_argument('--max-leg-length', type=float, default=100, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
+
+    # Waypoint preferences
+    parser.add_argument('--route-airport',       choices=route_choices, default='INCLUDE', help='Specify how to handle airports in the route.')
+    parser.add_argument('--route-balloonport',   choices=route_choices, default='REJECT',  help='Specify how to handle balloonports in the route.')
+    parser.add_argument('--route-seaplane-base', choices=route_choices, default='REJECT',  help='Specify how to handle seaplane bases in the route.')
+    parser.add_argument('--route-gliderport',    choices=route_choices, default='REJECT',  help='Specify how to handle gliderports in the route.')
+    parser.add_argument('--route-heliport',      choices=route_choices, default='REJECT',  help='Specify how to handle heliports in the route.')
+    parser.add_argument('--route-ultralight',    choices=route_choices, default='REJECT',  help='Specify how to handle ultralight aerodromes in the route.')
+    parser.add_argument('--route-vfr-waypoint',  choices=route_choices, default='INCLUDE', help='Specify how to handle VFR waypoints in the route.')
+    parser.add_argument('--route-dme',           choices=route_choices, default='REJECT',  help='Specify how to handle DMEs in the route.')
+    parser.add_argument('--route-ndb',           choices=route_choices, default='REJECT',  help='Specify how to handle NDBs in the route.')
+    parser.add_argument('--route-ndbdme',        choices=route_choices, default='REJECT',  help='Specify how to handle NDB/DMEs in the route.')
+    parser.add_argument('--route-vor',           choices=route_choices, default='REJECT',  help='Specify how to handle VORs in the route.')
+    parser.add_argument('--route-vortac',        choices=route_choices, default='REJECT',  help='Specify how to handle VORTACs in the route.')
+    parser.add_argument('--route-vordme',        choices=route_choices, default='REJECT',  help='Specify how to handle VORs in the route.')
+
+    # Airway preferences
+    parser.add_argument('--route-airway-victor', choices=route_choices, default='PREFER',  help='Specify how to handle Victor airways in the route.')
+    parser.add_argument('--route-airway-rnav',   choices=route_choices, default='INCLUDE', help='Specify how to handle RNAV (T and Q) airways in the route.')
+    parser.add_argument('--route-airway-jet',    choices=route_choices, default='REJECT',  help='Specify how to handle Jet airways in the route.')
+    parser.add_argument('--route-airway-color',  choices=route_choices, default='REJECT',  help='Specify how to handle colored airways in the route.')
+    parser.add_argument('--route-airway-other',  choices=route_choices, default='REJECT',  help='Specify how to handle atlantic, bahama, pacific, and puerto rico airways in the route.')
+
     args = parser.parse_args()
 
     # Exit if origin or destination are not set
@@ -265,7 +287,7 @@ def main():
         parser.error("You must specify an origin and destination")
 
     # Create a mapping from waypoint type to route preference
-    route_preferences = {
+    waypoint_preferences = {
         # Aerodromes can be configured individually
         'A': args.route_airport,
         'B': args.route_balloonport,
@@ -277,19 +299,19 @@ def main():
         # VFR waypoints can be configured
         'VFR': args.route_vfr_waypoint,
 
-        # These navaids can be configured individually or as a group with --route-airway
-        'DME': args.route_airway if args.route_airway else args.route_dme,
-        'NDB': args.route_airway if args.route_airway else args.route_ndb,
-        'NDB/DME': args.route_airway if args.route_airway else args.route_ndbdme,
-        'VOR': args.route_airway if args.route_airway else args.route_vor,
-        'VORTAC': args.route_airway if args.route_airway else args.route_vortac,
-        'VOR/DME': args.route_airway if args.route_airway else args.route_vordme,
+        # These navaids can be configured individually or as a group with --airway
+        'DME':     "INCLUDE" if args.airway else args.route_dme,
+        'NDB':     "INCLUDE" if args.airway else args.route_ndb,
+        'NDB/DME': "INCLUDE" if args.airway else args.route_ndbdme,
+        'VOR':     "INCLUDE" if args.airway else args.route_vor,
+        'VORTAC':  "INCLUDE" if args.airway else args.route_vortac,
+        'VOR/DME': "INCLUDE" if args.airway else args.route_vordme,
 
-        # These fixes are only useful for airway routing and can be configured as a group with --route-airway
-        'CN': args.route_airway if args.route_airway else "REJECT",
-        'MR': args.route_airway if args.route_airway else "REJECT",
-        'RP': args.route_airway if args.route_airway else "REJECT",
-        'WP': args.route_airway if args.route_airway else "REJECT",
+        # These fixes are only useful for airway routing and can be configured as a group with --airway
+        'CN': "INCLUDE" if args.airway else "REJECT",
+        'MR': "INCLUDE" if args.airway else "REJECT",
+        'RP': "INCLUDE" if args.airway else "REJECT",
+        'WP': "INCLUDE" if args.airway else "REJECT",
 
         # These fixes are not useful for routing
         'MW': "REJECT",
@@ -304,16 +326,28 @@ def main():
         'TACAN': "REJECT",
         'UHF/NDB': "REJECT",
         'VOT': "REJECT",
+    }
 
-        # This configuration provides a cost modifier during pathfinding when nodes are connected by an airway
-        'AIRWAY': args.route_airway if args.route_airway else "INCLUDE"
+    # Create a mapping from airway designation to route preference
+    airway_preferences = {
+        'V': args.route_airway_victor,
+        'J': args.route_airway_jet,
+        'G': args.route_airway_color,
+        'A': args.route_airway_color,
+        'R': args.route_airway_color,
+        'B': args.route_airway_color,
+        'RN': args.route_airway_rnav,
+        'AT': args.route_airway_other,
+        'BF': args.route_airway_other,
+        'PA': args.route_airway_other,
+        'PR': args.route_airway_other,
     }
 
     # Calculate maximum leg length in meters
     max_leg_length = args.max_leg_length * 1852
 
     # Initialize the router
-    r = router(route_preferences, max_leg_length)
+    r = router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length)
 
     # Get the origin id, and print an error if it does not exist
     origin_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.origin and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
