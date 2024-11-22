@@ -8,6 +8,7 @@ CSV files processed:
     - FIX_BASE.csv: Contains fix waypoint data.
     - NAV_BASE.csv: Contains navigation waypoint data.
     - AWY_BASE.csv: Contains airway data.
+    - AWY_SEG_ALT.csv: Contains airway segment data.
 
 Command line arguments:
     --filename: Specify the NASR data filename.

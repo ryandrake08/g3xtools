@@ -211,6 +211,8 @@ class router(astar.AStar):
                     typea = self.airways[aidx][2]
                     airway_cost_modifier = self.costs[self.airway_preferences[typea]]
 
+#        print(f"Between {self.waypoints[n1][0]} and {self.waypoints[n2][0]}: {distance} * {nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier} = {distance * nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier}")
+
         # Combine all cost modifiers to get the weighted distance
         return distance * nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier
 
@@ -236,7 +238,7 @@ class router(astar.AStar):
         distance = self.actual_distance_between(n1, n2)
 
         # Use most favorable possible cost, heuristic_cost_estimate must always underestimate
-        cost = self.costs["PREFER"] * self.costs["PREFER"] * self.costs["PREFER"]
+        cost = self.costs["PREFER"] * self.costs["PREFER"]
         return distance * cost
 
 def main():
@@ -252,6 +254,9 @@ def main():
 
     # Optional via waypoints
     parser.add_argument('--via', action='append', help='Generated route must include this airport, fix, or navaid. Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.', default=[])
+
+    # Output preferences
+    parser.add_argument('--output-minimal-airway', action='store_true', help='Output a condensed flight plan showing only airway entry and exit waypoints.')
 
     # Route generation preferences
     parser.add_argument('--direct', action='store_true', help='Generate a shortest-path direct flight plan between origin and destination, via any optional vias and exit. No intermediate legs are calculated.')
@@ -274,11 +279,11 @@ def main():
     parser.add_argument('--route-vordme',        choices=route_choices, default='REJECT',  help='Specify how to handle VORs in the route.')
 
     # Airway preferences
-    parser.add_argument('--route-airway-victor', choices=route_choices, default='PREFER',  help='Specify how to handle Victor airways in the route.')
-    parser.add_argument('--route-airway-rnav',   choices=route_choices, default='INCLUDE', help='Specify how to handle RNAV (T and Q) airways in the route.')
-    parser.add_argument('--route-airway-jet',    choices=route_choices, default='REJECT',  help='Specify how to handle Jet airways in the route.')
-    parser.add_argument('--route-airway-color',  choices=route_choices, default='REJECT',  help='Specify how to handle colored airways in the route.')
-    parser.add_argument('--route-airway-other',  choices=route_choices, default='REJECT',  help='Specify how to handle atlantic, bahama, pacific, and puerto rico airways in the route.')
+    parser.add_argument('--route-airway-victor', choices=route_choices, default='PREFER',  help='Specify how to handle Victor airways in the route, if --airway is set.')
+    parser.add_argument('--route-airway-rnav',   choices=route_choices, default='INCLUDE', help='Specify how to handle RNAV (T and Q) airways in the route, if --airway is set.')
+    parser.add_argument('--route-airway-jet',    choices=route_choices, default='REJECT',  help='Specify how to handle Jet airways in the route, if --airway is set.')
+    parser.add_argument('--route-airway-color',  choices=route_choices, default='REJECT',  help='Specify how to handle colored airways in the route, if --airway is set.')
+    parser.add_argument('--route-airway-other',  choices=route_choices, default='REJECT',  help='Specify how to handle atlantic, bahama, pacific, and puerto rico airways in the route, if --airway is set.')
 
     args = parser.parse_args()
 
@@ -376,7 +381,7 @@ def main():
     # Pick the shortest direct route
     route, _ = min(routes_and_distances, key=lambda x: x[1])
 
-    # Generate a point-to-point flight plan
+    # Generate a point-to-point route
     if not args.direct:
         # Find the route between each pair of waypoints
         for start, end in itertools.pairwise(route):
@@ -385,9 +390,75 @@ def main():
             if subroute:
                 route = route[:route.index(start)] + list(subroute) + route[route.index(end) + 1:]
 
+    # Format the route for output
+    if args.airway and args.output_minimal_airway:
+        # First walk the route and count how often each airway is present in a segment
+        airway_counts = {}
+        for wp1, wp2 in itertools.pairwise(route):
+            # Find the airway segment between the current waypoint and the previous waypoint
+            for neighbor, airway in r.connections.get(wp1, []):
+                if neighbor == wp2:
+                    # Keep track of the count. This will be used to break ties when selecting airways to display
+                    airway_counts[airway] = airway_counts.get(airway, 0) + 1
+
+        # Always start with the first waypoint
+        airway_route = [r.waypoints[route[0]][0]]
+
+        # Keep track of the "current" airway
+        current_airway = None
+
+        # Now walk the route again and insert airway segments
+        for wp1, wp2 in itertools.pairwise(route):
+            # Find the airway segment between the current waypoint and the previous waypoint
+            connecting_airways = [airway for neighbor, airway in r.connections.get(wp1, []) if neighbor == wp2]
+
+            # Select the airway to use. Default is no airway
+            selected_airway = None
+
+            # If there are multiple airways connecting these waypoints, need to selec one
+            if len(connecting_airways) > 1:
+
+                # Favor the current airway, or if no current airway, find the one with the highest count
+                if current_airway:
+                    selected_airway = next((airway for airway in connecting_airways if airway == current_airway), None)
+                if not selected_airway:
+                    selected_airway = max(connecting_airways, key=lambda x: airway_counts[x])
+
+            # If there is only one airway, use it
+            elif connecting_airways:
+                selected_airway = connecting_airways[0]
+
+#            print(f"Between {r.waypoints[wp1][0]} and {r.waypoints[wp2][0]}: {r.airways[selected_airway][0] if selected_airway else None}. Currently on {r.airways[current_airway][0] if current_airway else None}")
+
+            # If going from an airway to a different airway, add the previous waypoint and the airway
+            if current_airway and selected_airway and current_airway != selected_airway:
+                airway_route.append(r.waypoints[wp1][0])
+                airway_route.append(r.airways[selected_airway][0])
+
+            # If going from an airway to None, add the previous waypoint and the current waypoint
+            elif current_airway and not selected_airway:
+                airway_route.append(r.waypoints[wp1][0])
+                airway_route.append(r.waypoints[wp2][0])
+
+            # If going from None to None, add the waypoint
+            elif not selected_airway and not current_airway:
+                airway_route.append(r.waypoints[wp2][0])
+
+            # If going from None to an airway, add the airway
+            elif not current_airway and selected_airway:
+                airway_route.append(r.airways[selected_airway][0])
+
+            # Update the current airway
+            current_airway = selected_airway
+
+        # Output the airway route
+        route = airway_route
+    else:
+        route = [r.waypoints[idx][0] for idx in route]
+
     # Output the flight plan
     if route:
-        print(" ".join(r.waypoints[id][0] for id in route))
+        print(" ".join(item for item in route))
     else:
         print("No route found")
 

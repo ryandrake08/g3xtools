@@ -58,6 +58,12 @@ The --airway option may include airways in the plan:
     --via <waypoint>
         Generated route must include this airport, fix, or navaid. Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.
 
+    OUTPUT PREFERENCES
+
+    --output-minimal-airway
+        Output a condensed flight plan showing only airway entry and exit waypoints.
+
+
     ROUTE GENERATION PREFERENCES
 
     --direct:
