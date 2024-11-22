@@ -23,7 +23,7 @@ To set up the project's database, you need to:
 
 2. Build some pre-processed data files from the NASR data, so the planner doesn't have to navigate ZIP and CSV files:
     ```sh
-    python3 makedb.py <filename downloaded above>
+    python3 makedb.py nasr_filename
     ```
 
 # Usage
@@ -31,25 +31,25 @@ To set up the project's database, you need to:
 Try some routes.
 
 The defaults will produce a pretty decent VFR plan with under-100NM legs:
-    ```sh
-    python3 plan.py KHAF KUAO
-    ```
+```sh
+python3 plan.py KHAF KUAO
+```
 
 The --direct option is useful to find the shortest way to visit a number of other airports:
-    ```sh
-    python3 plan.py --direct KLVK KAPC --via KVCB --via KHAF --via KCCR
-    ```
+```sh
+python3 plan.py --direct KLVK KAPC --via KVCB --via KHAF --via KCCR
+```
 
 The --airway option may include airways in the plan:
-    ```sh
-    python3 plan.py --airway KMOD KPSP
-    ```
+```sh
+python3 plan.py --airway KMOD KPSP
+```
 
 ## Command line arguments
 
-    ```sh
-    python3 plan.py origin destination [options] [routing preferences]
-    ```
+```sh
+python3 plan.py origin destination [options] [routing preferences]
+```
 
     origin: Origin airport ICAO code. Mandatory argument.
 
