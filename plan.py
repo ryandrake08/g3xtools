@@ -91,10 +91,6 @@ class router(astar.AStar):
         with open("waypoints.pickle", "rb") as f:
             self.waypoints = pickle.load(f)
 
-        # Deserialize airways
-        with open("airways.pickle", "rb") as f:
-            self.airways = pickle.load(f)
-
         # Deserialize connections
         with open("connections.pickle", "rb") as f:
             self.connections = pickle.load(f)
@@ -166,7 +162,7 @@ class router(astar.AStar):
         airway_neighbors = self.connections.get(node, [])
 
         # Add airway connections to neighbors
-        neighbors.extend(neighbor for neighbor, _ in airway_neighbors if neighbor not in neighbors)
+        neighbors.extend(neighbor for neighbor, _, _ in airway_neighbors if neighbor not in neighbors)
 
         return neighbors
 
@@ -203,7 +199,7 @@ class router(astar.AStar):
         # If n1 and n2 are adjacent on the same airway, additionally factor in the airway cost modifier
         airway_cost_modifier = 1.0
         airway_neighbors = self.connections.get(n1, [])
-        for neighbor, airway in airway_neighbors:
+        for neighbor, _, _ in airway_neighbors:
             if neighbor == n2:
                 airway_cost_modifier = self.costs[self.route_preferences["AIRWAY"]]
 

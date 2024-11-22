@@ -61,55 +61,55 @@ def main():
                 read_csv_file(csv_archive, 'NAV_BASE.csv', ['NAV_ID', 'NAV_TYPE', 'LAT_DECIMAL', 'LONG_DECIMAL'], waypoints)
 
                 # Read airway data
-                read_csv_file(csv_archive, 'AWY_BASE.csv', ['AWY_ID', 'AWY_LOCATION', 'AWY_DESIGNATION', 'AIRWAY_STRING'], airways)
-
-    # Data cleaning: Special cases
-    def decide_between(i1, i2):
-        waypoint1 = waypoints[i1]
-        waypoint2 = waypoints[i2]
-
-        # Prefer VOR/DME or VORTAC, or TACAN and dis-prefer VOT, FAN MARKER, or MARINE NDB
-        if waypoint1[1] in ['VOR/DME', 'VORTAC', 'TACAN', 'DME'] or waypoint2[1] in ["VOT", "FAN MARKER", "MARINE NDB"]:
-            return i1
-        if waypoint2[1] in ['VOR/DME', 'VORTAC', 'TACAN', "DME" ] or waypoint1[1] in ["VOT", "FAN MARKER", "MARINE NDB"]:
-            return i2
-
-        # If both are named "AP", prefer the one whose longitude < -100. We know this one is part of airway A16
-        if waypoint1[0] == 'AP' and waypoint1[3] < -100:
-            return i1
-        if waypoint2[0] == 'AP' and waypoint2[3] < -100:
-            return i2
-
-        # The rest are two-letter NDBs that (as of the time this code was written) are not part of any airway
-        return i1
+                read_csv_file(csv_archive, 'AWY_SEG_ALT.csv', ['AWY_ID', 'AWY_LOCATION', 'FROM_POINT', 'FROM_PT_TYPE'], airways)
 
     # Build a temporary lookup dictionary of waypoint_id to waypoint_index
     waypoint_lookup = {}
     for i, waypoint in enumerate(waypoints):
         ei = waypoint_lookup.get(waypoint[0], None)
-        if ei:
-            waypoint_lookup[waypoint[0]] = decide_between(ei, i)
+        if isinstance(ei, list):
+            ei.append(i)
+        elif ei:
+            waypoint_lookup[waypoint[0]] = [ei, i]
         else:
             waypoint_lookup[waypoint[0]] = i
 
-    # Build a dictionary of airway connections: waypoint_index to [(neighbor_index, airway_index)]
-    connections = collections.defaultdict(list)
-    for i, airway in enumerate(airways):
-        # Get the list of waypoints in the airway
-        waypoint_indices = [waypoint_lookup[waypoint_id] for waypoint_id in airway[3].split(' ')]
+    # Build a temporary dictionary of airway connections, keyed by (airway_id, airway_location)
+    airway_lists = collections.defaultdict(list)
+    for row in airways:
+        airway_id, airway_location, point, waypoint_type = row
 
-        # For each pair of waypoints in the airway, add a connection in both directions
-        for waypoint_index, neighbor_index in itertools.pairwise(waypoint_indices):
-            connections[waypoint_index].append((neighbor_index, i))
-            connections[neighbor_index].append((waypoint_index, i))
+        # Look up the waypoint index from our temporary lookup dictionary
+        waypoint_index = waypoint_lookup.get(point)
+
+        # If the waypoint is not found, skip it. AWY_SEG_ALT.csv contains pseudo-waypoints for the US border that we don't use
+        if waypoint_index is None:
+            continue
+
+        # If there are multiple waypoints with the same ID, decide which one to use
+        if isinstance(waypoint_index, list):
+            # Find the first waypoint that matches the type
+            for i in waypoint_index:
+                if waypoints[i][1] == waypoint_type:
+                    waypoint_index = i
+                    break
+            # If we didn't find a match, raise an error
+            if isinstance(waypoint_index, list):
+                raise ValueError(f"No waypoints in {waypoint_index} matches the type {waypoint_type}")
+
+        # Add the waypoint index to the airway list
+        airway_lists[(airway_id, airway_location)].append(waypoint_index)
+
+    # Build a dictionary of airway connections: waypoint_index to (neighbor_index, airway_id, airway_location)
+    connections = collections.defaultdict(list)
+    for (airway_id, airway_location), waypoint_indices in airway_lists.items():
+        for i1, i2 in zip(waypoint_indices, waypoint_indices[1:]):
+            connections[i1].append((i2, airway_id, airway_location))
+            connections[i2].append((i1, airway_id, airway_location))
 
     # Serialize waypoints
     with open('waypoints.pickle', 'wb') as f:
         pickle.dump(waypoints, f)
-
-    # Serialize airways
-    with open('airways.pickle', 'wb') as f:
-        pickle.dump(airways, f)
 
     # Serialize connections
     with open('connections.pickle', 'wb') as f:
