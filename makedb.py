@@ -21,6 +21,7 @@ Raises:
 """
 
 import argparse
+import collections
 import csv
 import io
 import itertools
@@ -62,23 +63,44 @@ def main():
                 # Read airway data
                 read_csv_file(csv_archive, 'AWY_BASE.csv', ['AWY_ID', 'AWY_LOCATION', 'AWY_DESIGNATION', 'AIRWAY_STRING'], airways)
 
-    # Build a lookup table of waypoint_id to waypoint_index
-    waypoint_lookup = {waypoint[0]: i for i, waypoint in enumerate(waypoints)}
+    # Data cleaning: Special cases
+    def decide_between(i1, i2):
+        waypoint1 = waypoints[i1]
+        waypoint2 = waypoints[i2]
 
-    # Build a dictionary of airway connections: waypoint_index -> [(neighbor_index, airway_index)]
-    connections = {}
+        # Prefer VOR/DME or VORTAC, or TACAN and dis-prefer VOT, FAN MARKER, or MARINE NDB
+        if waypoint1[1] in ['VOR/DME', 'VORTAC', 'TACAN', 'DME'] or waypoint2[1] in ["VOT", "FAN MARKER", "MARINE NDB"]:
+            return i1
+        if waypoint2[1] in ['VOR/DME', 'VORTAC', 'TACAN', "DME" ] or waypoint1[1] in ["VOT", "FAN MARKER", "MARINE NDB"]:
+            return i2
+
+        # If both are named "AP", prefer the one whose longitude < -100. We know this one is part of airway A16
+        if waypoint1[0] == 'AP' and waypoint1[3] < -100:
+            return i1
+        if waypoint2[0] == 'AP' and waypoint2[3] < -100:
+            return i2
+
+        # The rest are two-letter NDBs that (as of the time this code was written) are not part of any airway
+        return i1
+
+    # Build a temporary lookup dictionary of waypoint_id to waypoint_index
+    waypoint_lookup = {}
+    for i, waypoint in enumerate(waypoints):
+        ei = waypoint_lookup.get(waypoint[0], None)
+        if ei:
+            waypoint_lookup[waypoint[0]] = decide_between(ei, i)
+        else:
+            waypoint_lookup[waypoint[0]] = i
+
+    # Build a dictionary of airway connections: waypoint_index to [(neighbor_index, airway_index)]
+    connections = collections.defaultdict(list)
     for i, airway in enumerate(airways):
-        airway_string = airway[3]
-        airway_waypoints = airway_string.split(' ')
-        waypoint_indices = [waypoint_lookup.get(wp) for wp in airway_waypoints]
+        # Get the list of waypoints in the airway
+        waypoint_indices = [waypoint_lookup[waypoint_id] for waypoint_id in airway[3].split(' ')]
 
         # For each pair of waypoints in the airway, add a connection in both directions
         for waypoint_index, neighbor_index in itertools.pairwise(waypoint_indices):
-            if waypoint_index not in connections:
-                connections[waypoint_index] = []
             connections[waypoint_index].append((neighbor_index, i))
-            if neighbor_index not in connections:
-                connections[neighbor_index] = []
             connections[neighbor_index].append((waypoint_index, i))
 
     # Serialize waypoints
