@@ -187,24 +187,28 @@ class router(astar.AStar):
             float: The weighted distance between the two nodes.
         """
 
+        # Calculate actual distance
+        distance = self.actual_distance_between(n1, n2)
+
         # Get type of each node
         type1 = self.waypoints[n1][1]
         type2 = self.waypoints[n2][1]
 
-        # Calculate actual distance
-        distance = self.actual_distance_between(n1, n2)
+        # The cost associated with the route preferences of the two nodes
+        nodes_cost_modifier = self.costs[self.route_preferences[type1]] * self.costs[self.route_preferences[type2]]
 
-        # If n1 and n2 are on the same airway, additionally factor in the airway cost modifier
+        # The cost modifier for distnaces greater than the max_leg_length
+        distance_cost_modifier = self.costs["REJECT"] if distance > self.max_leg_length else 1.0
+
+        # If n1 and n2 are adjacent on the same airway, additionally factor in the airway cost modifier
         airway_cost_modifier = 1.0
-        if n1 in self.connections:
-            for neighbor, airway in self.connections[n1]:
-                if neighbor == n2:
-                    airway_cost_modifier = self.costs[self.route_preferences["AIRWAY"]]
+        airway_neighbors = self.connections.get(n1, [])
+        for neighbor, airway in airway_neighbors:
+            if neighbor == n2:
+                airway_cost_modifier = self.costs[self.route_preferences["AIRWAY"]]
 
-        # Calculate total cost
-        cost = self.costs["REJECT"] if distance > self.max_leg_length else self.costs[self.route_preferences[type1]] * self.costs[self.route_preferences[type2]]
-
-        return distance * cost * airway_cost_modifier
+        # Combine all cost modifiers to get the weighted distance
+        return distance * nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier
 
     def heuristic_cost_estimate(self, n1, n2):
         """
@@ -243,17 +247,14 @@ def main():
     parser.add_argument('--route-gliderport',    choices=route_choices, default='REJECT',  help='Specify how to handle gliderports in the route')
     parser.add_argument('--route-heliport',      choices=route_choices, default='REJECT',  help='Specify how to handle heliports in the route')
     parser.add_argument('--route-ultralight',    choices=route_choices, default='REJECT',  help='Specify how to handle ultralight aerodromes in the route')
-    parser.add_argument('--route-cns',           choices=route_choices, default='REJECT',  help='Specify how to handle CNSs in the route')
     parser.add_argument('--route-vfr-waypoint',  choices=route_choices, default='INCLUDE', help='Specify how to handle VFR waypoints in the route')
     parser.add_argument('--route-dme',           choices=route_choices, default='REJECT',  help='Specify how to handle DMEs in the route')
     parser.add_argument('--route-ndb',           choices=route_choices, default='REJECT',  help='Specify how to handle NDBs in the route')
-    parser.add_argument('--route-ndbdme',        choices=route_choices, default='REJECT',  help='Specify how to handle NDBs in the route')
-    parser.add_argument('--route-tacan',         choices=route_choices, default='REJECT',  help='Specify how to handle VORTACs in the route')
-    parser.add_argument('--route-uhfndb',        choices=route_choices, default='REJECT',  help='Specify how to handle UHF/NDBs in the route')
-    parser.add_argument('--route-vor',           choices=route_choices, default='INCLUDE', help='Specify how to handle VORs in the route')
-    parser.add_argument('--route-vortac',        choices=route_choices, default='INCLUDE', help='Specify how to handle VORTACs in the route')
-    parser.add_argument('--route-vordme',        choices=route_choices, default='INCLUDE', help='Specify how to handle VORs in the route')
-    parser.add_argument('--route-airway',        choices=route_choices, help='Specify how to handle airways in the route. If set, this will override the setting for DME, NDB, NDB/DME, TACAN, UHF/NDB, VOR, VORTAC, and VOR/DME.')
+    parser.add_argument('--route-ndbdme',        choices=route_choices, default='REJECT',  help='Specify how to handle NDB/DMEs in the route')
+    parser.add_argument('--route-vor',           choices=route_choices, default='REJECT', help='Specify how to handle VORs in the route')
+    parser.add_argument('--route-vortac',        choices=route_choices, default='REJECT', help='Specify how to handle VORTACs in the route')
+    parser.add_argument('--route-vordme',        choices=route_choices, default='REJECT', help='Specify how to handle VORs in the route')
+    parser.add_argument('--route-airway',        choices=route_choices, help='Specify how to handle airways in the route. If set, this will override the setting for DMEs, NDBs, NDB/DMEs, VORs, VORTACs, and VOR/DMEs, and also add some other fixes that are unly useful for airway routing.')
 
     parser.add_argument('--max-leg-length', type=float, default=100, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
 
@@ -269,34 +270,47 @@ def main():
 
     # Create a mapping from waypoint type to route preference
     route_preferences = {
+        # Aerodromes can be configured individually
         'A': args.route_airport,
         'B': args.route_balloonport,
         'C': args.route_seaplane_base,
         'G': args.route_gliderport,
         'H': args.route_heliport,
         'U': args.route_ultralight,
-        'CN': args.route_cns,
+
+        # VFR waypoints can be configured
         'VFR': args.route_vfr_waypoint,
-        'MR': args.route_airway if args.route_airway else "REJECT",
-        'RP': args.route_airway if args.route_airway else "REJECT",
-        'WP': args.route_airway if args.route_airway else "REJECT",
+
+        # These navaids can be configured individually or as a group with --route-airway
         'DME': args.route_airway if args.route_airway else args.route_dme,
         'NDB': args.route_airway if args.route_airway else args.route_ndb,
         'NDB/DME': args.route_airway if args.route_airway else args.route_ndbdme,
-        'TACAN': args.route_airway if args.route_airway else args.route_tacan,
-        'UHF/NDB': args.route_airway if args.route_airway else args.route_uhfndb,
         'VOR': args.route_airway if args.route_airway else args.route_vor,
         'VORTAC': args.route_airway if args.route_airway else args.route_vortac,
         'VOR/DME': args.route_airway if args.route_airway else args.route_vordme,
+
+        # These fixes are only useful for airway routing and can be configured as a group with --route-airway
+        'CN': args.route_airway if args.route_airway else "REJECT",
+        'MR': args.route_airway if args.route_airway else "REJECT",
+        'RP': args.route_airway if args.route_airway else "REJECT",
+        'WP': args.route_airway if args.route_airway else "REJECT",
+
+        # These fixes are not useful for routing
         'MW': "REJECT",
         'NRS': "REJECT",
         'RADAR': "REJECT",
+
+        # These navaids are not useful for routing
         'CONSOLAN': "REJECT",
         'FAN MARKER': "REJECT",
         'MARINE NDB': "REJECT",
         'MARINE NDB/DME': "REJECT",
+        'TACAN': "REJECT",
+        'UHF/NDB': "REJECT",
         'VOT': "REJECT",
-        'AIRWAY': args.route_airway if args.route_airway else "REJECT"
+
+        # This configuration provides a cost modifier during pathfinding when nodes are connected by an airway
+        'AIRWAY': args.route_airway if args.route_airway else "INCLUDE"
     }
 
     # Calculate maximum leg length in meters
