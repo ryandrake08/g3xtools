@@ -1,7 +1,7 @@
  #!/usr/bin/env python3
 
 """
-This script processes NASR data and stores it in lists which get pickled to disk.
+This script processes NASR data and stores it in python data structures which get pickled to disk.
 
 CSV files processed:
     - APT_BASE.csv: Contains airport waypoint data.
@@ -61,49 +61,47 @@ def main():
                 read_csv_file(csv_archive, 'NAV_BASE.csv', ['NAV_ID', 'NAV_TYPE', 'LAT_DECIMAL', 'LONG_DECIMAL'], waypoints)
 
                 # Read airway data
-                read_csv_file(csv_archive, 'AWY_SEG_ALT.csv', ['AWY_ID', 'AWY_LOCATION', 'FROM_POINT', 'FROM_PT_TYPE'], airways)
+                read_csv_file(csv_archive, 'AWY_SEG_ALT.csv', ['AWY_ID', 'AWY_LOCATION', 'FROM_POINT', 'FROM_PT_TYPE', 'TO_POINT', 'AWY_SEG_GAP_FLAG'], airways)
 
-    # Build a temporary lookup dictionary of waypoint_id to waypoint_index
-    waypoint_lookup = {}
+    # Build a temporary reverse lookup dictionary of waypoint_id to waypoint_indices
+    waypoint_lookup = collections.defaultdict(list)
     for i, waypoint in enumerate(waypoints):
-        ei = waypoint_lookup.get(waypoint[0], None)
-        if isinstance(ei, list):
-            ei.append(i)
-        elif ei:
-            waypoint_lookup[waypoint[0]] = [ei, i]
-        else:
-            waypoint_lookup[waypoint[0]] = i
+        waypoint_lookup[waypoint[0]].append(i)
 
-    # Build a temporary dictionary of airway connections, keyed by (airway_id, airway_location)
-    airway_lists = collections.defaultdict(list)
+    # Build a temporary list of airway_id, airway_location, (waypoint index lists)
+    airway_lists = []
+    current_waypoint_index_list = []
     for row in airways:
-        airway_id, airway_location, point, waypoint_type = row
+        airway_id, airway_location, from_point, from_point_type, to_point, gap = row
 
-        # Look up the waypoint index from our temporary lookup dictionary
-        waypoint_index = waypoint_lookup.get(point)
+        # Look up the waypoint index from our temporary reverse lookup dictionary
+        waypoint_indices = waypoint_lookup.get(from_point)
+        if waypoint_indices:
+            # Find the waypoint index that matches the type
+            matching_waypoint_indices = [i for i in waypoint_indices if waypoints[i][1] == from_point_type]
 
-        # If the waypoint is not found, skip it. AWY_SEG_ALT.csv contains pseudo-waypoints for the US border that we don't use
-        if waypoint_index is None:
-            continue
+            # Special case: Disregard ALPENA, which is an NDB and has id AP but is not part of an airway
+            if from_point == 'AP' and from_point_type == 'NDB':
+                matching_waypoint_indices = [i for i in matching_waypoint_indices if waypoints[i][3] <= -100]
 
-        # If there are multiple waypoints with the same ID, decide which one to use
-        if isinstance(waypoint_index, list):
-            # Find the first waypoint that matches the type
-            for i in waypoint_index:
-                if waypoints[i][1] == waypoint_type:
-                    waypoint_index = i
-                    break
-            # If we didn't find a match, raise an error
-            if isinstance(waypoint_index, list):
-                raise ValueError(f"No waypoints in {waypoint_index} matches the type {waypoint_type}")
+            # Ensure there is exactly one matching waypoint index
+            if len(matching_waypoint_indices) == 0:
+                raise ValueError(f'While examining airway {airway_id}, no waypoints with id {from_point} and type {from_point_type} found')
+            elif len(matching_waypoint_indices) > 1:
+                raise ValueError(f'While examining airway {airway_id}, multiple waypoints with id {from_point} and type {from_point_type} found')
 
-        # Add the waypoint index to the airway list
-        airway_lists[(airway_id, airway_location)].append(waypoint_index)
+            # Add the waypoint index to the current waypoint index list
+            current_waypoint_index_list.append(matching_waypoint_indices[0])
 
-    # Build a dictionary of airway connections: waypoint_index to (neighbor_index, airway_id, airway_location)
+        # If there is a gap, or if we are at the end of the airway, start a new list
+        if gap == 'Y' or not to_point:
+            airway_lists.append((airway_id, airway_location, current_waypoint_index_list))
+            current_waypoint_index_list = []
+
+    # Go through each list pairwise and build a dictionary of airway connections: waypoint_index to (neighbor_index, airway_id, airway_location)
     connections = collections.defaultdict(list)
-    for (airway_id, airway_location), waypoint_indices in airway_lists.items():
-        for i1, i2 in zip(waypoint_indices, waypoint_indices[1:]):
+    for airway_id, airway_location, waypoint_indices in airway_lists:
+        for i1, i2 in itertools.pairwise(waypoint_indices):
             connections[i1].append((i2, airway_id, airway_location))
             connections[i2].append((i1, airway_id, airway_location))
 
