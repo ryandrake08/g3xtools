@@ -390,77 +390,54 @@ def main():
             if subroute:
                 route = route[:route.index(start)] + list(subroute) + route[route.index(end) + 1:]
 
-    # Format the route for output
+    # If this is an airway route, need to assign airways to segments, consolidate, and display them
     if args.airway and args.output_minimal_airway:
-        # First walk the route and count how often each airway is present in a segment
+        # A segment can be on multiple airways.
+        # First walk the route pairwise and create a list of possible airways for each segment,
+        # also counting how often each airway is present in the overall route
         airway_counts = {}
+        airway_segments = []
         for wp1, wp2 in itertools.pairwise(route):
-            # Find the airway segment between the current waypoint and the previous waypoint
+            # Find all airway segments between the current waypoint and the previous waypoint
+            airways_in_segment = set()
             for neighbor, airway in r.connections.get(wp1, []):
                 if neighbor == wp2:
                     # Keep track of the count. This will be used to break ties when selecting airways to display
                     airway_counts[airway] = airway_counts.get(airway, 0) + 1
 
-        # Always start with the first waypoint
-        airway_route = [r.waypoints[route[0]][0]]
+                    # Add the airway to the segment
+                    airways_in_segment.add(airway)
 
-        # Keep track of the "current" airway
+            # Add the segment to the list
+            airway_segments.append(airways_in_segment)
+
+        # Next, walk the segments and assign airways, keeping track of the "current" airway to favor continuity
         current_airway = None
+        for i, airways_in_segment in enumerate(airway_segments):
+            # If segment has no airways, set the current airway to None
+            if not airways_in_segment:
+                current_airway = None
 
-        # Now walk the route again and insert airway segments
-        for wp1, wp2 in itertools.pairwise(route):
-            # Find the airway segment between the current waypoint and the previous waypoint
-            connecting_airways = [airway for neighbor, airway in r.connections.get(wp1, []) if neighbor == wp2]
+            # Favor the current airway, or if no current airway, find the one with the highest count
+            elif current_airway not in airways_in_segment:
+                current_airway = max(airways_in_segment, key=lambda x: airway_counts[x])
 
-            # Select the airway to use. Default is no airway
-            selected_airway = None
+            # Update the segment in-place with the single airway
+            airway_segments[i] = current_airway
 
-            # If there are multiple airways connecting these waypoints, need to selec one
-            if len(connecting_airways) > 1:
-
-                # Favor the current airway, or if no current airway, find the one with the highest count
-                if current_airway:
-                    selected_airway = next((airway for airway in connecting_airways if airway == current_airway), None)
-                if not selected_airway:
-                    selected_airway = max(connecting_airways, key=lambda x: airway_counts[x])
-
-            # If there is only one airway, use it
-            elif connecting_airways:
-                selected_airway = connecting_airways[0]
-
-#            print(f"Between {r.waypoints[wp1][0]} and {r.waypoints[wp2][0]}: {r.airways[selected_airway][0] if selected_airway else None}. Currently on {r.airways[current_airway][0] if current_airway else None}")
-
-            # If going from an airway to a different airway, add the previous waypoint and the airway
-            if current_airway and selected_airway and current_airway != selected_airway:
-                airway_route.append(r.waypoints[wp1][0])
-                airway_route.append(r.airways[selected_airway][0])
-
-            # If going from an airway to None, add the previous waypoint and the current waypoint
-            elif current_airway and not selected_airway:
-                airway_route.append(r.waypoints[wp1][0])
-                airway_route.append(r.waypoints[wp2][0])
-
-            # If going from None to None, add the waypoint
-            elif not selected_airway and not current_airway:
-                airway_route.append(r.waypoints[wp2][0])
-
-            # If going from None to an airway, add the airway
-            elif not current_airway and selected_airway:
-                airway_route.append(r.airways[selected_airway][0])
-
-            # Update the current airway
-            current_airway = selected_airway
-
-        # Output the airway route
-        route = airway_route
+        # Finally, walk the segments and waypoints and print if no airway or the airway changed
+        for i, (waypoint, airway) in enumerate(zip(route, airway_segments + [None])):
+            if airway is None:
+                # If no airway, just print the waypoint and continue
+                print(f"{r.waypoints[waypoint][0]}", end=" ")
+            elif i==0 or (airway != airway_segments[i-1]):
+                # If airway is different from previous, print the waypoint and new airway (if exists)
+                print(f"{r.waypoints[waypoint][0]}", end=" ")
+                if airway:
+                    print(f"{r.airways[airway][0]}", end=" ")
+        print()
     else:
-        route = [r.waypoints[idx][0] for idx in route]
-
-    # Output the flight plan
-    if route:
-        print(" ".join(item for item in route))
-    else:
-        print("No route found")
+        print(" ".join(r.waypoints[waypoint][0] for waypoint in route))
 
 if __name__ == "__main__":
     main()
