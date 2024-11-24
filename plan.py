@@ -82,21 +82,21 @@ class router(astar.AStar):
 
         Args:
             waypoint_preferences (dict): A dictionary mapping waypoint types to routing preferences.
-                                         Possible values are "PREFER", "INCLUDE", "AVOID", and "REJECT".
+                                         Possible values are PREFER, INCLUDE, AVOID, and REJECT.
 
             max_leg_length (float): The maximum allowable length for any leg of the route.
         """
 
         # Deserialize waypoints
-        with open("waypoints.pickle", "rb") as f:
+        with open('waypoints.pickle', 'rb') as f:
             self.waypoints = pickle.load(f)
 
         # Deserialize airways
-        with open("airways.pickle", "rb") as f:
+        with open('airways.pickle', 'rb') as f:
             self.airways = pickle.load(f)
 
         # Deserialize connections
-        with open("connections.pickle", "rb") as f:
+        with open('connections.pickle', 'rb') as f:
             self.connections = pickle.load(f)
 
         # Store the route preferences
@@ -105,7 +105,7 @@ class router(astar.AStar):
         self.max_leg_length = max_leg_length
 
         # Set costs for each route preference
-        self.costs = { "PREFER": 0.8, "INCLUDE": 1.0, "AVOID": 1.25, "REJECT": 1000.0 }
+        self.costs = { 'PREFER': 0.8, 'INCLUDE': 1.0, 'AVOID': 1.25, 'REJECT': 1000.0 }
 
         # Construct an rtree index
         def generator_function():
@@ -200,7 +200,7 @@ class router(astar.AStar):
         nodes_cost_modifier = self.costs[self.waypoint_preferences[type1]] * self.costs[self.waypoint_preferences[type2]]
 
         # The cost modifier for distnaces greater than the max_leg_length
-        distance_cost_modifier = self.costs["REJECT"] if distance > self.max_leg_length else 1.0
+        distance_cost_modifier = self.costs['REJECT'] if distance > self.max_leg_length else 1.0
 
         # If n1 and n2 are adjacent on the same airway, additionally factor in the airway cost modifier
         airway_cost_modifier = 1.0
@@ -211,7 +211,7 @@ class router(astar.AStar):
                     typea = self.airways[aidx][2]
                     airway_cost_modifier = self.costs[self.airway_preferences[typea]]
 
-#        print(f"Between {self.waypoints[n1][0]} and {self.waypoints[n2][0]}: {distance} * {nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier} = {distance * nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier}")
+#        print(f'Between {self.waypoints[n1][0]} and {self.waypoints[n2][0]}: {distance} * {nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier} = {distance * nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier}')
 
         # Combine all cost modifiers to get the weighted distance
         return distance * nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier
@@ -238,7 +238,7 @@ class router(astar.AStar):
         distance = self.actual_distance_between(n1, n2)
 
         # Use most favorable possible cost, heuristic_cost_estimate must always underestimate
-        cost = self.costs["PREFER"] * self.costs["PREFER"]
+        cost = self.costs['PREFER'] * self.costs['PREFER']
         return distance * cost
 
 def main():
@@ -289,7 +289,7 @@ def main():
 
     # Exit if origin or destination are not set
     if not args.origin or not args.destination:
-        parser.error("You must specify an origin and destination")
+        parser.error('You must specify an origin and destination')
 
     # Create a mapping from waypoint type to route preference
     waypoint_preferences = {
@@ -305,32 +305,32 @@ def main():
         'VFR': args.route_vfr_waypoint,
 
         # These navaids can be configured individually or as a group with --airway
-        'DME':     "INCLUDE" if args.airway else args.route_dme,
-        'NDB':     "INCLUDE" if args.airway else args.route_ndb,
-        'NDB/DME': "INCLUDE" if args.airway else args.route_ndbdme,
-        'VOR':     "INCLUDE" if args.airway else args.route_vor,
-        'VORTAC':  "INCLUDE" if args.airway else args.route_vortac,
-        'VOR/DME': "INCLUDE" if args.airway else args.route_vordme,
+        'DME':     'INCLUDE' if args.airway else args.route_dme,
+        'NDB':     'INCLUDE' if args.airway else args.route_ndb,
+        'NDB/DME': 'INCLUDE' if args.airway else args.route_ndbdme,
+        'VOR':     'INCLUDE' if args.airway else args.route_vor,
+        'VORTAC':  'INCLUDE' if args.airway else args.route_vortac,
+        'VOR/DME': 'INCLUDE' if args.airway else args.route_vordme,
 
         # These fixes are only useful for airway routing and can be configured as a group with --airway
-        'CN': "INCLUDE" if args.airway else "REJECT",
-        'MR': "INCLUDE" if args.airway else "REJECT",
-        'RP': "INCLUDE" if args.airway else "REJECT",
-        'WP': "INCLUDE" if args.airway else "REJECT",
+        'CN': 'INCLUDE' if args.airway else 'REJECT',
+        'MR': 'INCLUDE' if args.airway else 'REJECT',
+        'RP': 'INCLUDE' if args.airway else 'REJECT',
+        'WP': 'INCLUDE' if args.airway else 'REJECT',
 
         # These fixes are not useful for routing
-        'MW': "REJECT",
-        'NRS': "REJECT",
-        'RADAR': "REJECT",
+        'MW': 'REJECT',
+        'NRS': 'REJECT',
+        'RADAR': 'REJECT',
 
         # These navaids are not useful for routing
-        'CONSOLAN': "REJECT",
-        'FAN MARKER': "REJECT",
-        'MARINE NDB': "REJECT",
-        'MARINE NDB/DME': "REJECT",
-        'TACAN': "REJECT",
-        'UHF/NDB': "REJECT",
-        'VOT': "REJECT",
+        'CONSOLAN': 'REJECT',
+        'FAN MARKER': 'REJECT',
+        'MARINE NDB': 'REJECT',
+        'MARINE NDB/DME': 'REJECT',
+        'TACAN': 'REJECT',
+        'UHF/NDB': 'REJECT',
+        'VOT': 'REJECT',
     }
 
     # Create a mapping from airway designation to route preference
@@ -355,21 +355,21 @@ def main():
     r = router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length)
 
     # Get the origin id, and print an error if it does not exist
-    origin_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.origin.upper() and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
+    origin_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.origin.upper() and waypoint_type in ('A', 'B', 'C', 'G', 'H', 'U')), None)
     if not origin_id:
-        parser.error(f"Origin airport '{args.origin}' not found")
+        parser.error(f'Origin airport "{args.origin}" not found')
 
     # Get the destination id, and print an error if it does not exist
-    destination_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.destination.upper() and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
+    destination_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.destination.upper() and waypoint_type in ('A', 'B', 'C', 'G', 'H', 'U')), None)
     if not destination_id:
-        parser.error(f"Destination airport '{args.destination}' not found")
+        parser.error(f'Destination airport "{args.destination}" not found')
 
     # Map waypoint_id to id all vias
     via_ids = []
     for via in args.via:
         via_id = next((index for index, (waypoint_id, _, _, _) in enumerate(r.waypoints) if waypoint_id == via.upper()), None)
         if not via_id:
-            parser.error(f"Via waypoint '{via}' not found")
+            parser.error(f'Via waypoint "{via}" not found')
         via_ids.append(via_id)
 
     # Calculate candidate route list
@@ -411,7 +411,7 @@ def main():
             # Add the segment to the list
             airway_segments.append(airways_in_segment)
 
-        # Next, walk the segments and assign airways, keeping track of the "current" airway to favor continuity
+        # Next, walk the segments and assign airways, keeping track of the current airway to favor continuity
         current_airway = None
         for i, airways_in_segment in enumerate(airway_segments):
             # If segment has no airways, set the current airway to None
@@ -429,15 +429,15 @@ def main():
         for i, (waypoint, airway) in enumerate(zip(route, airway_segments + [None])):
             if airway is None:
                 # If no airway, just print the waypoint and continue
-                print(f"{r.waypoints[waypoint][0]}", end=" ")
+                print(r.waypoints[waypoint][0], end=' ')
             elif i==0 or (airway != airway_segments[i-1]):
                 # If airway is different from previous, print the waypoint and new airway (if exists)
-                print(f"{r.waypoints[waypoint][0]}", end=" ")
+                print(r.waypoints[waypoint][0], end=' ')
                 if airway:
-                    print(f"{r.airways[airway][0]}", end=" ")
+                    print(r.airways[airway][0], end=' ')
         print()
     else:
-        print(" ".join(r.waypoints[waypoint][0] for waypoint in route))
+        print(' '.join(r.waypoints[waypoint][0] for waypoint in route))
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
