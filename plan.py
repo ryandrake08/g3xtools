@@ -261,7 +261,7 @@ def main():
     # Route generation preferences
     parser.add_argument('--direct', action='store_true', help='Generate a shortest-path direct flight plan between origin and destination, via any optional vias and exit. No intermediate legs are calculated.')
     parser.add_argument('--airway', action='store_true', help='Generate a flight plan between origin and destination, via any optional vias, considering airways as well as waypoint-to-waypoint legs.')
-    parser.add_argument('--max-leg-length', type=float, default=100, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
+    parser.add_argument('--max-leg-length', type=float, default=80, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
 
     # Waypoint preferences
     parser.add_argument('--route-airport',       choices=route_choices, default='INCLUDE', help='Specify how to handle airports in the route.')
@@ -355,19 +355,19 @@ def main():
     r = router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length)
 
     # Get the origin id, and print an error if it does not exist
-    origin_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.origin and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
+    origin_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.origin.upper() and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
     if not origin_id:
         parser.error(f"Origin airport '{args.origin}' not found")
 
     # Get the destination id, and print an error if it does not exist
-    destination_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.destination and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
+    destination_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.destination.upper() and waypoint_type in ("A", "B", "C", "G", "H", "U")), None)
     if not destination_id:
         parser.error(f"Destination airport '{args.destination}' not found")
 
     # Map waypoint_id to id all vias
     via_ids = []
     for via in args.via:
-        via_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == via), None)
+        via_id = next((index for index, (waypoint_id, _, _, _) in enumerate(r.waypoints) if waypoint_id == via.upper()), None)
         if not via_id:
             parser.error(f"Via waypoint '{via}' not found")
         via_ids.append(via_id)

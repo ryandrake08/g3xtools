@@ -30,7 +30,7 @@ To set up the project's database, you need to:
 
 Try some routes.
 
-The defaults will produce a pretty decent VFR plan with under-100NM legs:
+The defaults will produce a pretty decent VFR plan with under-80NM legs:
 ```sh
 python3 plan.py KHAF KUAO
 ```
@@ -75,7 +75,7 @@ python3 plan.py origin destination [options] [routing preferences]
     If --direct or --airway is not specified, generate a flight plan between origin and destination, via any optional vias, with intermediate legs using the following criteria:
 
     --max-leg-length <distance>:
-        Specify the maximum leg length for direct neighbors, in nautical miles. Default is 100.
+        Specify the maximum leg length for direct neighbors, in nautical miles. Default is 80.
 
     WAYPOINT PREFERENCES
 
