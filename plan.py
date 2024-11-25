@@ -109,7 +109,7 @@ class router(astar.AStar):
 
         # Construct an rtree index
         def generator_function():
-            for id, (_, waypoint_type, lat, lon) in enumerate(self.waypoints):
+            for id, (_, waypoint_type, lat, lon, _) in enumerate(self.waypoints):
                 if waypoint_preferences[waypoint_type] != 'REJECT':
                     yield (id, (lon, lat, lon, lat), None)
         self.waypoints_idx = rtree.index.Index(generator_function())
@@ -131,8 +131,8 @@ class router(astar.AStar):
             return 0
 
         # Get information about each node from the cache
-        _, _, lat1, lon1 = self.waypoints[n1]
-        _, _, lat2, lon2 = self.waypoints[n2]
+        lat1, lon1 = self.waypoints[n1][2:4]
+        lat2, lon2 = self.waypoints[n2][2:4]
 
         # Calculate the distance between the two points
         return haversine(lat1, lon1, lat2, lon2)
@@ -157,7 +157,7 @@ class router(astar.AStar):
         """
 
         # Construct bounding box around the current waypoint
-        _, _, lat, lon = self.waypoints[node]
+        lat, lon = self.waypoints[node][2:4]
         north, east, south, west = bounding_box(lat, lon, self.max_leg_length)
 
         # Query the index for neighbors
@@ -355,19 +355,19 @@ def main():
     r = router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length)
 
     # Get the origin id, and print an error if it does not exist
-    origin_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.origin.upper() and waypoint_type in ('A', 'B', 'C', 'G', 'H', 'U')), None)
+    origin_id = next((index for index, (waypoint_id, waypoint_type, _, _, _) in enumerate(r.waypoints) if waypoint_id == args.origin.upper() and waypoint_type in ('A', 'B', 'C', 'G', 'H', 'U')), None)
     if not origin_id:
         parser.error(f'Origin airport "{args.origin}" not found')
 
     # Get the destination id, and print an error if it does not exist
-    destination_id = next((index for index, (waypoint_id, waypoint_type, _, _) in enumerate(r.waypoints) if waypoint_id == args.destination.upper() and waypoint_type in ('A', 'B', 'C', 'G', 'H', 'U')), None)
+    destination_id = next((index for index, (waypoint_id, waypoint_type, _, _, _) in enumerate(r.waypoints) if waypoint_id == args.destination.upper() and waypoint_type in ('A', 'B', 'C', 'G', 'H', 'U')), None)
     if not destination_id:
         parser.error(f'Destination airport "{args.destination}" not found')
 
     # Map waypoint_id to id all vias
     via_ids = []
     for via in args.via:
-        via_id = next((index for index, (waypoint_id, _, _, _) in enumerate(r.waypoints) if waypoint_id == via.upper()), None)
+        via_id = next((index for index, (waypoint_id, _, _, _, _) in enumerate(r.waypoints) if waypoint_id == via.upper()), None)
         if not via_id:
             parser.error(f'Via waypoint "{via}" not found')
         via_ids.append(via_id)
