@@ -6,6 +6,7 @@ import math
 import itertools
 import pickle
 import rtree
+import webbrowser
 
 def haversine(lat1, lon1, lat2, lon2):
     """
@@ -257,6 +258,7 @@ def main():
 
     # Output preferences
     parser.add_argument('--output-minimal-airway', action='store_true', help='Output a condensed flight plan showing only airway entry and exit waypoints.')
+    parser.add_argument('--output-skyvector', action='store_true', help='Open a web browser with the route depicted by Skyvector.')
 
     # Route generation preferences
     parser.add_argument('--direct', action='store_true', help='Generate a shortest-path direct flight plan between origin and destination, via any optional vias and exit. No intermediate legs are calculated.')
@@ -390,6 +392,9 @@ def main():
             if subroute:
                 route = route[:route.index(start)] + list(subroute) + route[route.index(end) + 1:]
 
+    # Build textual route
+    route_text = ""
+
     # If this is an airway route, need to assign airways to segments, consolidate, and display them
     if args.airway and args.output_minimal_airway:
         # A segment can be on multiple airways.
@@ -429,15 +434,24 @@ def main():
         for i, (waypoint, airway) in enumerate(zip(route, airway_segments + [None])):
             if airway is None:
                 # If no airway, just print the waypoint and continue
-                print(r.waypoints[waypoint][0], end=' ')
+                route_text += r.waypoints[waypoint][0] + ' '
             elif i==0 or (airway != airway_segments[i-1]):
                 # If airway is different from previous, print the waypoint and new airway (if exists)
-                print(r.waypoints[waypoint][0], end=' ')
+                route_text += r.waypoints[waypoint][0] + ' '
                 if airway:
-                    print(r.airways[airway][0], end=' ')
-        print()
+                    route_text += f'{r.airways[airway][0]} '
+        # Remove trailing space
+        route_text = route_text.strip()
     else:
-        print(' '.join(r.waypoints[waypoint][0] for waypoint in route))
+        route_text = ' '.join(r.waypoints[waypoint][0] for waypoint in route)
+
+    # Print the route
+    print(route_text)
+
+    # Open the route in Skyvector if requested
+    if args.output_skyvector:
+        # Open the route in Skyvector
+        webbrowser.open(f'https://skyvector.com/?fpl={route_text}')
 
 if __name__ == '__main__':
     main()

@@ -63,6 +63,8 @@ python3 plan.py origin destination [options] [routing preferences]
     --output-minimal-airway
         Output a condensed flight plan showing only airway entry and exit waypoints.
 
+    --output-skyvector
+        Open a web browser with the route depicted by Skyvector.
 
     ROUTE GENERATION PREFERENCES
 
@@ -136,6 +138,12 @@ python3 plan.py origin destination [options] [routing preferences]
         Specify how to handle atlantic, bahama, pacific, and puerto rico airways in the route, only when airway routing is enabled. Default is 'REJECT'
 
 # Development Reference
+
+## Feature Ideas
+
+ - Distinguish between various (T, Q, TK) RNAV airways
+ - DPs and STARs
+ - Preferred Routes and Coded Departure Routes
 
 ## Waypoint Types
 
