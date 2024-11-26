@@ -1,108 +1,119 @@
  #!/usr/bin/env python3
 
 """
-This script downloads NASR (National Airspace System Resource) data from the FAA website.
+This module provides functions to interact with the FAA NASR Subscription page.
+It includes functions to extract archive links, current or preview NASR zip links,
+and download files from given URLs.
 
-Command Line Arguments:
-    --current: Downloads the Current data.
-    --preview: Downloads the Preview data.
-    --name: Downloads archived data by name.
-    --list: Lists the available NASR data in the Archive section.
-    --filename: Specifies the NASR data filename. Uses basename of URL if not provided.
+Functions:
+    article() -> bs4.element.Tag:
+        Retrieves the main NASR page and finds the article element.
 
-Usage:
-    python nasr.py --current [--filename <filename>]
-    python nasr.py --preview [--filename <filename>]
-    python nasr.py --list
-        (then)
-    python nasr.py --name <name> [--filename <filename>]
+    list_archives() -> dict:
+        Extracts and returns a dictionary of archive links from the NASR page.
 
-Raises:
-    FileNotFoundError: If no data is found for the specified criteria.
-    urllib.error.HTTPError: If there is an HTTP error during the download process.
+    current_or_preview(which: str) -> dict:
+        Extracts the NASR zip link from the specified section ('Preview' or 'Current').
+
+    download(url: str, filename: str = None) -> str:
 """
 
-import argparse
 import bs4
-import os
-import time
 import urllib.request
 import urllib.parse
 
-def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Download NASR data from www.faa.gov.')
-    parser.add_argument('--current', action='store_true', help='Download the Current data.')
-    parser.add_argument('--preview', action='store_true', help='Download the Preview data.')
-    parser.add_argument('--name', help='Download archived data by name.')
-    parser.add_argument('--list', action='store_true', help='List of NASR data in the Archive section.')
-    parser.add_argument('--filename', help='Specify the NASR data filename. Uses basename of URL if not provided.')
-    args = parser.parse_args()
+_NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
 
+def _article():
     # Get the main NASR page and find the article element
-    url = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
+    url = _NASR_URL
     response = urllib.request.urlopen(url)
     html = response.read().decode('utf-8')
     soup = bs4.BeautifulSoup(html, 'html.parser')
-    article = soup.find('article', id='content')
+    return soup.find('article', id='content')
 
-    # Process the archive section
-    if args.list or args.name:
-        # Initialize a dictionary to store the structured data
-        dataurl = {}
+def list_archives():
+    """
+    Extracts and returns a dictionary of archive links from a web page.
+    The function searches for an 'Archives' section in the HTML content of an article,
+    extracts the subscription effective date and corresponding link, and stores them
+    in a dictionary.
 
-        # Extract the fullzip link from the Archives section
-        archives_section = article.find('h2', string='Archives').find_next('ul')
-        for li in archives_section.find_all('li'):
-            text = li.contents[0].strip().lstrip('Subscription effective ').rstrip(' -')
-            link = li.find('a')
-            dataurl[text] = link['href']
+    Returns:
+        dict: A dictionary where the keys are subscription effective dates (as strings)
+              and the values are the corresponding URLs (as strings).
+    """
 
-        # List available NASR data if --list is passed, then exit
-        if args.list:
-            print('\n'.join(dataurl.keys()))
-            return
+    # Initialize a dictionary to store the structured data
+    dataurl = {}
 
-        # Look up fullzip link by name
-        if args.name:
-            fullzip_link = dataurl.get(args.name)
+    # Extract the fullzip link from the Archives section
+    archives_section = _article().find('h2', string='Archives').find_next('ul')
+    for li in archives_section.find_all('li'):
+        text = li.contents[0].strip().lstrip('Subscription effective ').rstrip(' -')
+        link = li.find('a')
+        dataurl[text] = link['href']
 
-    # Process the Preview or Current section
-    if args.preview or args.current:
+    return dataurl
 
-        # Decide which section to process
-        selected_section = article.find('h2', string='Preview' if args.preview else 'Current').find_next('ul')
+def current_or_preview(which):
+    """
+    Extracts the nasr zip link from the selected section.
 
-        # Extract the fullzip link from the selected section
-        for li in selected_section.find_all('li'):
-            link = li.find('a')
-            args.name = link.text.lstrip('Subscription effective ')
+    Args:
+        which (str): The section to extract the link from. Can be 'Preview' or 'Current'.
 
-            # Follow the link to get the fullzip and aptzip URLs
-            subpage_url = urllib.parse.urljoin(url, link['href'])
-            subpage_response = urllib.request.urlopen(subpage_url)
-            subpage_html = subpage_response.read().decode('utf-8')
-            subpage_soup = bs4.BeautifulSoup(subpage_html, 'html.parser')
-            subpage_article = subpage_soup.find('article', id='content')
-            fullzip_link = subpage_article.find('a', string='Download')['href']
+    Returns:
+        dict: A dictionary where the key is the subscription effective date (string)
+              and the value is the corresponding URLs (string).
+    """
 
-    # Check if a fullzip link was found
-    if not fullzip_link:
-        raise FileNotFoundError('nasr: No data found.')
+    # Extract the fullzip link from the selected section
+    for li in _article().find('h2', string=which).find_next('ul').find_all('li'):
+        link = li.find('a')
+        effective_date = link.text.lstrip('Subscription effective ')
 
-    # Create a request to retrieve the aptzip file
-    request = urllib.request.Request(fullzip_link)
+        # Follow the link to get the fullzip and aptzip URLs
+        subpage_url = urllib.parse.urljoin(_NASR_URL, link['href'])
+        subpage_response = urllib.request.urlopen(subpage_url)
+        subpage_html = subpage_response.read().decode('utf-8')
+        subpage_soup = bs4.BeautifulSoup(subpage_html, 'html.parser')
+        subpage_article = subpage_soup.find('article', id='content')
+        fullzip_link = subpage_article.find('a', string='Download')['href']
+
+    return {effective_date: fullzip_link}
+
+import os
+import time
+
+def download(url, filename=None):
+    """
+    Downloads a file from the given URL and saves it to the specified filename.
+    If the filename is not provided, the file will be saved with the basename of the URL.
+    If the file already exists, the function will add an 'If-Modified-Since' header to the request
+    to avoid downloading the file again if it has not been modified.
+
+    Args:
+        url (str): The URL of the file to download.
+        filename (str, optional): The name of the file to save. Defaults to None.
+
+    Returns:
+        str: The filename of the downloaded file.
+
+    Raises:
+        urllib.error.HTTPError: If an HTTP error occurs other than a 304 Not Modified response.
+    """
+
+    # Create a request to retrieve the file
+    request = urllib.request.Request(url)
 
     # Set filename
-    filename = args.filename or os.path.basename(fullzip_link)
+    filename = filename or os.path.basename(url)
 
-    # Check if the file already exists on the filesystem
+    # Check if the file already exists on the filesystem and add the If-Modified-Since header to the request
     if os.path.exists(filename):
-        # Get the file's last modified timestamp
         last_modified_time = os.path.getmtime(filename)
         last_modified_time_str = time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.gmtime(last_modified_time))
-
-        # Add the If-Modified-Since header to the request
         request.add_header('If-Modified-Since', last_modified_time_str)
 
     # Download the file
@@ -117,7 +128,4 @@ def main():
         if e.code != 304:
             raise
 
-    print(filename)
-
-if __name__ == '__main__':
-    main()
+    return filename

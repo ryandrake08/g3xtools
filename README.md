@@ -14,16 +14,9 @@ Before you begin, ensure you have met the following requirements:
 
 ## Initial Setup
 
-To set up the project's database, you need to:
-
-1. Download current NASR data from FAA:
+To set up the project's database, you need to download current NASR data from FAA and build some pre-processed data files from the NASR data, so the planner doesn't have to navigate ZIP and CSV files:
     ```sh
-    python3 nasr.py --current
-    ```
-
-2. Build some pre-processed data files from the NASR data, so the planner doesn't have to navigate ZIP and CSV files:
-    ```sh
-    python3 makedb.py nasr_filename
+    python3 makedb.py --current
     ```
 
 # Usage

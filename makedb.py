@@ -10,15 +10,31 @@ CSV files processed:
     - AWY_BASE.csv: Contains airway data.
     - AWY_SEG_ALT.csv: Contains airway segment data.
 
-Command line arguments:
-    --filename: Specify the NASR data filename.
+Command Line Arguments:
+    --current: Downloads the Current data.
+    --preview: Downloads the Preview data.
+    --name: Downloads archived data by name.
+    --list: Lists the available NASR data in the Archive section.
+    --filename: Specifies the NASR data filename. Uses basename of URL if not provided.
+    --output: Specifies the output database filename. Uses 'nasr.db' if not provided.
 
 Usage:
-    python makedb.py --filename <filename>
+    python makedb.py --current [--filename <filename>] [--output <output>]
+    python makedb.py --preview [--filename <filename>] [--output <output>]
+    python makedb.py --list
+        (then)
+    python makedb.py --name <name> [--filename <filename>] [--output <output>]
+
+        (to skip downloading)
+    python makedb.py --filename <filename> [--output <output>]
+
+Raises:
+    FileNotFoundError: If no data is found for the specified criteria.
+    IndexError: If the CSV data file is not found in the archive.
+    urllib.error.HTTPError: If there is an HTTP error during the download process.
 
 Raises:
     FileNotFoundError: If the specified NASR data file is not found.
-    IndexError: If the CSV data file is not found in the archive.
 """
 
 import argparse
@@ -26,6 +42,7 @@ import collections
 import csv
 import io
 import itertools
+import nasr
 import pickle
 import zipfile
 
@@ -45,16 +62,47 @@ def read_csv_file(csv_archive, file_name, columns, rowdata):
 
 def main():
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Process NASR data and store it in data structures useful for flight planning.')
-    parser.add_argument('--filename', required=True, help='Specify the NASR data filename.')
+    parser = argparse.ArgumentParser(description='Download NASR data and store it in data structures useful for flight planning.')
+    parser.add_argument('--current', action='store_true', help='Download the Current data.')
+    parser.add_argument('--preview', action='store_true', help='Download the Preview data.')
+    parser.add_argument('--name', help='Download archived data by name.')
+    parser.add_argument('--list', action='store_true', help='List of NASR data in the Archive section.')
+    parser.add_argument('--filename', help='Specify the NASR data filename. Uses basename of URL if not provided.')
+    parser.add_argument('--output', default='nasr.db', help='Specify the output database filename.')
     args = parser.parse_args()
+
+    # Process the archive section
+    if args.list:
+        # List available NASR data if --list is passed, then exit
+        print('\n'.join(nasr.list_archives().keys()))
+        return
+
+    elif args.name:
+        # Look up fullzip link by name
+        fullzip_link = nasr.list_archives().get(args.name)
+
+        # Download the file
+        filename = nasr.download(fullzip_link, args.filename)
+
+    elif args.preview or args.current:
+        # Process the Preview or Current section
+        fullzip_link = list(nasr.current_or_preview('Preview' if args.preview else 'Current').values())[0]
+
+        # Download the file
+        filename = nasr.download(fullzip_link, args.filename)
+
+    elif args.filename:
+        filename = args.filename
+
+    else:
+        raise FileNotFoundError('nasr: No data found or specified.')  
 
     waypoints = []
     airways = []
     airway_seg = []
 
     # Open archive
-    with zipfile.ZipFile(args.filename) as archive:
+    with zipfile.ZipFile(filename) as archive:
         # Find the CSV data file the archive
         csv_data_name = [name for name in archive.namelist() if name.startswith('CSV_Data/') and name.endswith('.zip')][0]
 
