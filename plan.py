@@ -100,6 +100,10 @@ class router(astar.AStar):
         with open('connections.pickle', 'rb') as f:
             self.connections = pickle.load(f)
 
+        # Deserialize connections
+        with open('icao_lookup.pickle', 'rb') as f:
+            self.icao_lookup = pickle.load(f)
+
         # Store the route preferences
         self.waypoint_preferences = waypoint_preferences
         self.airway_preferences = airway_preferences
@@ -110,9 +114,9 @@ class router(astar.AStar):
 
         # Construct an rtree index
         def generator_function():
-            for id, (_, waypoint_type, lat, lon, _) in enumerate(self.waypoints):
-                if waypoint_preferences[waypoint_type] != 'REJECT':
-                    yield (id, (lon, lat, lon, lat), None)
+            for id, waypoint in enumerate(self.waypoints):
+                if waypoint_preferences[waypoint[1]] != 'REJECT':
+                    yield (id, (waypoint[3], waypoint[2], waypoint[3], waypoint[2]), None)
         self.waypoints_idx = rtree.index.Index(generator_function())
 
     def actual_distance_between(self, n1, n2):
@@ -356,23 +360,26 @@ def main():
     # Initialize the router
     r = router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length)
 
+    # Find airport by airport_id or icao_id
+    def find_airport(airport_id):
+        i = next((index for index, waypoint in enumerate(r.waypoints) if (waypoint[0] == airport_id or (len(waypoint) > 5 and waypoint[5] == airport_id)) and waypoint[1] in ('A', 'B', 'C', 'G', 'H', 'U')), None)
+        if not i:
+            parser.error(f'Airport "{airport_id}" not found')
+        return i
+    
+    # Return airport name, preferring icao_id
+    def airport_name(airport_index):
+        waypoint = r.waypoints[airport_index]
+        return waypoint[5] if len(waypoint) > 5 else waypoint[0]
+
     # Get the origin id, and print an error if it does not exist
-    origin_id = next((index for index, (waypoint_id, waypoint_type, _, _, _) in enumerate(r.waypoints) if waypoint_id == args.origin.upper() and waypoint_type in ('A', 'B', 'C', 'G', 'H', 'U')), None)
-    if not origin_id:
-        parser.error(f'Origin airport "{args.origin}" not found')
+    origin_id = find_airport(args.origin.upper())
 
     # Get the destination id, and print an error if it does not exist
-    destination_id = next((index for index, (waypoint_id, waypoint_type, _, _, _) in enumerate(r.waypoints) if waypoint_id == args.destination.upper() and waypoint_type in ('A', 'B', 'C', 'G', 'H', 'U')), None)
-    if not destination_id:
-        parser.error(f'Destination airport "{args.destination}" not found')
+    destination_id = find_airport(args.destination.upper())
 
     # Map waypoint_id to id all vias
-    via_ids = []
-    for via in args.via:
-        via_id = next((index for index, (waypoint_id, _, _, _, _) in enumerate(r.waypoints) if waypoint_id == via.upper()), None)
-        if not via_id:
-            parser.error(f'Via waypoint "{via}" not found')
-        via_ids.append(via_id)
+    via_ids = [find_airport(via.upper()) for via in args.via]
 
     # Calculate candidate route list
     candidate_routes = [[origin_id] + list(perm) + [destination_id] for perm in itertools.permutations(via_ids)]
@@ -431,19 +438,19 @@ def main():
             airway_segments[i] = current_airway
 
         # Finally, walk the segments and waypoints and print if no airway or the airway changed
-        for i, (waypoint, airway) in enumerate(zip(route, airway_segments + [None])):
-            if airway is None:
+        for i, (waypoint_idx, airway_idx) in enumerate(zip(route, airway_segments + [None])):
+            if airway_idx is None:
                 # If no airway, just print the waypoint and continue
-                route_text += r.waypoints[waypoint][0] + ' '
-            elif i==0 or (airway != airway_segments[i-1]):
+                route_text += airport_name(waypoint_idx) + ' '
+            elif i==0 or (airway_idx != airway_segments[i-1]):
                 # If airway is different from previous, print the waypoint and new airway (if exists)
-                route_text += r.waypoints[waypoint][0] + ' '
-                if airway:
-                    route_text += f'{r.airways[airway][0]} '
+                route_text += airport_name(waypoint_idx) + ' '
+                if airway_idx:
+                    route_text += f'{r.airways[airway_idx][0]} '
         # Remove trailing space
         route_text = route_text.strip()
     else:
-        route_text = ' '.join(r.waypoints[waypoint][0] for waypoint in route)
+        route_text = ' '.join(airport_name(waypoint_idx) for waypoint_idx in route)
 
     # Print the route
     print(route_text)

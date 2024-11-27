@@ -3,3 +3,4 @@ env
 *.pdf
 *.pstats
 *.pickle
+__pycache__

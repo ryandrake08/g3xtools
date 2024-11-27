@@ -53,8 +53,7 @@ def read_csv_file(csv_archive, file_name, columns, rowdata):
         csv_reader = csv.DictReader(csv_wrapper)
         for row in csv_reader:
             values = [
-                # Handling CSV rows: 1. Use ICAO_ID if available, 2. Strip whitespace, 3. Convert to float if necessary
-                row['ICAO_ID'].strip() if csv_header == 'ARPT_ID' and row.get('ICAO_ID', None) else
+                # Handling CSV rows: Strip whitespace and convert to float if necessary
                 float(row[csv_header]) if csv_header in ['LAT_DECIMAL', 'LONG_DECIMAL'] else
                 row[csv_header].strip()
                     for csv_header in columns]
@@ -111,7 +110,7 @@ def main():
             # Treat the file as a ZipFile
             with zipfile.ZipFile(csv_data_file) as csv_archive:
                 # Read waypoint data
-                read_csv_file(csv_archive, 'APT_BASE.csv', ['ARPT_ID', 'SITE_TYPE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
+                read_csv_file(csv_archive, 'APT_BASE.csv', ['ARPT_ID', 'SITE_TYPE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE', 'ICAO_ID'], waypoints)
                 read_csv_file(csv_archive, 'FIX_BASE.csv', ['FIX_ID', 'FIX_USE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
                 read_csv_file(csv_archive, 'NAV_BASE.csv', ['NAV_ID', 'NAV_TYPE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
 
