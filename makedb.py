@@ -43,7 +43,6 @@ import csv
 import io
 import itertools
 import pickle
-import zipfile
 import nasr
 
 # Read CSV file
@@ -121,22 +120,15 @@ def main():
     airway_seg = []
 
     # Open archive
-    with zipfile.ZipFile(filename) as archive:
-        # Find the CSV data file the archive
-        csv_data_name = [name for name in archive.namelist() if name.startswith('CSV_Data/') and name.endswith('.zip')][0]
+    with nasr.CsvZip(filename) as csv_archive:
+        # Read waypoint data
+        read_csv_file(csv_archive, 'APT_BASE.csv', ['ARPT_ID', 'SITE_TYPE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE', 'ICAO_ID'], waypoints)
+        read_csv_file(csv_archive, 'FIX_BASE.csv', ['FIX_ID', 'FIX_USE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
+        read_csv_file(csv_archive, 'NAV_BASE.csv', ['NAV_ID', 'NAV_TYPE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
 
-        # Open the single file inside the CSV_Data folder as a new ZipFile
-        with archive.open(csv_data_name) as csv_data_file:
-            # Treat the file as a ZipFile
-            with zipfile.ZipFile(csv_data_file) as csv_archive:
-                # Read waypoint data
-                read_csv_file(csv_archive, 'APT_BASE.csv', ['ARPT_ID', 'SITE_TYPE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE', 'ICAO_ID'], waypoints)
-                read_csv_file(csv_archive, 'FIX_BASE.csv', ['FIX_ID', 'FIX_USE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
-                read_csv_file(csv_archive, 'NAV_BASE.csv', ['NAV_ID', 'NAV_TYPE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
-
-                # Read airway data
-                read_csv_file(csv_archive, 'AWY_BASE.csv', ['AWY_ID', 'AWY_LOCATION', 'AWY_DESIGNATION'], airways)
-                read_csv_file(csv_archive, 'AWY_SEG_ALT.csv', ['AWY_ID', 'AWY_LOCATION', 'FROM_POINT', 'FROM_PT_TYPE', 'TO_POINT', 'COUNTRY_CODE', 'AWY_SEG_GAP_FLAG'], airway_seg)
+        # Read airway data
+        read_csv_file(csv_archive, 'AWY_BASE.csv', ['AWY_ID', 'AWY_LOCATION', 'AWY_DESIGNATION'], airways)
+        read_csv_file(csv_archive, 'AWY_SEG_ALT.csv', ['AWY_ID', 'AWY_LOCATION', 'FROM_POINT', 'FROM_PT_TYPE', 'TO_POINT', 'COUNTRY_CODE', 'AWY_SEG_GAP_FLAG'], airway_seg)
 
     # Build a temporary reverse lookup dictionary of waypoint_id to [list of waypoint index]
     # Unfortunately waypoint_id are not unique

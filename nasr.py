@@ -22,6 +22,7 @@ import os
 import time
 import urllib.request
 import urllib.parse
+import zipfile
 import bs4
 
 _NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
@@ -128,3 +129,84 @@ def download(url, filename=None):
             raise
 
     return filename
+
+class CsvZip():
+    """
+    A context manager class to handle the nested CSV ZIP file contained in the main ZIP archive.
+
+    Attributes:
+        filename (str): The path to the outer ZIP file.
+        archive (zipfile.ZipFile): The outer ZIP file object.
+        csv_archive (zipfile.ZipFile): The inner ZIP file object containing CSV data.
+
+    Methods:
+        __enter__(): Opens the outer ZIP file and the inner CSV ZIP file.
+        __exit__(exc_type, exc_value, traceback): Closes the inner and outer ZIP files.
+        namelist(): Returns a list of file names in the inner CSV ZIP file.
+        open(name): Opens a file in the inner CSV ZIP file.
+    """
+
+    def __init__(self, filename):
+        """
+        Initializes the NASR object with the given filename.
+
+        Args:
+            filename (str): The name of the file to be processed.
+
+        Attributes:
+            filename (str): The name of the file to be processed.
+            archive (None): Placeholder for the archive data.
+            csv_archive (None): Placeholder for the CSV archive data.
+        """
+        self.filename = filename
+        self.archive = None
+        self.csv_archive = None
+
+    def __enter__(self):
+        """
+        Enter the runtime context related to this object.
+        This method is called when the execution flow enters the context of the
+        `with` statement. It opens the main archive file specified by `self.filename`
+        and then finds and opens the CSV data file within the archive.
+
+        Returns:
+            self: The instance of the class.
+        """
+        self.archive = zipfile.ZipFile(self.filename)
+
+        # Find the CSV data file the archive
+        csv_data_name = next(name for name in self.archive.namelist() if name.startswith('CSV_Data/') and name.endswith('.zip'))
+
+        # Open the single file inside the CSV_Data folder as a new ZipFile
+        self.csv_archive = zipfile.ZipFile(self.archive.open(csv_data_name))
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Exit the runtime context related to this object.
+        This method is called when the 'with' statement is used. It closes the
+        csv_archive and archive resources.
+        """
+
+        self.csv_archive.close()
+        self.archive.close()
+
+    def namelist(self):
+        """
+        Retrieve the list of filenames from the CSV archive.
+        Returns:
+            list: A list of names contained in the CSV archive.
+        """
+        return self.csv_archive.namelist()
+
+    def open(self, name):
+        """
+        Open a file from the CSV archive.
+
+        Parameters:
+            name (str): The name of the file to open.
+
+        Returns:
+            file object: The opened file object from the CSV archive.
+        """
+        return self.csv_archive.open(name)
