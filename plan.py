@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 import argparse
-import astar
 import math
 import itertools
 import pickle
-import rtree
 import webbrowser
+import astar
+import rtree
 
 def haversine(lat1, lon1, lat2, lon2):
     """
@@ -76,7 +76,35 @@ def bounding_box(lat1, lon1, distance):
     # Convert latitude and longitude back to degrees
     return (math.degrees(lat2), math.degrees(lon2), math.degrees(lat3), math.degrees(lon3))
 
-class router(astar.AStar):
+class Router(astar.AStar):
+    '''
+    Router class for implementing the A* pathfinding algorithm for aviation navigation.
+    This class extends the AStar class and provides methods to calculate distances,
+    find neighbors, and estimate costs for waypoints in an aviation routing context.
+
+    Attributes:
+        waypoints (list): A list of waypoints loaded from 'waypoints.pickle'.
+        airways (list): A list of airways loaded from 'airways.pickle'.
+        connections (dict): A dictionary of connections between waypoints loaded from 'connections.pickle'.
+        waypoint_preferences (dict): A dictionary mapping waypoint types to routing preferences.
+        airway_preferences (dict): A dictionary mapping airway types to routing preferences.
+        max_leg_length (float): The maximum allowable length for any leg of the route.
+        costs (dict): A dictionary mapping route preferences to cost modifiers.
+        waypoints_idx (rtree.index.Index): An R-tree index for spatial queries on waypoints.
+
+    Methods:
+        __init__(waypoint_preferences, airway_preferences, max_leg_length):
+            Initializes the Router with waypoint and airway preferences and maximum leg length.
+        actual_distance_between(n1, n2):
+            Calculates the actual distance between two waypoints using the Haversine formula.
+        neighbors(node):
+            Finds and returns the neighboring waypoints for a given node within max_leg_length meters.
+        distance_between(n1, n2):
+            Calculates the A* weighted distance between two waypoints.
+        heuristic_cost_estimate(current, goal):
+            Estimates the heuristic cost between the current waypoint and the goal waypoint.
+    '''
+
     def __init__(self, waypoint_preferences, airway_preferences, max_leg_length):
         """
         Initialize all the state needed to implement the a-star pathfinding algorithm.
@@ -100,10 +128,6 @@ class router(astar.AStar):
         with open('connections.pickle', 'rb') as f:
             self.connections = pickle.load(f)
 
-        # Deserialize connections
-        with open('icao_lookup.pickle', 'rb') as f:
-            self.icao_lookup = pickle.load(f)
-
         # Store the route preferences
         self.waypoint_preferences = waypoint_preferences
         self.airway_preferences = airway_preferences
@@ -114,9 +138,9 @@ class router(astar.AStar):
 
         # Construct an rtree index
         def generator_function():
-            for id, waypoint in enumerate(self.waypoints):
+            for waypoint_id, waypoint in enumerate(self.waypoints):
                 if waypoint_preferences[waypoint[1]] != 'REJECT':
-                    yield (id, (waypoint[3], waypoint[2], waypoint[3], waypoint[2]), None)
+                    yield (waypoint_id, (waypoint[3], waypoint[2], waypoint[3], waypoint[2]), None)
         self.waypoints_idx = rtree.index.Index(generator_function())
 
     def actual_distance_between(self, n1, n2):
@@ -216,14 +240,12 @@ class router(astar.AStar):
                     typea = self.airways[aidx][2]
                     airway_cost_modifier = self.costs[self.airway_preferences[typea]]
 
-#        print(f'Between {self.waypoints[n1][0]} and {self.waypoints[n2][0]}: {distance} * {nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier} = {distance * nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier}')
-
         # Combine all cost modifiers to get the weighted distance
         return distance * nodes_cost_modifier * distance_cost_modifier * airway_cost_modifier
 
-    def heuristic_cost_estimate(self, n1, n2):
+    def heuristic_cost_estimate(self, current, goal):
         """
-        Estimated distance from node n1 to goal node n2.
+        Estimated distance from node current to goal node goal.
 
         This method calculates the heuristic cost estimate between two waypoints.
         The heuristic cost must always underestimate the actual cost to ensure the
@@ -232,21 +254,25 @@ class router(astar.AStar):
         Required implementation of the abstract method in the astar class.
 
         Args:
-            n1 (int): The index of the first waypoint.
-            n2 (int): The index of the second waypoint.
+            current (int): The index of the first waypoint.
+            goal (int): The index of the second waypoint.
 
         Returns:
             float: The estimated heuristic cost between the two nodes.
         """
 
         # Calculate actual distance
-        distance = self.actual_distance_between(n1, n2)
+        distance = self.actual_distance_between(current, goal)
 
         # Use most favorable possible cost, heuristic_cost_estimate must always underestimate
         cost = self.costs['PREFER'] * self.costs['PREFER']
         return distance * cost
 
 def main():
+    """
+    Main function to generate a flight plan from origin to destination, via an optional list of waypoints.
+    """
+
     # Choices for route preferences
     route_choices = ['PREFER', 'INCLUDE', 'AVOID', 'REJECT']
 
@@ -358,7 +384,7 @@ def main():
     max_leg_length = args.max_leg_length * 1852
 
     # Initialize the router
-    r = router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length)
+    r = Router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length)
 
     # Find airport by airport_id or icao_id
     def find_airport(airport_id):
@@ -366,7 +392,7 @@ def main():
         if not i:
             parser.error(f'Airport "{airport_id}" not found')
         return i
-    
+
     # Return airport name, preferring icao_id
     def airport_name(airport_index):
         waypoint = r.waypoints[airport_index]

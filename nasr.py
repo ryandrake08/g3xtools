@@ -18,9 +18,11 @@ Functions:
     download(url: str, filename: str = None) -> str:
 """
 
-import bs4
+import os
+import time
 import urllib.request
 import urllib.parse
+import bs4
 
 _NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
 
@@ -82,9 +84,6 @@ def current_or_preview(which):
         fullzip_link = subpage_article.find('a', string='Download')['href']
 
     return {effective_date: fullzip_link}
-
-import os
-import time
 
 def download(url, filename=None):
     """

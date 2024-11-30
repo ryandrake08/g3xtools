@@ -42,12 +42,29 @@ import collections
 import csv
 import io
 import itertools
-import nasr
 import pickle
 import zipfile
+import nasr
 
 # Read CSV file
 def read_csv_file(csv_archive, file_name, columns, rowdata):
+    """
+    Reads a CSV file from a given archive and extracts specified columns into a list.
+
+    Args:
+        csv_archive (zipfile.ZipFile): The archive containing the CSV file.
+        file_name (str): The name of the CSV file within the archive.
+        columns (list of str): The list of column headers to extract from the CSV file.
+        rowdata (list of list): The list to append the extracted row data to.
+        
+    Returns:
+        None: This function modifies the rowdata list in place.
+
+    Notes:
+        - The function strips whitespace from all column values.
+        - If the column header is 'LAT_DECIMAL' or 'LONG_DECIMAL', the value is converted to a float.
+    """
+
     with csv_archive.open(file_name) as csv_file:
         csv_wrapper = io.TextIOWrapper(csv_file)
         csv_reader = csv.DictReader(csv_wrapper)
@@ -60,6 +77,10 @@ def read_csv_file(csv_archive, file_name, columns, rowdata):
             rowdata.append(values)
 
 def main():
+    """
+    Main function to download NASR data and store it in data structures useful for flight planning.
+    """
+
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Download NASR data and store it in data structures useful for flight planning.')
     parser.add_argument('--current', action='store_true', help='Download the Current data.')
@@ -94,7 +115,7 @@ def main():
         filename = args.filename
 
     else:
-        raise FileNotFoundError('nasr: No data found or specified.')  
+        raise FileNotFoundError('nasr: No data found or specified.')
 
     waypoints = []
     airways = []
