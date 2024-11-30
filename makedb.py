@@ -66,8 +66,7 @@ def read_csv_file(csv_archive, file_name, columns, rowdata):
     """
 
     with csv_archive.open(file_name) as csv_file:
-        csv_wrapper = io.TextIOWrapper(csv_file)
-        csv_reader = csv.DictReader(csv_wrapper)
+        csv_reader = csv.DictReader(io.TextIOWrapper(csv_file, encoding='iso-8859-1', errors='strict'))
         for row in csv_reader:
             values = [
                 # Handling CSV rows: Strip whitespace and convert to float if necessary
