@@ -284,7 +284,7 @@ def main():
     parser.add_argument('destination', help='Destination airport code')
 
     # Optional via waypoints
-    parser.add_argument('--via', action='append', help='Generated route must include this airport, fix, or navaid. Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.', default=[])
+    parser.add_argument('--via', action='append', help='Generated route must include this airport. Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.', default=[])
 
     # Output preferences
     parser.add_argument('--output-minimal-airway', action='store_true', help='Output a condensed flight plan showing only airway entry and exit waypoints.')

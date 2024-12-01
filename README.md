@@ -48,8 +48,8 @@ python3 plan.py origin destination [options] [routing preferences]
 
     destination: Destination airport ICAO code. Mandatory argument.
 
-    --via <waypoint>
-        Generated route must include this airport, fix, or navaid. Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.
+    --via <airport>
+        Generated route must include this airport. Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.
 
     OUTPUT PREFERENCES
 
