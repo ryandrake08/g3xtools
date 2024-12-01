@@ -396,7 +396,7 @@ def main():
     # Return airport name, preferring icao_id
     def airport_name(airport_index):
         waypoint = r.waypoints[airport_index]
-        return waypoint[5] if len(waypoint) > 5 else waypoint[0]
+        return waypoint[5] if len(waypoint) > 5 and waypoint[5] else waypoint[0]
 
     # Get the origin id, and print an error if it does not exist
     origin_id = find_airport(args.origin.upper())
