@@ -1,4 +1,5 @@
 env
+*.db
 *.zip
 *.pdf
 *.pstats

@@ -132,11 +132,36 @@ python3 plan.py origin destination [options] [routing preferences]
 
 # Development Reference
 
+## Spatialite database tool
+
+Although not required for the FPlan tool, nasr2sqlite.py will create a sqlite database represntation of the NASR data (with spatialite geometry if you have spatialite installed). This database can be used to easily visualize and navigate NASR data.
+
+```sh
+python3 nasr2sql.py --current [--filename <filename>] [--db <filename>]
+python3 nasr2sql.py --preview [--filename <filename>] [--db <filename>]
+python3 nasr2sql.py --name <name> [--filename <filename>] [--db <filename>]
+```
+    Downloads the current, preview, or named NASR release
+
+```sh
+python3 nasr2sql.py --list
+```
+    Lists the named archive NASR releases available to download
+
+```sh
+python3 nasr2sql.py --filename <filename> [--db <filename>]
+```
+    Skips the download and processes the given NASR zip file directly
+
 ## Feature Ideas
 
  - Distinguish between various (T, Q, TK) RNAV airways
  - DPs and STARs
  - Preferred Routes and Coded Departure Routes
+ - Airspace-aware, airspace avoidance, including special use airspace
+ - Terrain-aware, terrain avoidance
+ - Obstacle-aware, obstacle avoidance
+ - IFR altitudes: MEA, MOCA, and so on
 
 ## Waypoint Types
 
