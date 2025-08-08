@@ -137,12 +137,23 @@ class Router(astar.AStar):
         # Set costs for each route preference
         self.costs = { 'PREFER': 0.8, 'INCLUDE': 1.0, 'AVOID': 1.25, 'REJECT': 1000.0 }
 
+        # Cache for bounding box calculations keyed by waypoint index
+        self._bounding_box_cache = {}
+
         # Construct an rtree index
         def generator_function():
             for waypoint_id, waypoint in enumerate(self.waypoints):
                 if waypoint_preferences[waypoint[1]] != 'REJECT':
                     yield (waypoint_id, (waypoint[3], waypoint[2], waypoint[3], waypoint[2]), None)
         self.waypoints_idx = rtree.index.Index(generator_function())
+
+    def _get_cached_bounding_box(self, waypoint_index):
+        """Get cached bounding box or calculate and cache it."""
+        if waypoint_index not in self._bounding_box_cache:
+            lat, lon = self.waypoints[waypoint_index][2:4]
+            self._bounding_box_cache[waypoint_index] = bounding_box(lat, lon, self.max_leg_length)
+
+        return self._bounding_box_cache[waypoint_index]
 
     def actual_distance_between(self, n1, n2):
         """
@@ -186,9 +197,8 @@ class Router(astar.AStar):
             list: A list of indices of neighboring waypoints within a bounding box.
         """
 
-        # Construct bounding box around the current waypoint
-        lat, lon = self.waypoints[node][2:4]
-        north, east, south, west = bounding_box(lat, lon, self.max_leg_length)
+        # Get cached bounding box using waypoint index
+        north, east, south, west = self._get_cached_bounding_box(node)
 
         # Query the index for neighbors
         neighbors = list(self.waypoints_idx.intersection((west, south, east, north)))
