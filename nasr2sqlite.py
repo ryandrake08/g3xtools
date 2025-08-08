@@ -31,9 +31,26 @@ import argparse
 import collections
 import csv
 import io
+import re
 import sqlite3
 import os
 import nasr
+
+def validate_sql_identifier(identifier):
+    """Validate that an identifier is safe for SQL use."""
+    if not identifier:
+        raise ValueError("Identifier cannot be empty")
+
+    # Allow only alphanumeric characters and underscores, starting with letter or underscore
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', identifier):
+        raise ValueError(f"Invalid SQL identifier: {identifier}")
+
+    # Prevent SQL reserved words (add more as needed)
+    reserved_words = {'SELECT', 'INSERT', 'DELETE', 'UPDATE', 'DROP', 'CREATE', 'TABLE', 'FROM', 'WHERE'}
+    if identifier.upper() in reserved_words:
+        raise ValueError(f"Reserved word not allowed as identifier: {identifier}")
+
+    return identifier
 
 def main():
     """
@@ -132,8 +149,11 @@ def main():
             csv_table_name = os.path.splitext(csv_filename)[0]
             column_definition = table_structures[csv_table_name]
 
+            # Validate table name for SQL injection prevention
+            safe_table_name = validate_sql_identifier(csv_table_name)
+
             # Create the table
-            c.execute(f'CREATE TABLE IF NOT EXISTS {csv_table_name} ({", ".join(column_definition)})')
+            c.execute(f'CREATE TABLE IF NOT EXISTS {safe_table_name} ({", ".join(column_definition)})')
 
             # File encoding is usually iso-8859-1
             file_encodings = { 'CDR': 'utf-8' }
@@ -144,7 +164,7 @@ def main():
                 csv_reader = csv.DictReader(io.TextIOWrapper(csv_file, encoding=file_encoding, errors='strict'))
                 for row in csv_reader:
                     # Insert the data
-                    c.execute(f'INSERT INTO {csv_table_name} VALUES ({', '.join(['?'] * len(row))})', tuple(row.values()))
+                    c.execute(f'INSERT INTO {safe_table_name} VALUES ({', '.join(['?'] * len(row))})', tuple(row.values()))
 
     # Run nasr_initialize.sql to add some helpful columns not included in the NASR data
     with open('nasr_initialize.sql', encoding='us-ascii') as f:
