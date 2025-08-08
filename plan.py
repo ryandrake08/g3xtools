@@ -389,7 +389,7 @@ def main():
     # Find airport by airport_id or icao_id
     def find_airport(airport_id):
         i = next((index for index, waypoint in enumerate(r.waypoints) if (waypoint[0] == airport_id or (len(waypoint) > 5 and waypoint[5] == airport_id)) and waypoint[1] in ('A', 'B', 'C', 'G', 'H', 'U')), None)
-        if not i:
+        if i is None:
             parser.error(f'Airport "{airport_id}" not found')
         return i
 
