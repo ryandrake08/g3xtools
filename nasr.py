@@ -30,8 +30,8 @@ _NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_
 def _article():
     # Get the main NASR page and find the article element
     url = _NASR_URL
-    response = urllib.request.urlopen(url)
-    html = response.read().decode('utf-8')
+    with urllib.request.urlopen(url) as response:
+        html = response.read().decode('utf-8')
     soup = bs4.BeautifulSoup(html, 'html.parser')
     return soup.find('article', id='content')
 
