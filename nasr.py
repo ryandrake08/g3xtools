@@ -19,6 +19,7 @@ Functions:
 """
 
 import os
+import re
 import time
 import urllib.request
 import urllib.parse
@@ -26,6 +27,39 @@ import zipfile
 import bs4
 
 _NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
+_DEFAULT_FILENAME = 'downloaded_file'
+
+def sanitize_filename(filename, max_length=255):
+    """Sanitize a filename to prevent path traversal and other security issues."""
+    if not filename:
+        raise ValueError("Filename cannot be empty")
+
+    # Extract just the filename part, handling URLs properly
+    if '/' in filename:
+        filename = filename.split('/')[-1]
+    if '\\' in filename:
+        filename = filename.split('\\')[-1]
+
+    # Remove or replace dangerous characters
+    # Keep only alphanumeric, dots, dashes, underscores
+    filename = re.sub(r'[^a-zA-Z0-9._-]', '_', filename)
+
+    # Remove leading/trailing dots and spaces
+    filename = filename.strip('. ')
+
+    # Prevent empty filename
+    if not filename or filename in ('.', '..'):
+        filename = _DEFAULT_FILENAME
+
+    # Ensure filename has reasonable length
+    if len(filename) > max_length:
+        name, ext = os.path.splitext(filename)
+        if ext:
+            filename = name[:max_length-len(ext)] + ext
+        else:
+            filename = filename[:max_length]
+
+    return filename
 
 def _article():
     # Get the main NASR page and find the article element
@@ -107,8 +141,15 @@ def download(url, filename=None):
     # Create a request to retrieve the file
     request = urllib.request.Request(url)
 
-    # Set filename
-    filename = filename or os.path.basename(url)
+    # Set filename with proper sanitization
+    if filename:
+        filename = sanitize_filename(filename)
+    else:
+        url_basename = os.path.basename(url)
+        filename = sanitize_filename(url_basename) if url_basename else _DEFAULT_FILENAME
+
+    # Ensure we're writing to current directory only
+    filename = os.path.basename(filename)  # Extra safety measure
 
     # Check if the file already exists on the filesystem and add the If-Modified-Since header to the request
     if os.path.exists(filename):
