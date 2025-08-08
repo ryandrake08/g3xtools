@@ -4,6 +4,7 @@ import argparse
 import math
 import itertools
 import pickle
+import urllib.parse
 import webbrowser
 import astar
 import rtree
@@ -483,8 +484,10 @@ def main():
 
     # Open the route in Skyvector if requested
     if args.output_skyvector:
-        # Open the route in Skyvector
-        webbrowser.open(f'https://skyvector.com/?fpl={route_text}')
+        # URL encode the route text to prevent injection
+        encoded_route = urllib.parse.quote_plus(route_text)
+        skyvector_url = f'https://skyvector.com/?fpl={encoded_route}'
+        webbrowser.open(skyvector_url)
 
 if __name__ == '__main__':
     main()
