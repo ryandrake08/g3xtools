@@ -55,7 +55,7 @@ def read_csv_file(csv_archive, file_name, columns, rowdata):
         file_name (str): The name of the CSV file within the archive.
         columns (list of str): The list of column headers to extract from the CSV file.
         rowdata (list of list): The list to append the extracted row data to.
-        
+
     Returns:
         None: This function modifies the rowdata list in place.
 
@@ -154,7 +154,10 @@ def main():
         # Find the waypoint index that matches the type and country code
         matching_waypoint_indices = [i for i in waypoint_indices if waypoints[i][1] == from_point_type and waypoints[i][4] == country_code]
 
-        assert len(matching_waypoint_indices) <= 1, f'Warning: Waypoint {from_point} has indices: {waypoint_indices}'
+        # Error if multiple waypoints found, this should not happen
+        if len(matching_waypoint_indices) > 1:
+            raise ValueError(f'Multiple waypoints found for {from_point} with type {from_point_type} and country {country_code}. Indices: {waypoint_indices}')
+
         if matching_waypoint_indices:
             # Add the waypoint index to the current waypoint index list
             current_waypoint_index_list.append(matching_waypoint_indices[0])
