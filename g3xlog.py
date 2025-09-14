@@ -5,7 +5,7 @@ import glob
 import os
 import pandas
 import re
-import subprocess
+import shutil
 import sys
 
 def main():
@@ -81,8 +81,10 @@ def main():
                 if args.verbose:
                     print(f"{os.path.basename(log)}: flight")
 
-            # Call rsync to copy the file into the correct destination path
-            subprocess.call(["rsync", "-t", "--ignore-existing", log, dest_path])
+            # Copy the file into the correct destination path, preserving modification time
+            dest_file = os.path.join(dest_path, os.path.basename(log))
+            if not os.path.exists(dest_file):
+                shutil.copy2(log, dest_file)
 
 if __name__ == "__main__":
     """ This is executed when run from the command line """
