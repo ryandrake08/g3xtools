@@ -1,4 +1,23 @@
 #!/usr/bin/env python3
+"""
+Garmin G3X Log Processor
+
+Processes and categorizes Garmin G3X aircraft data logs into flight types based on
+operational characteristics. Analyzes CSV log files to determine if sessions were:
+- config: Ground testing (no oil pressure)
+- taxi: Ground operations only (max ground speed < 50kt)
+- flight: Actual flight operations
+
+Usage:
+    python3 g3xlog.py /path/to/search -o /output/path -v
+
+Environment Variables:
+    G3X_SEARCH_PATH: Default search path for input log files
+    G3X_LOG_PATH: Default output path for processed logs
+
+The tool automatically discovers log_*.csv files recursively and copies them to
+categorized subdirectories while preserving modification times.
+"""
 
 import argparse
 import glob

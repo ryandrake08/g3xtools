@@ -1,4 +1,23 @@
 #!/usr/bin/env python3
+"""
+Garmin G3X Log Structure Analyzer
+
+Analyzes Garmin G3X aircraft data log files to detect structural changes across
+different software versions. Compares column headers and stable keys between
+consecutive log files to identify:
+- New columns added
+- Columns removed
+- Columns renamed (detected via stable key matching)
+
+Usage:
+    python3 g3xheaders.py /path/to/logs
+
+Environment Variables:
+    G3X_LOG_PATH: Default path to search for log files
+
+The tool processes log_*.csv files in chronological order (sorted by basename)
+and reports structural differences with software version information.
+"""
 
 import argparse
 import csv
