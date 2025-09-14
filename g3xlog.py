@@ -1,32 +1,34 @@
 #!/usr/bin/env python3
 
+import argparse
 import glob
 import os
 import pandas
 import re
 import subprocess
+import sys
 
 def main():
-    # Destination path
-    log_path = "/Volumes/volume0/rv/data_log"
-    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Process and categorize Garmin G3X aircraft data logs')
+    parser.add_argument('search_path', nargs='?', help='Path to search for data_log directories')
+    parser.add_argument('-o', '--output', help='Output directory for processed logs')
+    args = parser.parse_args()
+
+    # Determine search path: command line > environment > error
+    mount_root = args.search_path or os.getenv('G3X_SEARCH_PATH')
+    if not mount_root:
+        print("Error: Search path must be provided via G3X_SEARCH_PATH environment variable or command line argument", file=sys.stderr)
+        sys.exit(1)
+
+    # Determine output path: command line > environment > current directory
+    log_path = args.output or os.getenv('G3X_LOG_PATH', os.getcwd())
+
     # Create destination subfolders
-    os.makedirs(log_path + "/config", exist_ok=True)
-    os.makedirs(log_path + "/flight", exist_ok=True)
-    os.makedirs(log_path + "/taxi", exist_ok=True)
+    [os.makedirs(log_path + f"/{subdir}", exist_ok=True) for subdir in ["config", "flight", "taxi"]]
 
-    # Determine source path
-    mount_root = "/Volumes"
-    src_logs = []
-
-    # Search filesystem for mounts that contain g3x logs
-    mounts = glob.glob(mount_root + "/*")
-    for mount in mounts:
-        dirs = glob.glob(mount + "/*")
-        for dir in dirs:
-            if "data_log" in dir:
-                logs = glob.glob(dir + "/*.csv")
-                src_logs.extend(logs)
+    # Search recursively for G3X log files (log_*.csv)
+    src_logs = glob.glob(mount_root + "/**/log_*.csv", recursive=True)
 
     # Process each log source
     for log in src_logs:
