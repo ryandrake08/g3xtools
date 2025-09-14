@@ -13,6 +13,7 @@ def main():
     parser = argparse.ArgumentParser(description='Process and categorize Garmin G3X aircraft data logs')
     parser.add_argument('search_path', nargs='?', help='Path to search for data_log directories')
     parser.add_argument('-o', '--output', help='Output directory for processed logs')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Output metadata information for each log file')
     args = parser.parse_args()
 
     # Determine search path: command line > environment > error
@@ -39,33 +40,46 @@ def main():
 
         # Comma separated
         metadata_text = first_line.strip().split(",")
-    
+
         # Verify first item
         if metadata_text[0] != "#airframe_info":
             raise ValueError("Not a Garmin G3X log file")
 
         # Convert the rest to dict
-        metadata = dict(map(lambda meta: re.fullmatch("(.*)=\"(.*)\"", meta).groups(), metadata_text[1:]))
+        metadata = {}
+        for meta in metadata_text[1:]:
+            match = re.fullmatch(r'(.*)="(.*)"', meta)
+            if match:
+                key, value = match.groups()
+                metadata[key] = value
+
+        # Output metadata information if verbose mode is enabled
+        if args.verbose:
+            print(f"{os.path.basename(log)}: {metadata['aircraft_ident']} {metadata['product']} {metadata['unit']} {metadata['software_version']}")
 
         # Parse CSV
         df = pandas.read_csv(log, skiprows=[0,2])
-        
+
         if df.empty:
             # If file has zero data, recommend deleting, for now just skip
-            print("empty: ", log)
+            if args.verbose:
+                print(f"{os.path.basename(log)}: empty")
         else:
             if df["Oil Press (PSI)"].max() < 1:
                 # If no oil pressure in all of log, assume this session was testing/configuration
                 dest_path = log_path + "/config/"
-                print("config:", log)
+                if args.verbose:
+                    print(f"{os.path.basename(log)}: config")
             elif df["GPS Ground Speed (kt)"].max() < 50:
                 # If airplane did not achieve a ground speed sufficient for flight, assume taxi-only
                 dest_path = log_path + "/taxi/"
-                print("taxi:  ", log)
+                if args.verbose:
+                    print(f"{os.path.basename(log)}: taxi")
             else:
                 # Otherwise, the airplane was flying
                 dest_path = log_path + "/flight/"
-                print("flight:", log)
+                if args.verbose:
+                    print(f"{os.path.basename(log)}: flight")
 
             # Call rsync to copy the file into the correct destination path
             subprocess.call(["rsync", "-t", "--ignore-existing", log, dest_path])
