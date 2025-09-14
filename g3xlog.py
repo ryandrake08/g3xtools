@@ -23,7 +23,7 @@ def main():
         sys.exit(1)
 
     # Search recursively for G3X log files (log_*.csv)
-    src_logs = sorted(glob.glob(mount_root + "/**/log_*.csv", recursive=True))
+    src_logs = sorted(glob.glob(f"{mount_root}/**/log_*.csv", recursive=True))
 
     # Determine output path: command line > environment. If not specified, no files are output
     log_path = args.output or os.getenv('G3X_LOG_PATH')
@@ -54,8 +54,15 @@ def main():
                 key, value = match.groups()
                 metadata[key] = value
 
+        # Read row 2 as stable column keys
+        stable_keys_row = pandas.read_csv(log, skiprows=[0,1], nrows=1)
+        stable_keys = dict(zip(stable_keys_row.columns, stable_keys_row.iloc[0]))
+
         # Parse CSV
         df = pandas.read_csv(log, skiprows=[0,2])
+
+        # Store the stable key mapping for cross-file analysis
+        df.attrs['stable_keys'] = stable_keys
 
         if df.empty:
             # If file has zero data, recommend deleting, for now just skip
