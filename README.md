@@ -1,6 +1,9 @@
 # G3X Tools
 
-A Python toolset for processing and analyzing Garmin G3X aircraft systems, including data logs and aviation checklists.
+A Python toolset for processing and analyzing Garmin G3X aircraft systems, including data logs, aviation checklists, and navigation database updates.
+
+**NOTE:**
+Navigation database functionality heavily based on the work done in https://github.com/dimaryaz/jdmtool
 
 ## Tools Overview
 
@@ -70,6 +73,43 @@ python3 g3xchecklist.py -x checklist.ace -o checklist.yaml
 python3 g3xchecklist.py -c checklist.yaml -o checklist.ace
 ```
 
+### g3xdata.py - Aviation Database Downloader
+Downloads current aviation database updates from Garmin's fly.garmin.com service for G3X systems.
+
+**Features:**
+- OAuth authentication with Garmin's flight services
+- Automatic discovery of registered aircraft and devices
+- Downloads current installable navigation database updates
+- Conditional downloads using file modification timestamps
+- Supports all aviation database types (obstacles, terrain, navigation, etc.)
+- Organizes downloads with proper directory structure
+
+**Usage:**
+```bash
+# List all aircraft and their device IDs
+python3 g3xdata.py -l
+
+# Download updates for specific aircraft and device
+python3 g3xdata.py -a AIRCRAFT_ID -d DEVICE_ID -c /path/to/cache
+
+# Download with verbose output
+python3 g3xdata.py -a AIRCRAFT_ID -d DEVICE_ID -c /path/to/cache -v
+
+# Save aircraft descriptor for offline debugging
+python3 g3xdata.py --dump-aircraft-descriptor aircraft.json
+
+# Use saved aircraft descriptor (skip API calls)
+python3 g3xdata.py --aircraft-descriptor aircraft.json -a AIRCRAFT_ID -d DEVICE_ID -c /path/to/cache
+
+# Get detailed series information (debugging)
+python3 g3xdata.py -s SERIES_ID
+```
+
+**Authentication:**
+- First run opens browser for Garmin login
+- Access token cached in `garmin_auth.json` for reuse
+- Automatic token refresh when expired
+
 ## Installation
 
 1. **Python Environment:**
@@ -82,6 +122,7 @@ python3 g3xchecklist.py -c checklist.yaml -o checklist.ace
    - Python 3.13 (virtual environment in `./env/`)
    - pandas, numpy (for g3xlog.py)
    - PyYAML (for g3xchecklist.py)
+   - requests (for g3xdata.py)
    - Standard library modules: csv, struct, zlib, argparse
 
 ## YAML Checklist Format Specification
@@ -377,7 +418,7 @@ xx xx xx xx                            # CRC32 (4 bytes, little-endian)
 source ./env/bin/activate
 
 # Install dependencies
-pip install pyyaml pandas numpy
+pip install pyyaml pandas numpy requests
 ```
 
 ### Environment Variables
@@ -396,6 +437,10 @@ python3 g3xlog.py /path/to/logs -o /output/path -v
 
 # Test header analysis
 python3 g3xheaders.py /path/to/logs
+
+# Test database downloader
+python3 g3xdata.py -l  # List aircraft and devices
+python3 g3xdata.py --dump-aircraft-descriptor test_aircraft.json  # Save data for testing
 ```
 
 ## File Structure
@@ -406,6 +451,7 @@ g3xtools/
 ├── g3xlog.py                  # Flight data log processor
 ├── g3xheaders.py             # Log structure analyzer
 ├── g3xchecklist.py           # Checklist converter
+├── g3xdata.py                # Aviation database downloader
 ├── env/                      # Python virtual environment
 ├── ace/                      # JavaScript checklist editor
 │   ├── index.html           # Web interface

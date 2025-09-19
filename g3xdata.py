@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from datetime import datetime
 import http.server
 from http import HTTPStatus
 import json
@@ -50,8 +51,8 @@ class GarminHandler(http.server.BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             content = self.rfile.read(length)
             data = json.loads(content)
-            service_url = data["serviceUrl"]
-            service_ticket = data["serviceTicket"]
+            service_url = data['serviceUrl']
+            service_ticket = data['serviceTicket']
             print(f"Service URL: {service_url}")
             print(f"Service ticket: {service_ticket}")
             print("Received ticket. Requesting access token")
@@ -111,7 +112,7 @@ def flygarmin_get_access_token(auth_filename):
         data = flygarmin_login(auth_filename)
 
     # At this point, we should have the token data
-    return data["access_token"]
+    return data['access_token']
 
 session = requests.Session()
 session.headers['User-Agent'] = None  # type: ignore
@@ -159,54 +160,103 @@ def flygarmin_unlock(access_token: str, series_id: int, issue_name: str, device_
     resp.raise_for_status()
     return resp.json()
 
-def get_aircraft(aircraft_data, aircraft_id):
-    # Find the specified aircraft
-    for a in aircraft_data:
-        if str(a['id']) == aircraft_id:
-            return a
-    raise KeyError
+def download_file(url, dest_path, expected_size=None, verbose=False):
+    """Download a file with conditional headers if it already exists."""
+    dest_file = Path(dest_path)
+    headers = {}
 
-def get_device(device_data, device_id):
-    for d in device_data:
-        if str(d['id']) == device_id:
-            return d
-    raise KeyError
+    # Check if file already exists and set If-Modified-Since header
+    if dest_file.exists():
+        # Get the modification time and format it for HTTP header
+        mtime = dest_file.stat().st_mtime
+        if_modified_since = datetime.fromtimestamp(mtime).strftime('%a, %d %b %Y %H:%M:%S GMT')
+        headers['If-Modified-Since'] = if_modified_since
 
-def get_database(device, database_id):
-    for db in device['avdbTypes']:
-        if str(db['id']) == database_id:
-            return db
-    raise KeyError
+        if verbose:
+            print(f"    File exists, checking if modified since {if_modified_since}")
 
-def get_series(database, series_id):
-    for s in database['series']:
-        if str(s['id']) == series_id:
-            return s
-    raise KeyError
+    # Create parent directories if they don't exist
+    dest_file.parent.mkdir(parents=True, exist_ok=True)
 
-def get_issue(series, issue_name):
-    for issue in series['installableIssues']:
-        if issue['name'] == issue_name:
-            return issue
-    raise KeyError
+    try:
+        resp = session.get(url, headers=headers, stream=True)
+
+        if resp.status_code == 304:
+            if verbose:
+                print(f"    File not modified, skipping download")
+            return False  # File not modified
+
+        resp.raise_for_status()
+
+        if verbose:
+            print(f"    Downloading {url} -> {dest_path}")
+            if expected_size:
+                print(f"    Expected size: {expected_size} bytes")
+
+        # Download the file
+        with open(dest_file, 'wb') as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        # Verify file size if expected_size is provided
+        actual_size = dest_file.stat().st_size
+        if expected_size and actual_size != expected_size:
+            print(f"    Warning: Expected {expected_size} bytes, got {actual_size} bytes")
+
+        return True  # File downloaded
+
+    except requests.RequestException as e:
+        print(f"    Error downloading {url}: {e}")
+        return False
+
+def download_files_in(files_list, cache_path, verbose=False):
+    """Download a list of files from files_data structure."""
+    cache_root = Path(cache_path)
+
+    for file_info in files_list:
+        url = file_info['url']
+        destination = file_info.get('destination')
+        file_size = file_info.get('fileSize')
+
+        if destination:
+            dest_path = cache_root / destination
+            if verbose:
+                print(f"  Destination filename is: {destination}")
+        else:
+            # Extract filename from URL and place in root cache_path
+            filename = Path(urllib.parse.urlparse(url).path).name
+            dest_path = cache_root / filename
+            if verbose:
+                print(f"  No destination specified, using: {filename}")
+
+        download_file(url, str(dest_path), file_size, verbose)
 
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Download G3X data update and create SD card')
     parser.add_argument('-T', '--access-token', default='garmin_auth.json', help='Specify file containing flygarmin access token')
-    parser.add_argument('-X', '--aircraft-descriptor', help='Specify file containing an aircraft descriptor (for DEBUG only), to avoid request to flygarmin')
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
-    parser.add_argument('-A', '--list-aircraft', action='store_true', help='Output just the list of aircraft IDs')
+    # List aircraft and devices
+    parser.add_argument('-l', '--list', action='store_true', help='List aircraft IDs and device IDs for each aircraft')
+    # Download
     parser.add_argument('-a', '--aircraft-id', help='Specify aircraft ID')
-    parser.add_argument('-D', '--list-devices', action='store_true', help='Output the list of device IDs for given aircraft')
     parser.add_argument('-d', '--device-id', help='Specify device ID')
-    parser.add_argument('-B', '--list-databases', action='store_true', help='Output the list of database IDs for given aircraft and device')
-    parser.add_argument('-b', '--database-id', help='Specify database ID')
-    parser.add_argument('-S', '--list-series', action='store_true', help='Output the list of series IDs for given database')
-    parser.add_argument('-s', '--series-id', help='Specify series ID')
-    parser.add_argument('-I', '--list-issues', action='store_true', help='Output the list of installable issues for given series')
-    parser.add_argument('-i', '--issue-name', help='Specify issue name')
+    parser.add_argument('-c', '--cache-path', default='cache', help='Specify root path to cache downloaded files')
+    # Get information about series
+    parser.add_argument('-s', '--series-info', help='Get information about a particular series')
+    # Development/debug arguments
+    parser.add_argument('--dump-aircraft-descriptor', help='Output a file containing an aircraft descriptor (for DEBUG only) and then exit')
+    parser.add_argument('--aircraft-descriptor', help='Specify file containing an aircraft descriptor (for DEBUG only), to avoid request to flygarmin')
     args = parser.parse_args()
+
+    if args.series_info:
+        # Print series info and exit
+        try:
+            series = flygarmin_list_series(args.series_info)
+            print(json.dumps(series, indent=2))
+        except Exception as e:
+            print(f"Error getting series info: {e}")
+        return
 
     if args.aircraft_descriptor:
         # Use the provided aircraft descriptor file instead of making API calls
@@ -214,80 +264,70 @@ def main():
             aircraft_data = json.load(fd)
     else:
         # Query garmin for the aircraft data
-        access_token = flygarmin_get_access_token(args.access_token)
-        aircraft_data = flygarmin_list_aircraft(access_token)
+        try:
+            access_token = flygarmin_get_access_token(args.access_token)
+            aircraft_data = flygarmin_list_aircraft(access_token)
+        except Exception as e:
+            print(f"Error getting aircraft data: {e}")
+            return
 
-    if args.list_aircraft:
-        # Output just aircraft IDs
+    if args.dump_aircraft_descriptor:
+        # Print the aircraft descriptor and exit
+        print(json.dumps(aircraft_data, indent=2))
+        return
+
+    if args.list:
+        # List the aircraft and devices and exit
         for aircraft in aircraft_data:
+            device_ids = [str(device['id']) for device in aircraft['devices']]
+            print(f"Aircraft: {aircraft['id']}: Devices: {', '.join(device_ids)}")
+        return
+
+    if args.aircraft_id and args.device_id and args.cache_path:
+        # Download the current installable series/issue of all avdb types
+        aircraft = next((a for a in aircraft_data if str(a['id']) == args.aircraft_id), None)
+        if aircraft is None:
+            raise KeyError
+
+        device = next((d for d in aircraft['devices'] if str(d['id']) == args.device_id), None)
+        if device is None:
+            raise KeyError
+
+        # Collect all series/issue combinations
+        series_issue_list = []
+        for avdb in device['avdbTypes']:
+            for series in avdb['series']:
+                for issue in series['installableIssues']:
+                    # Parse the date strings and check if issue is currently valid
+                    effective_at = datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
+                    invalid_at = None if issue['invalidAt'] is None else datetime.fromisoformat(issue['invalidAt'].replace('Z', '+00:00'))
+                    now = datetime.now().astimezone()
+
+                    # Only include if today's time is >= effectiveAt and < invalidAt (or invalidAt is None)
+                    if effective_at <= now and (invalid_at is None or now < invalid_at):
+                        series_issue_list.append((avdb['name'], series['region']['name'], series['id'], issue['name']))
+
+        # Download files for each series/issue combination
+        for avdb_name, series_region_name, series_id, issue_name in series_issue_list:
             if args.verbose:
-                print(f"{aircraft['id']}: {aircraft['name']}, {aircraft['year']} {aircraft['aircraftMakeName']} {aircraft['aircraftModelName']} S/N {aircraft['serial']}")
-            else:
-                print(aircraft['id'])
+                print(f"Processing {avdb_name}: {series_region_name}, Issue: {issue_name}")
 
-    elif args.aircraft_id:
-        # Get individual aircraft info
-        aircraft = get_aircraft(aircraft_data, args.aircraft_id)
+            # Get the file list for this series/issue
+            try:
+                files_data = flygarmin_list_files(series_id, issue_name)
+            except Exception as e:
+                print(f"  Error getting file list for series {series_id}, issue {issue_name}: {e}")
+                continue
 
-        if args.list_devices:
-            # List devices for the aircraft
-            for device in aircraft["devices"]:
-                if args.verbose:
-                    print(f"{device['id']}: {device['name']} S/N {device['displaySerial']}")
-                else:
-                    print(device['id'])
+            # Download main files
+            if 'mainFiles' in files_data:
+                download_files_in(files_data['mainFiles'], args.cache_path, args.verbose)
 
-        elif args.device_id:
-            # Get individual device info
-            device = get_device(aircraft["devices"], args.device_id)
+            # Download auxiliary files
+            if 'auxiliaryFiles' in files_data:
+                download_files_in(files_data['auxiliaryFiles'], args.cache_path, args.verbose)
 
-            if args.list_databases:
-                # List databases for the aircraft/device
-                for database in device["avdbTypes"]:
-                    if args.verbose:
-                        print(f"{database['id']}: {database['name']}")
-                    else:
-                        print(f"{database['id']}")
-
-            elif args.database_id:
-                # Get individual database info
-                database = get_database(device, args.database_id)
-
-                if args.list_series:
-                    # List series for the database
-                    for series in database["series"]:
-                        if args.verbose:
-                            print(f"{series['id']}: {series['region']['name']}")
-                        else:
-                            print(series['id'])
-
-                elif args.series_id:
-                    # Get individual series info
-                    series = get_series(database, args.series_id)
-
-                    if args.list_issues:
-                        # List installable issues for the series
-                        for issue in series["installableIssues"]:
-                            if args.verbose:
-                                print(f"{issue['name']}: effective {issue['effectiveAt']}, invalid {issue['invalidAt']}")
-                            else:
-                                print(issue['name'])
-
-                    elif args.issue_name:
-                        # Get individual issue info
-                        issue = get_issue(series, args.issue_name)
-                        print(f"Issue: {issue['name']}")
-                        print(f"Effective: {issue['effectiveAt']}")
-                        print(f"Invalid: {issue['invalidAt']}")
-                        print(f"Available: {issue['availableAt']}")
-
-    elif args.series_id and args.issue_name:
-        files = flygarmin_list_files(args.series_id, args.issue_name)
-        print(json.dumps(files, indent=2))
-
-    elif args.series_id:
-        series = flygarmin_list_series(args.series_id)
-        print(json.dumps(series, indent=2))
+        return
 
 if __name__ == "__main__":
     main()
