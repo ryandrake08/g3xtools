@@ -1,184 +1,60 @@
 #!/usr/bin/env python3
+"""
+G3X Aviation Database Downloader and SD Card Creator
+
+Downloads current navigation database updates from Garmin's fly.garmin.com service
+for G3X aircraft systems and creates complete SD card images ready for installation.
+
+This tool orchestrates the complete workflow:
+1. Authenticates with Garmin services (via garmin_login module)
+2. Discovers aircraft and their devices (via garmin_api module)
+3. Catalogs available database updates as JSON descriptors
+4. Downloads navigation databases and auxiliary files conditionally
+5. Extracts TAW archives and copies files to create SD card images
+
+Features:
+- OAuth authentication with automatic token caching
+- Conditional downloads using HTTP If-Modified-Since headers
+- Two-phase operation: discovery + download for efficient processing
+- TAW archive extraction for navigation databases
+- Preserves directory structure for auxiliary files
+- Verbose output and error handling for debugging
+
+Example usage:
+    python3 g3xdata.py -l                              # List aircraft
+    python3 g3xdata.py -a 12345 -d 67890               # Download databases
+    python3 g3xdata.py -a 12345 -d 67890 -o /sdcard    # Create SD card image
+"""
 
 import argparse
-from datetime import datetime
-import http.server
-from http import HTTPStatus
+import datetime
 import json
+import pathlib
+import platformdirs
 import requests
 import shutil
-import socketserver
 import urllib.parse
-import webbrowser
-from pathlib import Path
 
-SSO_CLIENT_ID = "FLY_GARMIN_DESKTOP"
-OAUTH_TOKEN_URL = "https://services.garmin.com/api/oauth/token"
-API_PREFIX = "https://fly.garmin.com/fly-garmin/api"
-
-class GarminHandler(http.server.BaseHTTPRequestHandler):
-    def handle_credentials(self, auth: dict[str, str]):
-        ...
-
-    def do_GET(self) -> None:
-        path = urllib.parse.urlsplit(self.path, scheme="http", allow_fragments=False).path
-
-        if path == "/":
-            sso_html = Path(__file__).parent / "flygarmin" / "index.html"
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(sso_html.stat().st_size))
-            self.end_headers()
-            with open(sso_html, "rb") as fd:
-                shutil.copyfileobj(fd, self.wfile)
-
-        elif path == "/sso.js":
-            sso_js = Path(__file__).parent / "flygarmin" / "sso.js"
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "text/javascript")
-            self.send_header("Content-Length", str(sso_js.stat().st_size))
-            self.end_headers()
-            with open(sso_js, "rb") as fd:
-                shutil.copyfileobj(fd, self.wfile)
-
-        else:
-            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
-
-    def do_POST(self) -> None:
-        path = urllib.parse.urlsplit(self.path, scheme="http", allow_fragments=False).path
-
-        if path == "/login":
-            length = int(self.headers.get("Content-Length", "0"))
-            content = self.rfile.read(length)
-            data = json.loads(content)
-            service_url = data['serviceUrl']
-            service_ticket = data['serviceTicket']
-            print(f"Service URL: {service_url}")
-            print(f"Service ticket: {service_ticket}")
-            print("Received ticket. Requesting access token")
-
-            self.send_response(HTTPStatus.NO_CONTENT)
-            self.end_headers()
-
-            resp = requests.post(
-                OAUTH_TOKEN_URL,
-                data={
-                    'grant_type': 'service_ticket',
-                    'client_id': SSO_CLIENT_ID,
-                    'service_url': service_url,
-                    'service_ticket': service_ticket,
-                },
-                timeout=5,
-            )
-            resp.raise_for_status()
-            print("Received access token")
-            self.handle_credentials(resp.json())
-
-        else:
-            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
-
-def flygarmin_login(auth_filename) -> dict[str, str]:
-    data: dict[str, str] | None = None
-
-    # Overridden from GarminHandler to set our local variable
-    class Handler(GarminHandler):
-        def handle_credentials(self, auth):
-            nonlocal data
-            data = auth
-            print(f"Done retrieving access token data")
-
-    # Host a web server on localhost to perform oauth login
-    with socketserver.TCPServer(("localhost", 0), Handler) as httpd:
-        host, port = httpd.server_address[:2]
-        url = f"http://{host}:{port}"
-        print(f"Serving at {url}")
-        webbrowser.open(url)
-        while not data:
-            httpd.handle_request()
-
-    # Save the token data for later
-    with open(auth_filename, "w", encoding="utf-8") as fd:
-        json.dump(data, fd)
-
-    return data
-
-def flygarmin_get_access_token(auth_filename):
-    try:
-        # First look for specified file
-        with open(auth_filename, encoding="utf-8") as fd:
-            data = json.load(fd)
-    except FileNotFoundError:
-        # If not found, attempt to login to produce file
-        data = flygarmin_login(auth_filename)
-
-    # At this point, we should have the token data
-    return data['access_token']
-
-session = requests.Session()
-session.headers['User-Agent'] = None  # type: ignore
-
-def flygarmin_list_aircraft(access_token) -> list:
-    resp = session.get(
-        f"{API_PREFIX}/aircraft/",
-        params={
-            "withAvdbs": "true",
-            "withJeppImported": "true",
-            "withSharedAircraft": "true",
-        },
-        headers={
-            "Authorization": f"Bearer {access_token}",
-        },
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-def flygarmin_list_series(series_id: int) -> dict:
-    resp = session.get(
-        f"{API_PREFIX}/avdb-series/{series_id}/",
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-def flygarmin_list_files(series_id: int, issue_name: str) -> dict:
-    resp = session.get(
-        f"{API_PREFIX}/avdb-series/{series_id}/{issue_name}/files/",
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-def flygarmin_unlock(access_token: str, series_id: int, issue_name: str, device_id: int, card_serial: int) -> dict:
-    resp = session.get(
-        f"{API_PREFIX}/avdb-series/{series_id}/{issue_name}/unlock/",
-        params={
-            "deviceIDs": device_id,
-            "cardSerial": card_serial,
-        },
-        headers={
-            "Authorization": f"Bearer {access_token}",
-        },
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-def download_file(url, dest_path, expected_size=None, verbose=False):
+def download_file(url: str, dest_path: pathlib.Path, expected_size: int | None = None, verbose: bool = False) -> bool:
     """Download a file with conditional headers if it already exists."""
-    dest_file = Path(dest_path)
     headers = {}
 
     # Check if file already exists and set If-Modified-Since header
-    if dest_file.exists():
+    if dest_path.exists():
         # Get the modification time and format it for HTTP header
-        mtime = dest_file.stat().st_mtime
-        if_modified_since = datetime.fromtimestamp(mtime).strftime('%a, %d %b %Y %H:%M:%S GMT')
+        mtime = dest_path.stat().st_mtime
+        if_modified_since = datetime.datetime.fromtimestamp(mtime).strftime('%a, %d %b %Y %H:%M:%S GMT')
         headers['If-Modified-Since'] = if_modified_since
 
         if verbose:
             print(f"    File exists, checking if modified since {if_modified_since}")
 
     # Create parent directories if they don't exist
-    dest_file.parent.mkdir(parents=True, exist_ok=True)
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
+        session = requests.Session()
+        session.headers['User-Agent'] = None  # type: ignore
         resp = session.get(url, headers=headers, stream=True)
 
         if resp.status_code == 304:
@@ -194,12 +70,12 @@ def download_file(url, dest_path, expected_size=None, verbose=False):
                 print(f"    Expected size: {expected_size} bytes")
 
         # Download the file
-        with open(dest_file, 'wb') as f:
+        with open(dest_path, 'wb') as f:
             for chunk in resp.iter_content(chunk_size=8192):
                 f.write(chunk)
 
         # Verify file size if expected_size is provided
-        actual_size = dest_file.stat().st_size
+        actual_size = dest_path.stat().st_size
         if expected_size and actual_size != expected_size:
             print(f"    Warning: Expected {expected_size} bytes, got {actual_size} bytes")
 
@@ -209,9 +85,9 @@ def download_file(url, dest_path, expected_size=None, verbose=False):
         print(f"    Error downloading {url}: {e}")
         return False
 
-def download_files_in(files_list, cache_path, verbose=False):
+def download_files_in(files_list: list[dict], cache_root: pathlib.Path, skip: bool = False, verbose: bool = False) -> list:
     """Download a list of files from files_data structure."""
-    cache_root = Path(cache_path)
+    dest_paths = []
 
     for file_info in files_list:
         url = file_info['url']
@@ -219,115 +95,179 @@ def download_files_in(files_list, cache_path, verbose=False):
         file_size = file_info.get('fileSize')
 
         if destination:
-            dest_path = cache_root / destination
+            # Filename destination is specified, place it there
+            dest_path = cache_root / pathlib.PurePosixPath(destination)
             if verbose:
                 print(f"  Destination filename is: {destination}")
         else:
-            # Extract filename from URL and place in root cache_path
-            filename = Path(urllib.parse.urlparse(url).path).name
+            # Extract filename from URL and place in cache_root
+            filename = pathlib.Path(urllib.parse.urlparse(url).path).name
             dest_path = cache_root / filename
             if verbose:
                 print(f"  No destination specified, using: {filename}")
 
-        download_file(url, str(dest_path), file_size, verbose)
+        dest_paths.append(dest_path)
+
+        if not skip:
+            download_file(url, dest_path, file_size, verbose)
+
+    return dest_paths
 
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Download G3X data update and create SD card')
-    parser.add_argument('-T', '--access-token', default='garmin_auth.json', help='Specify file containing flygarmin access token')
+    parser.add_argument('-T', '--access-token', help='Specify flygarmin access token')
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
     # List aircraft and devices
     parser.add_argument('-l', '--list', action='store_true', help='List aircraft IDs and device IDs for each aircraft')
     # Download
+    parser.add_argument('-c', '--clear-cache', action='store_true', help='Delete all cached downloaded data, will cause all data to be re-downloaded')
+    parser.add_argument('-u', '--update', action='store_true', help='Update to the latest installable data offered by flygarmin. If not set, uses existing data')
     parser.add_argument('-a', '--aircraft-id', help='Specify aircraft ID')
     parser.add_argument('-d', '--device-id', help='Specify device ID')
-    parser.add_argument('-c', '--cache-path', default='cache', help='Specify root path to cache downloaded files')
-    # Get information about series
-    parser.add_argument('-s', '--series-info', help='Get information about a particular series')
+    # Update SDCard
+    parser.add_argument('-o', '--output', help='Specify output path (usually an SD card)')
     # Development/debug arguments
-    parser.add_argument('--dump-aircraft-descriptor', help='Output a file containing an aircraft descriptor (for DEBUG only) and then exit')
-    parser.add_argument('--aircraft-descriptor', help='Specify file containing an aircraft descriptor (for DEBUG only), to avoid request to flygarmin')
+    parser.add_argument('--dump-auth-json', help='Output a file containing the authentication record returned from flygarmin (for DEBUG only)')
+    parser.add_argument('--auth-json', help='Specify file containing the authentication record, to avoid request to flygarmin (for DEBUG only)')
+    parser.add_argument('--dump-aircraft-json', help='Output a file containing an aircraft descriptor and then exit (for DEBUG only)')
+    parser.add_argument('--aircraft-json', help='Specify file containing an aircraft descriptor, to avoid request to flygarmin (for DEBUG only)')
+    parser.add_argument('--no-download-data', action='store_true', help='Skip actual data file download and use files in the cache (for DEBUG only)')
     args = parser.parse_args()
 
-    if args.series_info:
-        # Print series info and exit
-        try:
-            series = flygarmin_list_series(args.series_info)
-            print(json.dumps(series, indent=2))
-        except Exception as e:
-            print(f"Error getting series info: {e}")
-        return
+    from garmin_login import flygarmin_get_access_token
+    from garmin_api import flygarmin_list_aircraft, flygarmin_list_files
 
-    if args.aircraft_descriptor:
-        # Use the provided aircraft descriptor file instead of making API calls
-        with open(args.aircraft_descriptor, encoding="utf-8") as fd:
-            aircraft_data = json.load(fd)
-    else:
-        # Query garmin for the aircraft data
-        try:
-            access_token = flygarmin_get_access_token(args.access_token)
+    # Directories for intermediate data
+    datasets_path = platformdirs.user_data_path("g3xavdb", "g3xavdb")
+    caches_path = platformdirs.user_cache_path("g3xavdb", "g3xavdb")
+
+    # We only need aircraft data if we are updating
+    if args.update:
+        if args.aircraft_json:
+            # Use the provided aircraft descriptor file instead of making API calls
+            with open(args.aircraft_json, encoding="utf-8") as fd:
+                aircraft_data = json.load(fd)
+
+        else:
+            # Need to obtain an aircraft descriptor from garmin, this requires an access token
+            access_token = args.access_token or flygarmin_get_access_token(args.auth_json, args.dump_auth_json)
+
+            # Query garmin for the aircraft data
             aircraft_data = flygarmin_list_aircraft(access_token)
-        except Exception as e:
-            print(f"Error getting aircraft data: {e}")
+
+            # Optionally dump the aircraft data
+            if args.dump_aircraft_json:
+                with open(args.dump_aircraft_json, "w", encoding="utf-8") as fd:
+                    json.dump(aircraft_data, fd, indent=2)
+
+        if args.list:
+            # List the aircraft and devices and exit
+            for aircraft in aircraft_data:
+                device_ids = [str(device['id']) for device in aircraft['devices']]
+                print(f"Aircraft: {aircraft['id']}: Devices: {', '.join(device_ids)}")
             return
 
-    if args.dump_aircraft_descriptor:
-        # Print the aircraft descriptor and exit
-        print(json.dumps(aircraft_data, indent=2))
-        return
-
-    if args.list:
-        # List the aircraft and devices and exit
-        for aircraft in aircraft_data:
-            device_ids = [str(device['id']) for device in aircraft['devices']]
-            print(f"Aircraft: {aircraft['id']}: Devices: {', '.join(device_ids)}")
-        return
-
-    if args.aircraft_id and args.device_id and args.cache_path:
-        # Download the current installable series/issue of all avdb types
-        aircraft = next((a for a in aircraft_data if str(a['id']) == args.aircraft_id), None)
-        if aircraft is None:
-            raise KeyError
-
-        device = next((d for d in aircraft['devices'] if str(d['id']) == args.device_id), None)
-        if device is None:
-            raise KeyError
-
-        # Collect all series/issue combinations
-        series_issue_list = []
-        for avdb in device['avdbTypes']:
-            for series in avdb['series']:
-                for issue in series['installableIssues']:
-                    # Parse the date strings and check if issue is currently valid
-                    effective_at = datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
-                    invalid_at = None if issue['invalidAt'] is None else datetime.fromisoformat(issue['invalidAt'].replace('Z', '+00:00'))
-                    now = datetime.now().astimezone()
-
-                    # Only include if today's time is >= effectiveAt and < invalidAt (or invalidAt is None)
-                    if effective_at <= now and (invalid_at is None or now < invalid_at):
-                        series_issue_list.append((avdb['name'], series['region']['name'], series['id'], issue['name']))
-
-        # Download files for each series/issue combination
-        for avdb_name, series_region_name, series_id, issue_name in series_issue_list:
+        # Clear the dataset directory because we are going to download new descriptors
+        if datasets_path.exists():
             if args.verbose:
-                print(f"Processing {avdb_name}: {series_region_name}, Issue: {issue_name}")
+                print("Clearing data directory")
+            shutil.rmtree(datasets_path)
+        datasets_path.mkdir(parents=True, exist_ok=True)
 
-            # Get the file list for this series/issue
-            try:
-                files_data = flygarmin_list_files(series_id, issue_name)
-            except Exception as e:
-                print(f"  Error getting file list for series {series_id}, issue {issue_name}: {e}")
-                continue
+        if args.aircraft_id and args.device_id:
+            # Download the current installable series/issue of all avdb types for this aircraft / device combination
+            aircraft = next((a for a in aircraft_data if str(a['id']) == args.aircraft_id), None)
+            if aircraft is None:
+                raise KeyError
 
-            # Download main files
-            if 'mainFiles' in files_data:
-                download_files_in(files_data['mainFiles'], args.cache_path, args.verbose)
+            device = next((d for d in aircraft['devices'] if str(d['id']) == args.device_id), None)
+            if device is None:
+                raise KeyError
 
-            # Download auxiliary files
-            if 'auxiliaryFiles' in files_data:
-                download_files_in(files_data['auxiliaryFiles'], args.cache_path, args.verbose)
+            if args.verbose:
+                print(f"Updating installable datasets for {aircraft['name']} {device['name']} from flygarmin")
 
-        return
+            # Iterate through all installable series/issue combinations
+            for avdb in device['avdbTypes']:
+                for series in avdb['series']:
+                    for issue in series['installableIssues']:
+                        # Parse the date strings and check if issue is currently valid
+                        effective_at = datetime.datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
+                        invalid_at = None if issue['invalidAt'] is None else datetime.datetime.fromisoformat(issue['invalidAt'].replace('Z', '+00:00'))
+                        now = datetime.datetime.now().astimezone()
+
+                        # Warn if we are outside dataset's validity window
+                        if now < effective_at:
+                            print(f"Warning: dataset: {avdb['name']}, series: {series['region']['name']}, issue: {issue['name']} becomes effective {effective_at}")
+
+                        if invalid_at and now >= invalid_at:
+                            print(f"Warning: dataset: {avdb['name']}, series: {series['region']['name']}, issue: {issue['name']} expired {invalid_at}")
+
+                        # Get the dataset descriptor for this series/issue
+                        try:
+                            files_data = flygarmin_list_files(series['id'], issue['name'])
+                        except Exception as e:
+                            print(f"Error getting file list for series {series['id']}, issue {issue['name']}: {e}")
+                            continue
+
+                        # Save dataset descriptor to file
+                        dataset_file = datasets_path / f"{avdb['id']}-{series['id']}-{issue['name']}.json"
+                        with open(dataset_file, 'w', encoding='utf-8') as fd:
+                            json.dump(files_data, fd, indent=2)
+
+                        if args.verbose:
+                            print(f"Available dataset: {avdb['name']}, series: {series['region']['name']}, issue: {issue['name']}, revision: {issue['revision']}")
+
+    # Clear cache if requested
+    if args.clear_cache:
+        if args.verbose:
+            print("Clearing download cache")
+
+        if caches_path.exists():
+            shutil.rmtree(caches_path)
+        caches_path.mkdir(parents=True, exist_ok=True)
+
+    # Download files for each dataset descriptor
+    taw_files = []
+    copy_files = []
+    for dataset_file in datasets_path.glob("*.json"):
+        if args.verbose:
+            print(f"Processing dataset described in: {dataset_file.name}")
+
+        # Read the dataset descriptor
+        with open(dataset_file, 'r', encoding='utf-8') as fd:
+            files_data = json.load(fd)
+
+        # Download main files
+        if 'mainFiles' in files_data:
+            main_files = download_files_in(files_data['mainFiles'], caches_path / "mainFiles", args.no_download_data, args.verbose)
+            taw_files.extend(main_files)
+
+        # Download auxiliary files
+        if 'auxiliaryFiles' in files_data:
+            auxiliary_files = download_files_in(files_data['auxiliaryFiles'], caches_path / "auxiliaryFiles", args.no_download_data, args.verbose)
+            copy_files.extend(auxiliary_files)
+
+    from taw import extract_taw
+
+    if args.output:
+        # Extract each file in taw_files to the root sdcard
+        for taw_file in taw_files:
+            if args.verbose:
+                print(f"Extracting {taw_file} to {args.output}")
+            extract_taw(str(taw_file), args.output, info_only=False, verbose=args.verbose)
+
+        # Copy each file in copy_files to the root sdcard, preserving the relative path
+        for copy_file in copy_files:
+            # Calculate relative path from auxiliaryFiles directory to preserve directory structure
+            relative_path = copy_file.relative_to(caches_path / "auxiliaryFiles")
+            dest_path = pathlib.Path(args.output) / relative_path
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if args.verbose:
+                print(f"Copying {copy_file} to {dest_path}")
+            shutil.copy2(copy_file, dest_path)
 
 if __name__ == "__main__":
     main()

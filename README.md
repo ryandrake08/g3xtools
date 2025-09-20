@@ -73,42 +73,86 @@ python3 g3xchecklist.py -x checklist.ace -o checklist.yaml
 python3 g3xchecklist.py -c checklist.yaml -o checklist.ace
 ```
 
-### g3xdata.py - Aviation Database Downloader
-Downloads current aviation database updates from Garmin's fly.garmin.com service for G3X systems.
+### taw.py - TAW Archive Extractor
+Extracts and analyzes Garmin TAW (navigation database) archive files used by G3X and other Garmin aviation systems.
 
 **Features:**
-- OAuth authentication with Garmin's flight services
-- Automatic discovery of registered aircraft and devices
-- Downloads current installable navigation database updates
-- Conditional downloads using file modification timestamps
-- Supports all aviation database types (obstacles, terrain, navigation, etc.)
-- Organizes downloads with proper directory structure
+- TAW file analysis and content listing
+- Full extraction to directory structures ready for SD card deployment
+- Support for multiple Garmin device types (G3X, G500, GPSMAP series)
+- Binary archive format parsing with embedded file directory
+- Automatic directory creation with proper file paths
+
+**Usage:**
+```bash
+# Extract TAW archive to directory
+python3 taw.py archive.taw /output/path
+
+# Show archive contents only (no extraction)
+python3 taw.py -i archive.taw
+
+# Verbose extraction with detailed output
+python3 taw.py -v archive.taw /output/path
+```
+
+### g3xdata.py - Aviation Database Downloader and SD Card Creator
+Downloads current aviation database updates from Garmin's fly.garmin.com service and creates complete SD card images for G3X systems.
+
+**Features:**
+- Modular design with separate authentication and API modules
+- OAuth authentication with automatic token caching
+- Two-phase operation: dataset discovery + file download
+- Conditional downloads using HTTP If-Modified-Since headers
+- TAW archive extraction for navigation databases
+- SD card image creation with proper file organization
+- Supports all aviation database types (obstacles, terrain, navigation, charts)
 
 **Usage:**
 ```bash
 # List all aircraft and their device IDs
 python3 g3xdata.py -l
 
-# Download updates for specific aircraft and device
-python3 g3xdata.py -a AIRCRAFT_ID -d DEVICE_ID -c /path/to/cache
+# Download databases to cache directory
+python3 g3xdata.py -a AIRCRAFT_ID -d DEVICE_ID
 
-# Download with verbose output
-python3 g3xdata.py -a AIRCRAFT_ID -d DEVICE_ID -c /path/to/cache -v
+# Create complete SD card image
+python3 g3xdata.py -a AIRCRAFT_ID -d DEVICE_ID -o /path/to/sdcard
 
-# Save aircraft descriptor for offline debugging
+# Save aircraft descriptor for offline use
 python3 g3xdata.py --dump-aircraft-descriptor aircraft.json
 
-# Use saved aircraft descriptor (skip API calls)
-python3 g3xdata.py --aircraft-descriptor aircraft.json -a AIRCRAFT_ID -d DEVICE_ID -c /path/to/cache
-
-# Get detailed series information (debugging)
-python3 g3xdata.py -s SERIES_ID
+# Use saved aircraft descriptor (offline mode)
+python3 g3xdata.py --aircraft-descriptor aircraft.json -a AIRCRAFT_ID -d DEVICE_ID -o /sdcard
 ```
 
-**Authentication:**
-- First run opens browser for Garmin login
-- Access token cached in `garmin_auth.json` for reuse
-- Automatic token refresh when expired
+### Supporting Modules
+
+#### garmin_login.py - OAuth Authentication
+Handles authentication with Garmin's flight services using browser-based OAuth flow.
+
+**Usage:**
+```bash
+# Get access token (opens browser for login)
+python3 garmin_login.py
+
+# Save authentication data for debugging
+python3 garmin_login.py --dump-auth-json auth.json
+```
+
+#### garmin_api.py - REST API Client
+Provides clean interface to Garmin's aviation database APIs.
+
+**Usage:**
+```bash
+# Test aircraft API
+python3 garmin_api.py -t aircraft
+
+# Test series API
+python3 garmin_api.py -t series --series-id 12345
+
+# Test files API
+python3 garmin_api.py -t files --series-id 12345 --issue-name "2024-01"
+```
 
 ## Installation
 
@@ -438,9 +482,11 @@ python3 g3xlog.py /path/to/logs -o /output/path -v
 # Test header analysis
 python3 g3xheaders.py /path/to/logs
 
-# Test database downloader
-python3 g3xdata.py -l  # List aircraft and devices
-python3 g3xdata.py --dump-aircraft-descriptor test_aircraft.json  # Save data for testing
+# Test database downloader and modules
+python3 g3xdata.py -l                               # List aircraft and devices
+python3 garmin_login.py --dump-auth-json auth.json  # Test authentication
+python3 garmin_api.py -t aircraft                   # Test API calls
+python3 taw.py -i ace_examples/test.taw             # Test TAW extraction (if available)
 ```
 
 ## File Structure
@@ -451,7 +497,10 @@ g3xtools/
 ├── g3xlog.py                  # Flight data log processor
 ├── g3xheaders.py             # Log structure analyzer
 ├── g3xchecklist.py           # Checklist converter
-├── g3xdata.py                # Aviation database downloader
+├── g3xdata.py                # Aviation database downloader and SD card creator
+├── garmin_login.py           # OAuth authentication module
+├── garmin_api.py             # REST API client module
+├── taw.py                    # TAW archive extractor
 ├── env/                      # Python virtual environment
 ├── ace/                      # JavaScript checklist editor
 │   ├── index.html           # Web interface
