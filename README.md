@@ -100,11 +100,12 @@ Downloads current aviation database updates from Garmin's fly.garmin.com service
 
 **Features:**
 - Modular design with separate authentication and API modules
-- OAuth authentication with automatic token caching
-- Two-phase operation: dataset discovery + file download
-- Conditional downloads using HTTP If-Modified-Since headers
+- OAuth authentication with automatic token caching using platformdirs
+- URL-based file caching with organized directory structure
+- Conditional downloads (skip if file already cached)
 - TAW archive extraction for navigation databases
-- SD card image creation with proper file organization
+- Cross-platform volume serial number reading
+- Device-specific unlock code generation
 - Supports all aviation database types (obstacles, terrain, navigation, charts)
 
 **Usage:**
@@ -112,35 +113,38 @@ Downloads current aviation database updates from Garmin's fly.garmin.com service
 # List all aircraft and their device IDs
 python3 g3xdata.py -l
 
-# Download databases to cache directory
-python3 g3xdata.py -a AIRCRAFT_ID -d DEVICE_ID
+# Download databases for all devices (to cache)
+python3 g3xdata.py
 
-# Create complete SD card image
-python3 g3xdata.py -a AIRCRAFT_ID -d DEVICE_ID -o /path/to/sdcard
+# Create complete SD card image for specific device
+python3 g3xdata.py -d DEVICE_ID -o /path/to/sdcard
 
-# Save aircraft descriptor for offline use
-python3 g3xdata.py --dump-aircraft-descriptor aircraft.json
+# Create SD card image with automatic volume serial number detection
+python3 g3xdata.py -d DEVICE_ID -s /dev/rdisk2s1 -o /path/to/sdcard
 
-# Use saved aircraft descriptor (offline mode)
-python3 g3xdata.py --aircraft-descriptor aircraft.json -a AIRCRAFT_ID -d DEVICE_ID -o /sdcard
+# Create SD card image with manual volume serial number (no root required)
+python3 g3xdata.py -d DEVICE_ID -N A1B2C3D4 -o /path/to/sdcard
+
+# Force refresh of cached data
+python3 g3xdata.py -A -D -U  # Force refresh aircraft, datasets, and unlock codes
+
+# Verbose output for debugging
+python3 g3xdata.py -v -d DEVICE_ID -o /path/to/sdcard
 ```
 
 ### Supporting Modules
 
 #### garmin_login.py - OAuth Authentication
-Handles authentication with Garmin's flight services using browser-based OAuth flow.
+Handles authentication with Garmin's flight services using browser-based OAuth flow with automatic token caching.
 
 **Usage:**
 ```bash
-# Get access token (opens browser for login)
+# Get access token (opens browser for login if not cached)
 python3 garmin_login.py
-
-# Save authentication data for debugging
-python3 garmin_login.py --dump-auth-json auth.json
 ```
 
 #### garmin_api.py - REST API Client
-Provides clean interface to Garmin's aviation database APIs.
+Provides clean interface to Garmin's aviation database APIs with comprehensive testing capabilities.
 
 **Usage:**
 ```bash
@@ -154,20 +158,36 @@ python3 garmin_api.py -t series --series-id 12345
 python3 garmin_api.py -t files --series-id 12345 --issue-name "2024-01"
 ```
 
+#### vsn.py - Volume Serial Number Reader
+Cross-platform utility for reading volume serial numbers from storage devices, supporting both Unix-style raw devices and Windows drive letters.
+
+**Usage:**
+```bash
+# Unix/Mac (requires sudo for raw device access)
+sudo python3 vsn.py /dev/rdisk2s1
+
+# Windows (no special privileges required)
+python3 vsn.py D:
+
+# Output format: 8-character uppercase hexadecimal (e.g., A1B2C3D4)
+```
+
 ## Installation
 
 1. **Python Environment:**
    ```bash
    source ./env/bin/activate
-   pip install pyyaml  # Required for g3xchecklist.py
+   pip install pyyaml requests pandas numpy platformdirs
    ```
 
 2. **Dependencies:**
    - Python 3.13 (virtual environment in `./env/`)
    - pandas, numpy (for g3xlog.py)
    - PyYAML (for g3xchecklist.py)
-   - requests (for g3xdata.py)
-   - Standard library modules: csv, struct, zlib, argparse
+   - requests (for g3xdata.py and garmin_api.py)
+   - platformdirs (for cross-platform cache directories)
+   - pywin32 (for vsn.py on Windows - optional)
+   - Standard library modules: csv, struct, zlib, argparse, pathlib, datetime, json
 
 ## YAML Checklist Format Specification
 

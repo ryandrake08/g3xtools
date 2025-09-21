@@ -74,12 +74,11 @@ TAW_REGION_PATHS = {
     0x4F: "air_sport.gpi",
 }
 
-def extract_taw(input_file: str, dest_path: str, info_only: bool = False, verbose: bool = False) -> None:
+def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bool = False, skip_unknown_regions: bool = False, verbose: bool = False) -> None:
 
     debug = print if verbose else lambda *_: None
 
-    input_file_path = pathlib.Path(input_file)
-    with open(input_file_path, 'rb') as fd:
+    with open(input_path, 'rb') as fd:
 
         # Read header
 
@@ -183,21 +182,24 @@ def extract_taw(input_file: str, dest_path: str, info_only: bool = False, verbos
 
             if region_path:
                 output_file = pathlib.PurePosixPath(region_path)
+            elif skip_unknown_regions:
+                output_file = None
             else:
                 output_file = f"region_{region:02x}.bin"
 
-            if info_only:
-                debug()
-                print(f"{data_size:>10} {output_file}")
-            else:
-                assert fd.tell() == data_start
-                block_size = 0x1000
-                output_path = pathlib.Path(dest_path) / output_file
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(output_path, 'wb') as fd_out:
-                    for offset in range(0, data_size, block_size):
-                        block = fd.read(min(data_size - offset, block_size))
-                        fd_out.write(block)
+            if output_file:
+                if info_only:
+                    debug()
+                    print(f"{data_size:>10} {output_file}")
+                else:
+                    assert fd.tell() == data_start
+                    block_size = 0x1000
+                    output_path = dest_path / output_file
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(output_path, 'wb') as fd_out:
+                        for offset in range(0, data_size, block_size):
+                            block = fd.read(min(data_size - offset, block_size))
+                            fd_out.write(block)
 
             debug()
 
@@ -208,7 +210,7 @@ def extract_taw(input_file: str, dest_path: str, info_only: bool = False, verbos
         tail = fd.read()
         debug(f"Tail: {tail}")
 
-def main():
+def main() -> None:
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Test Garmin API functions')
     parser.add_argument('input_file', nargs='?', help='Input .taw file')

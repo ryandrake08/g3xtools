@@ -125,32 +125,9 @@ def flygarmin_login() -> dict[str, str]:
     # Return the authentication record
     return data
 
-def flygarmin_get_access_token(auth_json: str | None = None, dump_auth_json: str | None = None) -> str:
-    """Obtain OAuth access token either from the provided file or by performing a login."""
-    if auth_json:
-        # Read the provided authentication record
-        with open(auth_json, encoding="utf-8") as fd:
-            auth_data = json.load(fd)
-    else:
-        # Obtain an authentication record from garmin
-        auth_data = flygarmin_login()
-        if dump_auth_json:
-            # Optionally dump the authentication record
-            with open(dump_auth_json, "w", encoding="utf-8") as fd:
-                json.dump(auth_data, fd, indent=2)
-
-    # Extract the access token from the authentication record
-    return auth_data['access_token']
-
-def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Download G3X data update and create SD card')
-    parser.add_argument('--dump-auth-json', default=None, help='Output a file containing the authentication record returned from flygarmin (for DEBUG only)')
-    parser.add_argument('--auth-json', default=None, help='Specify file containing the authentication record, to avoid request to flygarmin (for DEBUG only)')
-    args = parser.parse_args()
-
+def main() -> None:
     # Obtain the access token and print it to stdout
-    access_token = flygarmin_get_access_token(args.auth_json, args.dump_auth_json)
+    access_token = flygarmin_login()
     print(access_token)
 
 if __name__ == "__main__":
