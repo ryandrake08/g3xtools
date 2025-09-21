@@ -27,7 +27,7 @@ import re
 import shutil
 import sys
 
-def main():
+def main() -> None:
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Process and categorize Garmin G3X aircraft data logs')
     parser.add_argument('search_path', nargs='?', help='Path to search for data_log directories')

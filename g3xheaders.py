@@ -59,7 +59,7 @@ class G3XLogFileData:
     def close(self):
         self.file.close()
 
-def compare_headers(prev_file, curr_file):
+def compare_headers(prev_file: 'G3XLogFileData', curr_file: 'G3XLogFileData') -> None:
     """Compare headers between two G3X files and report changes"""
     prev_headers = prev_file.full_headers
     prev_stable_keys = dict(zip(prev_file.full_headers, prev_file.short_headers))
@@ -106,7 +106,7 @@ def compare_headers(prev_file, curr_file):
             return True
     return False
 
-def main():
+def main() -> None:
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Analyze Garmin G3X aircraft data logs looking for structure differences')
     parser.add_argument('search_path', nargs='?', help='Path to search for log files')

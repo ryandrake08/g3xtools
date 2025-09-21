@@ -237,7 +237,7 @@ def read_ace_binary(file_path: str) -> AceFile:
 
     return ace_file
 
-def write_ace_binary(ace_file: AceFile, file_path: str):
+def write_ace_binary(ace_file: AceFile, file_path: str) -> None:
     """Write an AceFile to binary ACE format."""
     # Build header
     header = bytearray(ACE_HEADER_SIGNATURE)
@@ -399,7 +399,7 @@ def yaml_dict_to_ace(yaml_dict: dict) -> AceFile:
 
     return ace_file
 
-def write_yaml_file(ace_file: AceFile, file_path: str):
+def write_yaml_file(ace_file: AceFile, file_path: str) -> None:
     """Write AceFile to YAML format."""
     yaml_dict = ace_to_yaml_dict(ace_file)
 
@@ -426,7 +426,7 @@ def read_yaml_file(file_path: str) -> AceFile:
 # CONVERSION FUNCTIONS
 # ================================================================
 
-def ace_to_yaml(ace_path: str, yaml_path: str):
+def ace_to_yaml(ace_path: str, yaml_path: str) -> None:
     """Convert ACE binary file to YAML format."""
     try:
         print(f"Reading ACE file: {ace_path}", file=sys.stderr)
@@ -446,7 +446,7 @@ def ace_to_yaml(ace_path: str, yaml_path: str):
         print(f"Error converting ACE to YAML: {e}", file=sys.stderr)
         sys.exit(1)
 
-def yaml_to_ace(yaml_path: str, ace_path: str):
+def yaml_to_ace(yaml_path: str, ace_path: str) -> None:
     """Convert YAML file to ACE binary format."""
     try:
         print(f"Reading YAML file: {yaml_path}", file=sys.stderr)
@@ -466,7 +466,7 @@ def yaml_to_ace(yaml_path: str, ace_path: str):
         print(f"Error converting YAML to ACE: {e}", file=sys.stderr)
         sys.exit(1)
 
-def main():
+def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         description='Convert Garmin G3X checklist files between binary (.ace) and YAML formats',
