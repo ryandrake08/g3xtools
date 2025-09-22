@@ -74,7 +74,7 @@ TAW_REGION_PATHS = {
     0x4F: "air_sport.gpi",
 }
 
-def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bool = False, skip_unknown_regions: bool = False, verbose: bool = False) -> None:
+def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bool = False, skip_unknown_regions: bool = False, verbose: bool = False):
 
     debug = print if verbose else lambda *_: None
 
@@ -200,6 +200,8 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
                         for offset in range(0, data_size, block_size):
                             block = fd.read(min(data_size - offset, block_size))
                             fd_out.write(block)
+
+                    yield (region_path, output_path)
 
             debug()
 

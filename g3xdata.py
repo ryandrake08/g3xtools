@@ -42,6 +42,7 @@ from taw import extract_taw
 from vsn import read_vsn
 
 CACHE_PATH = platformdirs.user_cache_path("g3xavdb", "g3xavdb", ensure_exists=True)
+GARMIN_SECURITY_ID = 1727
 
 session = requests.Session()
 session.headers['User-Agent'] = None  # type: ignore
@@ -89,6 +90,22 @@ def get_unlock_data(access_token: str, series_id: int, issue_name: str, device_i
     """Obtain unlock data either from cache or through flygarmin API."""
     cache_filename = f"unlock-{series_id}-{issue_name}-{device_id}-{card_serial:08X}.json"
     return cache_json_data(cache_filename, lambda: flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
+
+def get_system_serial(aircraft_data: list, device_id: int) -> int | None:
+    """Get system serial number for a given device ID from aircraft data.
+
+    Args:
+        aircraft_data: List of aircraft dictionaries from flygarmin API
+        device_id: Target device ID to find serial for
+
+    Returns:
+        Device serial number as integer, or None if not found
+    """
+    for aircraft in aircraft_data:
+        for device in aircraft['devices']:
+            if device['id'] == device_id:
+                return device['serial']
+    return None
 
 def list_aircraft_devices(aircraft_data):
     """List all aircraft and their devices, then exit."""
@@ -145,6 +162,35 @@ def download_file(url: str, expected_size: int) -> pathlib.Path:
         print(f"Warning: {dest_path}: Expected {expected_size} bytes, got {actual_size} bytes", file=sys.stderr)
 
     return dest_path
+
+def update_feature_unlock(dest_dir: pathlib.Path, region_path: str, card_serial: int, security_id: int, system_serial: int):
+    from featunlk import FILENAME_TO_FEATURE, CHUNK_SIZE, Feature, NAVIGATION_PREVIEW_START, NAVIGATION_PREVIEW_END, update_feat_unlk
+    from checksum import feat_unlk_checksum
+
+    feature = FILENAME_TO_FEATURE.get(region_path)
+    if feature is None:
+        raise ValueError(f"Unsupported region: {region_path}")
+
+    preview = None
+    dest_path = dest_dir / region_path
+    with open(dest_path, 'rb') as data:
+        last_block = block = data.read(CHUNK_SIZE)
+
+        if feature == Feature.NAVIGATION:
+            preview = block[NAVIGATION_PREVIEW_START:NAVIGATION_PREVIEW_END]
+
+        chk = 0xFFFFFFFF
+        while block:
+            last_block = block
+            chk = feat_unlk_checksum(block, chk)
+            block = data.read(CHUNK_SIZE)
+
+    if chk != 0:
+        raise ValueError(f"{dest_path} failed the checksum")
+
+    checksum = int.from_bytes(last_block[-4:], 'little')
+
+    update_feat_unlk(dest_dir, feature, card_serial, security_id, system_serial, checksum, preview)
 
 def installable_databases(aircraft_data: list):
     """Generate all installable series/issue combinations for all aircraft devices.
@@ -243,7 +289,10 @@ def main():
     # Read the sdcard's serial number if it's not provided
     card_serial = int(args.vsn, 16) if args.vsn else read_vsn(args.sddevice) if args.sddevice else None
 
-    if args.device_id and args.output and card_serial:
+    # Get system serial from aircraft data
+    system_serial = get_system_serial(aircraft_data, int(args.device_id))
+
+    if args.device_id and args.output and card_serial and system_serial:
         if args.verbose:
             print(f"Creating SD card (s/n: {card_serial:08X}) at {args.output}, installable on device {args.device_id}")
 
@@ -256,6 +305,12 @@ def main():
             if args.verbose:
                 print(f"Adding to SD card series {series_id}, issue {issue_name}")
 
+            # Receive unlock information for each database
+            #unlock_data = get_unlock_data(access_token, series_id, issue_name, device_id, card_serial, args.force_refresh_unlock_codes)
+
+            # Find unlock code for our device
+            #unlock_code = next((item['unlockCode'] for item in unlock_data['unlockCodes'] if item['deviceID'] == device_id)), None
+
             # Get the dataset descriptor for this series/issue
             files_data = get_dataset_files(series_id, issue_name)
 
@@ -264,38 +319,33 @@ def main():
                 print(f"Warning: Unexpected issue type {files_data['issue_type']} for series {series_id}, issue {issue_name}", file=sys.stderr)
                 continue
 
+            # Get a path for the root output directory
+            output_path = pathlib.Path(args.output)
+
             # Extract main files
             for file_info in files_data.get('mainFiles', []):
                 # Get destination path
                 cached_path = get_cached_file_path_for_url(file_info['url'])
 
-                if args.verbose:
-                    print(f"Extracting {cached_path} to {args.output}")
-
                 # Extract each file to the root sdcard
-                extract_taw(cached_path, pathlib.Path(args.output), skip_unknown_regions=True, verbose=args.verbose)
+                for region_path, output_file_path in extract_taw(cached_path, output_path, skip_unknown_regions=True, verbose=args.verbose):
+                    if args.verbose:
+                        print(f"Extracted {cached_path} taw region {region_path} to {output_file_path}")
+                    if region_path:
+                        update_feature_unlock(output_path, region_path, card_serial, GARMIN_SECURITY_ID, system_serial)
 
             # Copy auxiliary files
             for file_info in files_data.get('auxiliaryFiles', []):
                 # Get destination path
                 cached_path = get_cached_file_path_for_url(file_info['url'])
 
-                if args.verbose:
-                    print(f"Copying {cached_path} to {args.output}")
-
                 # Copy each file to the root sdcard, preserving the destination path
-                output_path = pathlib.Path(args.output) / pathlib.PurePosixPath(file_info['destination'])
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(cached_path, output_path)
+                output_file_path = output_path / pathlib.PurePosixPath(file_info['destination'])
+                output_file_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(cached_path, output_file_path)
 
-            # Receive unlock information for each database
-            unlock_data = get_unlock_data(access_token, series_id, issue_name, device_id, card_serial, args.force_refresh_unlock_codes)
-
-            # Find unlock code for our device
-            unlock_code = next((item['unlockCode'] for item in unlock_data['unlockCodes'] if item['deviceID'] == device_id)), None
-            if args.verbose:
-                print(f"SD card unlock code: {unlock_code}")
-
+                if args.verbose:
+                    print(f"Copied {cached_path} to {args.output}")
 
 if __name__ == "__main__":
     main()
