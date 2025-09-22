@@ -37,7 +37,7 @@ import sys
 import urllib.parse
 
 from garmin_login import flygarmin_login
-from garmin_api import flygarmin_list_aircraft, flygarmin_list_files, flygarmin_unlock
+from garmin_api import flygarmin_list_aircraft, flygarmin_list_files, flygarmin_unlock, flygarmin_list_series
 from taw import extract_taw
 from vsn import read_vsn
 
@@ -106,6 +106,59 @@ def get_system_serial(aircraft_data: list, device_id: int) -> int | None:
             if device['id'] == device_id:
                 return device['serial']
     return None
+
+def list_series_details(series_id: int) -> None:
+    """List detailed information about a specific series and exit.
+
+    Args:
+        series_id: The series ID to get details for
+    """
+    # Get series data from API
+    series_data = flygarmin_list_series(series_id)
+
+    # Print series header information
+    print(f"Series ID: {series_data['id']}")
+    print(f"Region: {series_data['region']['name']}")
+    if 'nextExpectedAvdbAvailability' in series_data:
+        next_expected = datetime.datetime.fromisoformat(series_data['nextExpectedAvdbAvailability'].replace('Z', '+00:00'))
+        print(f"Next Expected Availability: {next_expected.strftime('%B %d, %Y')}")
+    print()
+
+    # Collect all issues with status
+    all_issues = []
+
+    # Add past issues
+    for issue in series_data.get('pastIssues', []):
+        all_issues.append((issue, 'Past'))
+
+    # Add available issues
+    for issue in series_data.get('availableIssues', []):
+        all_issues.append((issue, 'Available'))
+
+    # Add upcoming issues
+    for issue in series_data.get('upcomingIssues', []):
+        all_issues.append((issue, 'Upcoming'))
+
+    # Sort by effectiveAt date
+    all_issues.sort(key=lambda x: datetime.datetime.fromisoformat(x[0]['effectiveAt'].replace('Z', '+00:00')))
+
+    # Print table header
+    print(f"{'Issue':<8} {'Status':<10} {'Available At':<18} {'Effective At':<18} {'Invalid At':<18}")
+    print("-" * 82)
+
+    # Print each issue
+    for issue, status in all_issues:
+        available_at = datetime.datetime.fromisoformat(issue['availableAt'].replace('Z', '+00:00'))
+        effective_at = datetime.datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
+        invalid_at = datetime.datetime.fromisoformat(issue['invalidAt'].replace('Z', '+00:00')) if issue['invalidAt'] else None
+
+        available_str = available_at.strftime('%b %d, %Y')
+        effective_str = effective_at.strftime('%b %d, %Y')
+        invalid_str = invalid_at.strftime('%b %d, %Y') if invalid_at else 'N/A'
+
+        print(f"{issue['name']:<8} {status:<10} {available_str:<18} {effective_str:<18} {invalid_str:<18}")
+
+    sys.exit(0)
 
 def list_aircraft_devices(aircraft_data):
     """List all aircraft and their devices, then exit."""
@@ -239,28 +292,30 @@ def main():
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Download G3X data update and create SD card')
+
+    # Informational
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
-
-    # FlyGarmin controls
-    parser.add_argument('-F', '--force-login', action='store_true', help='Force a refresh of the flygarmin access token')
-    parser.add_argument('-T', '--access-token', help='Specify flygarmin access token')
-
-    # Working with aircraft and devices
-    parser.add_argument('-A', '--force-refresh-aircraft', action='store_true', help='Force a refresh of the aircraft data')
     parser.add_argument('-l', '--list-devices', action='store_true', help='List aircraft IDs and avionics device IDs for each aircraft')
+    parser.add_argument('-i', '--series-info', type=int, metavar='SERIES_ID', help='Show detailed information about a specific series ID')
 
-    # Download
+    # FlyGarmin authenitcation and queries
+    parser.add_argument('-T', '--access-token', help='Specify flygarmin access token')
+    parser.add_argument('-F', '--force-login', action='store_true', help='Force a refresh of the flygarmin access token')
+    parser.add_argument('-A', '--force-refresh-aircraft', action='store_true', help='Force a refresh of the aircraft data')
     parser.add_argument('-D', '--force-refresh-datasets', action='store_true', help='Force a refresh of the dataset data')
+    parser.add_argument('-U', '--force-refresh-unlock-codes', action='store_true', help='Force a refresh of the unlock codes')
 
     # Update SDCard
-    parser.add_argument('-U', '--force-refresh-unlock-codes', action='store_true', help='Force a refresh of the unlock codes')
-    parser.add_argument('-d', '--device-id', help='Specify avionics device ID')
+    parser.add_argument('-d', '--device-id', help='Specify avionics device ID for SD card programming')
     parser.add_argument('-o', '--output', help='Specify output path (usually an SD card)')
     parser.add_argument('-s', '--sddevice', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. Example: {device_example}")
     parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges")
 
     # Development/debug arguments
     args = parser.parse_args()
+
+    # List series details and exit
+    args.series_info and list_series_details(args.series_info) # type: ignore
 
     # Get access token either from the comand line, from the auth_json, or from flygarmin
     access_token = args.access_token or get_access_token(args.force_login)
