@@ -19,7 +19,7 @@ Processes and categorizes Garmin G3X aircraft data logs into flight types based 
 **Usage:**
 ```bash
 # Activate virtual environment
-source ./env/bin/activate
+source env/bin/activate
 
 # Process logs with verbose output
 python3 g3xlog.py /path/to/search -o /output/path -v
@@ -73,28 +73,6 @@ python3 g3xchecklist.py -x checklist.ace -o checklist.yaml
 python3 g3xchecklist.py -c checklist.yaml -o checklist.ace
 ```
 
-### taw.py - TAW Archive Extractor
-Extracts and analyzes Garmin TAW (navigation database) archive files used by G3X and other Garmin aviation systems.
-
-**Features:**
-- TAW file analysis and content listing
-- Full extraction to directory structures ready for SD card deployment
-- Support for multiple Garmin device types (G3X, G500, GPSMAP series)
-- Binary archive format parsing with embedded file directory
-- Automatic directory creation with proper file paths
-
-**Usage:**
-```bash
-# Extract TAW archive to directory
-python3 taw.py archive.taw /output/path
-
-# Show archive contents only (no extraction)
-python3 taw.py -i archive.taw
-
-# Verbose extraction with detailed output
-python3 taw.py -v archive.taw /output/path
-```
-
 ### g3xdata.py - Aviation Database Downloader and SD Card Creator
 Downloads current aviation database updates from Garmin's fly.garmin.com service and creates complete SD card images for G3X systems.
 
@@ -116,20 +94,29 @@ python3 g3xdata.py -l
 # Download databases for all devices (to cache)
 python3 g3xdata.py
 
-# Create complete SD card image for specific device
-python3 g3xdata.py -d DEVICE_ID -o /path/to/sdcard
-
 # Create SD card image with automatic volume serial number detection
 python3 g3xdata.py -d DEVICE_ID -s /dev/rdisk2s1 -o /path/to/sdcard
 
 # Create SD card image with manual volume serial number (no root required)
 python3 g3xdata.py -d DEVICE_ID -N A1B2C3D4 -o /path/to/sdcard
 
+# Include specific series/issue combinations
+python3 g3xdata.py -d DEVICE_ID -I 2054 2509 -I 2056 25D4 -o /path/to/sdcard
+
+# Include custom TAW files
+python3 g3xdata.py -d DEVICE_ID -W /path/to/custom.taw -W /path/to/other.taw -o /path/to/sdcard
+
 # Force refresh of cached data
-python3 g3xdata.py -A -D -U  # Force refresh aircraft, datasets, and unlock codes
+python3 g3xdata.py -A -D -F  # Force refresh aircraft, datasets, and file downloads
+
+# Enable CRC checking during TAW extraction (slower but more reliable)
+python3 g3xdata.py -c -d DEVICE_ID -o /path/to/sdcard
 
 # Verbose output for debugging
 python3 g3xdata.py -v -d DEVICE_ID -o /path/to/sdcard
+
+# Show detailed series information
+python3 g3xdata.py -i 2054  # Show details for series ID 2054
 ```
 
 ### Supporting Modules
@@ -158,6 +145,48 @@ python3 garmin_api.py -t series --series-id 12345
 python3 garmin_api.py -t files --series-id 12345 --issue-name "2024-01"
 ```
 
+#### taw.py - TAW Archive Extractor
+Extracts and analyzes Garmin TAW (navigation database) archive files. Primarily used by g3xdata.py but can be used standalone.
+
+**Features:**
+- TAW file analysis and content listing
+- Full extraction to directory structures ready for SD card deployment
+- Support for multiple Garmin device types (G3X, G500, GPSMAP series)
+- Binary archive format parsing with embedded file directory
+
+**Usage:**
+```bash
+# Extract TAW archive to directory
+python3 taw.py archive.taw /output/path
+
+# Show archive contents only (no extraction)
+python3 taw.py -i archive.taw
+
+# Verbose extraction with detailed output
+python3 taw.py -v archive.taw /output/path
+```
+
+#### featunlk.py - Feature Unlock File Generator
+Generates feature unlock files (feat_unlk.dat) for Garmin aviation systems. Primarily used by g3xdata.py but can be used standalone.
+
+**Features:**
+- Cross-platform CLI with short argument support
+- Optional CRC checking during processing
+- Supports all Garmin aviation database file types
+- Generates device-specific unlock codes
+
+**Usage:**
+```bash
+# Generate unlock file for navigation data
+python3 featunlk.py -o /sdcard -f /sdcard/ldr_sys/avtn_db.bin -r "ldr_sys/avtn_db.bin" -N A1B2C3D4 -S 12345678
+
+# Generate with CRC checking (slower but more reliable)
+python3 featunlk.py -c -o /sdcard -f /sdcard/terrain_9as.tdb -r "terrain_9as.tdb" -N A1B2C3D4 -S 12345678
+
+# Show help for all options
+python3 featunlk.py --help
+```
+
 #### vsn.py - Volume Serial Number Reader
 Cross-platform utility for reading volume serial numbers from storage devices, supporting both Unix-style raw devices and Windows drive letters.
 
@@ -176,15 +205,15 @@ python3 vsn.py D:
 
 1. **Python Environment:**
    ```bash
-   source ./env/bin/activate
-   pip install pyyaml requests pandas numpy platformdirs
+   source env/bin/activate
+   pip install pyyaml requests pandas platformdirs
    ```
 
 2. **Dependencies:**
    - Python 3.13 (virtual environment in `./env/`)
-   - pandas, numpy (for g3xlog.py)
+   - pandas (for g3xlog.py)
    - PyYAML (for g3xchecklist.py)
-   - requests (for g3xdata.py and garmin_api.py)
+   - requests (for g3xdata.py)
    - platformdirs (for cross-platform cache directories)
    - pywin32 (for vsn.py on Windows - optional)
    - Standard library modules: csv, struct, zlib, argparse, pathlib, datetime, json
@@ -474,15 +503,177 @@ xx xx xx xx                            # CRC32 (4 bytes, little-endian)
 - Text length: No explicit limits, but practical limits apply
 - Nesting: Groups contain checklists; checklists contain items (no deeper nesting)
 
+## TAW Archive Format Specification
+
+TAW (archive) files contain Garmin navigation database information for aviation systems. The format consists of a header, metadata, and multiple data regions.
+
+### File Structure Overview
+
+```
+┌─────────────────┐
+│     Header      │ 5 bytes: Magic signature, either "pWa.d" or "wAt.d"
+├─────────────────┤
+│   Separator     │ 13 bytes: Fixed separator sequence
+├─────────────────┤
+│    SQA Data     │ 25 bytes: Unknown
+├─────────────────┤
+│  Metadata Len   │ 4 bytes: Length of metadata section
+├─────────────────┤
+│   Section 'F'   │ 1 byte: Metadata signifier
+├─────────────────┤
+│    Metadata     │ Variable: Database type and info
+├─────────────────┤
+│    Padding      │ 4 bytes: Padding
+├─────────────────┤
+│   Section 'R'   │ 1 byte: Region section marker
+├─────────────────┤
+│   TAW Magic     │ 5 bytes: "KpGrd"
+├─────────────────┤
+│   Separator     │ 13 bytes: Fixed separator sequence
+├─────────────────┤
+│    SQA Data     │ 25 bytes: Unknown
+├─────────────────┤
+│    Regions      │ Variable: Multiple data regions
+└─────────────────┘
+```
+
+### Header Format
+
+| Offset | Size | Description | Values |
+|--------|------|-------------|--------|
+| 0x00 | 5 bytes | Magic signature | `pWa.d` or `wAt.d` |
+| 0x05 | 13 bytes | Separator | `00 02 00 00 00 44 64 00 1b 00 00 00 41 c8 00` |
+| 0x12 | 25 bytes | SQA data 1 | Null-terminated strings |
+| 0x2B | 4 bytes | Metadata length | Little-endian integer |
+| 0x2F | 1 byte | Section marker | `F` (0x46) |
+| 0x30 | Variable | Metadata | Database information |
+| 0x30+len | 4 bytes | Padding | Unknown/padding bytes |
+| Next | 1 byte | Section marker | `R` (0x52) |
+| Next+1 | 5 bytes | TAW magic | `KpGrd` |
+| Next+6 | 13 bytes | Separator | Same as offset 0x05 |
+| Next+19 | 25 bytes | SQA data 2 | Null-terminated strings |
+
+### Metadata Section Format
+
+The metadata section contains database information in a structured format:
+
+| Offset | Size | Description |
+|--------|------|-------------|
+| 0x00 | 2 bytes | Database type ID (little-endian) |
+| 0x02 | 1 byte | Format variant (0x00 or other) |
+| 0x03 | Variable | Format-specific data |
+
+#### Format Variant 0x00
+
+| Offset | Size | Description |
+|--------|------|-------------|
+| 0x03 | 5 bytes | Reserved |
+| 0x08 | 1 byte | Year |
+| 0x09 | 3 bytes | Reserved |
+| 0x0C | 1 byte | Cycle |
+| 0x0D | 3 bytes | Reserved |
+| 0x10 | Variable | Text data (3 null-terminated strings) |
+
+#### Other Format Variants
+
+| Offset | Size | Description |
+|--------|------|-------------|
+| 0x03 | 1 byte | Reserved |
+| 0x04 | 1 byte | Year |
+| 0x05 | 1 byte | Reserved |
+| 0x06 | 1 byte | Cycle |
+| 0x07 | 1 byte | Reserved |
+| 0x08 | Variable | Text data (3 null-terminated strings) |
+
+#### Text Data Format
+
+The text data consists of three null-terminated strings:
+1. **Avionics**: Target avionics system
+2. **Coverage**: Geographic coverage area
+3. **Type**: Database type description
+
+### Region Section Format
+
+Each region contains:
+
+| Offset | Size | Description |
+|--------|------|-------------|
+| 0x00 | 4 bytes | Section size (little-endian) |
+| 0x04 | 1 byte | Section type ('R' = region, 'S' = end) |
+| 0x05 | 2 bytes | Region ID (little-endian) |
+| 0x07 | 4 bytes | Unknown field |
+| 0x0B | 4 bytes | Data size (little-endian) |
+| 0x0F | Variable | Region data |
+
+### Known Region IDs
+
+| ID | Path |
+|----|------|
+| 0x01 | `ldr_sys/avtn_db.bin` |
+| 0x02 | `ldr_sys/nav_db2.bin` |
+| 0x03 | `bmap.bin` |
+| 0x04 | `nav.bin` |
+| 0x05 | `bmap2.bin` |
+| 0x0A | `safetaxi.bin` |
+| 0x0B | `safetaxi2.gca` |
+| 0x14 | `fc_tpc/fc_tpc.dat` |
+| 0x1A | `rasters/rasters.xml` |
+| 0x21 | `terrain.tdb` |
+| 0x22 | `terrain_9as.tdb` |
+| 0x23 | `trn.dat` |
+| 0x24 | `FCharts.dat` |
+| 0x25 | `Fcharts.fca` |
+| 0x26 | `standard.odb` |
+| 0x27 | `terrain.odb` |
+| 0x28 | `terrain.adb` |
+| 0x32 | `.System/AVTN/avtn_db.bin` |
+| 0x33 | `Poi/air_sport.gpi` |
+| 0x35 | `.System/AVTN/Obstacle.odb` |
+| 0x36 | `.System/AVTN/safetaxi.img` |
+| 0x39 | `.System/AVTN/FliteCharts/fc_tpc.dat` |
+| 0x3A | `.System/AVTN/FliteCharts/fc_tpc.fca` |
+| 0x4C | `fbo.gpi` |
+| 0x4E | `apt_dir.gca` |
+| 0x4F | `air_sport.gpi` |
+
+### Database Types
+
+| ID | Type |
+|----|------|
+| 0x0091 | GPSMAP 196 |
+| 0x00BF | Gx000 |
+| 0x0104 | GPSMAP 296 |
+| 0x0190 | G500 |
+| 0x01F2 | G500H/GPSx75 |
+| 0x0253 | GPSMAP 496 |
+| 0x0294 | AERA 660 |
+| 0x02E9 | GPSMAP 696 |
+| 0x02EA | G3X |
+| 0x02F0 | GPS175 |
+| 0x0402 | GtnXi |
+| 0x0465 | GI275 |
+| 0x0618 | AERA 760 |
+| 0x06BF | G3X Touch |
+| 0x0738 | GTR2X5 |
+| 0x07DC | GTXi |
+
+## Feature Unlock (feat_unlk.dat) Format Specification
+
+The feat_unlk.dat file activates database features on Garmin aviation systems by providing unlock codes tied to specific SD card serial numbers and aircraft device IDs.
+
+### File Structure Overview
+
+For now, see featunlk.py for this information.
+
 ## Development
 
 ### Environment Setup
 ```bash
 # Activate virtual environment
-source ./env/bin/activate
+source env/binactivate
 
 # Install dependencies
-pip install pyyaml pandas numpy requests
+pip install pyyaml pandas requests platformdirs
 ```
 
 ### Environment Variables
@@ -490,62 +681,49 @@ pip install pyyaml pandas numpy requests
 - `G3X_LOG_PATH`: Default output path for processed logs
 
 ### Testing
-Test the tools with provided example files in `ace_examples/`:
+Basic functionality tests:
 ```bash
-# Test checklist conversion
-python3 g3xchecklist.py -x ace_examples/test.ace -o test.yaml
-python3 g3xchecklist.py -c test.yaml -o test_new.ace
+# Test authentication and API access
+python3 garmin_login.py                             # Test authentication
+python3 garmin_api.py -t aircraft                   # Test API calls
 
-# Test log processing
+# Test database discovery
+python3 g3xdata.py -l                               # List aircraft and devices
+
+# Test volume serial number reading (Unix/Mac)
+sudo python3 vsn.py /dev/rdisk2s1                   # Replace with actual device
+
+# Test volume serial number reading (Windows)
+python3 vsn.py D:                                   # Replace with actual drive
+
+# Test log processing (requires actual G3X log files)
 python3 g3xlog.py /path/to/logs -o /output/path -v
 
-# Test header analysis
+# Test header analysis (requires actual G3X log files)
 python3 g3xheaders.py /path/to/logs
-
-# Test database downloader and modules
-python3 g3xdata.py -l                               # List aircraft and devices
-python3 garmin_login.py --dump-auth-json auth.json  # Test authentication
-python3 garmin_api.py -t aircraft                   # Test API calls
-python3 taw.py -i ace_examples/test.taw             # Test TAW extraction (if available)
 ```
 
 ## File Structure
 
 ```
 g3xtools/
-├── README.md                  # This file
-├── g3xlog.py                  # Flight data log processor
+├── README.md                 # This file
+├── g3xlog.py                 # Flight data log processor
 ├── g3xheaders.py             # Log structure analyzer
 ├── g3xchecklist.py           # Checklist converter
 ├── g3xdata.py                # Aviation database downloader and SD card creator
+├── featunlk.py               # Feature unlock file generator
 ├── garmin_login.py           # OAuth authentication module
 ├── garmin_api.py             # REST API client module
 ├── taw.py                    # TAW archive extractor
-├── env/                      # Python virtual environment
-├── ace/                      # JavaScript checklist editor
-│   ├── index.html           # Web interface
-│   ├── app.js               # Editor logic
-│   ├── style.css            # Styling
-│   └── acefile.txt          # ACE format documentation
-└── ace_examples/             # Example ACE files
-    ├── test.ace
-    ├── empty.ace
-    └── *.ace
+└── vsn.py                    # Volume serial number reader
 ```
-
-## Contributing
-
-When working with this codebase:
-
-1. **Activate Environment**: Always use `source ./env/bin/activate`
-2. **Follow Patterns**: Study existing code patterns before implementing
-3. **Test Thoroughly**: Verify changes with example files
-4. **Document Changes**: Update relevant documentation
 
 ## License
 
-See individual files for license information. The JavaScript checklist editor (ace/) is MIT licensed.
+See LICENSE file.
 
 ## Disclaimer
 
-This software is not affiliated with Garmin. Always verify checklist function and content in actual devices before flight. Checklists created with these tools are not intended to replace official AFM procedures.
+This software is not affiliated with Garmin. Always verify function and content in actual devices before flight. Checklists created with these tools are not intended to replace official AFM procedures.
+Update cards created with these tools are unofficial, and to be used at the users's own risk.
