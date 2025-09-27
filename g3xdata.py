@@ -301,7 +301,7 @@ def copy_file(file_info: dict, output_path: pathlib.Path) -> pathlib.Path:
     shutil.copy2(cached_path, output_file_path)
     return output_file_path
 
-def installable_databases(aircraft_data: list, device_id: int) -> list[tuple[int, str, int]]:
+def installable_databases(aircraft_data: list, device_id: int) -> list[tuple[int, str]]:
     """Get all installable series/issue combinations for a specific device.
 
     Args:
@@ -309,7 +309,7 @@ def installable_databases(aircraft_data: list, device_id: int) -> list[tuple[int
         device_id: Device ID to get databases for
 
     Returns:
-        List of (series_id, issue_name, device_id) tuples for each valid dataset
+        List of (series_id, issue_name) tuples for each valid dataset
     """
     databases = []
 
@@ -333,7 +333,7 @@ def installable_databases(aircraft_data: list, device_id: int) -> list[tuple[int
                                 print(f"Warning: dataset: {avdb['name']}, series: {series['region']['name']} ({series['id']}), issue: {issue['name']} expired {invalid_at}", file=sys.stderr)
 
                             # Add to list
-                            databases.append((series['id'], issue['name'], device['id']))
+                            databases.append((series['id'], issue['name']))
 
     return databases
 
@@ -355,7 +355,11 @@ def main() -> None:
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('-l', '--list-devices', action='store_true', help='List aircraft IDs and avionics device IDs for each aircraft')
     parser.add_argument('-i', '--series-info', type=int, metavar='SERIES_ID', help='Show detailed information about a specific series ID')
-    parser.add_argument('-c', '--check-crc', action='store_true', help='Perform CRC check during TAW file extraction (slow)')
+
+    # Data
+    parser.add_argument('-c', '--check-crc', action='store_true', help='Perform CRC check during feature unlock generation (slow)')
+    parser.add_argument('-I', '--include-series', action='append', nargs=2, metavar=('SERIES_ID', 'ISSUE_NAME'), help='Add specific series ID and issue name to output (can be specified multiple times, e.g., -I 2054 2509 -I 2056 25D4)')
+    parser.add_argument('-W', '--include-taw', action='append', metavar='TAW_FILE', help='Include specific TAW file for extraction (can be specified multiple times, e.g., -W /path/to/file.taw -W /path/to/other.taw)')
 
     # Update SDCard
     parser.add_argument('-d', '--device-id', help='Specify avionics device ID for SD card programming. If not specified, use the first device in the first aircraft')
@@ -403,9 +407,15 @@ def main() -> None:
     # List the installable databases
     databases = installable_databases(aircraft_data, device_id)
 
+    # Add manually specified series/issue pairs
+    if args.include_series:
+        for series_id_str, issue_name in args.include_series:
+            series_id = int(series_id_str)
+            databases.append((series_id, issue_name))
+
     # File downloading
 
-    for series_id, issue_name, _ in databases:
+    for series_id, issue_name in databases:
         # Get the dataset descriptor for this series/issue
         files_data = get_dataset_files(series_id, issue_name, args.force_refresh_datasets)
 
@@ -421,7 +431,7 @@ def main() -> None:
         features = []
 
         # Iterate through all installable series/issue combinations
-        for series_id, issue_name, _ in databases:
+        for series_id, issue_name in databases:
             vprint(f"Adding to SD card series {series_id}, issue {issue_name}")
 
             # Get the dataset descriptor for this series/issue
@@ -449,6 +459,22 @@ def main() -> None:
                 vprint(f"Copied {file_info['url']} to {output_file_path}")
 
             vprint(f"Finished adding series")
+
+        # Process manually specified TAW files
+        if args.include_taw:
+            for taw_file_path in args.include_taw:
+                vprint(f"Adding manual TAW file {taw_file_path}")
+                taw_path = pathlib.Path(taw_file_path)
+
+                if not taw_path.exists():
+                    print(f"Warning: TAW file {taw_file_path} does not exist, skipping", file=sys.stderr)
+                    continue
+
+                # Extract each file to the root sdcard
+                for taw_region_path, output_file_path in extract_taw(taw_path, output_path, skip_unknown_regions=True):
+                    vprint(f"Extracted {taw_file_path} taw region {taw_region_path} to {output_file_path}")
+                    if taw_region_path:
+                        features.append((taw_region_path, output_file_path))
 
         # Activate features on the sdcard
 
