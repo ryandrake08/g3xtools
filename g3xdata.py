@@ -362,10 +362,10 @@ def main() -> None:
     parser.add_argument('-W', '--include-taw', action='append', metavar='TAW_FILE', help='Include specific TAW file for extraction (can be specified multiple times, e.g., -W /path/to/file.taw -W /path/to/other.taw)')
 
     # Update SDCard
-    parser.add_argument('-d', '--device-id', help='Specify avionics device ID for SD card programming. If not specified, use the first device in the first aircraft')
+    parser.add_argument('-d', '--device-id', type=int, help='Specify avionics device ID for SD card programming. If not specified, use the first device in the first aircraft')
     parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path). If not specified, try to detect a SD card mount point')
     parser.add_argument('-s', '--sddevice', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. Example: {device_example}")
-    parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges")
+    parser.add_argument('-N', '--vsn', type=lambda x: int(x, 16), help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges")
 
     # FlyGarmin authenitcation, query, and download overrides
     parser.add_argument('-T', '--access-token', help='Specify flygarmin access token')
@@ -387,7 +387,7 @@ def main() -> None:
     output_path = pathlib.Path(args.output or sd_card or "") if (args.output or sd_card) else None
 
     # Read the sdcard's serial number if it's not provided
-    card_serial = int(args.vsn, 16) if args.vsn else read_vsn(args.sddevice) if args.sddevice else None
+    card_serial = args.vsn if args.vsn else read_vsn(args.sddevice) if args.sddevice else None
 
     # List series details and exit
     args.series_info and list_series_details(args.series_info) # type: ignore
@@ -402,7 +402,7 @@ def main() -> None:
     args.list_devices and list_aircraft_devices(aircraft_data) # type: ignore
 
     # Select a device id, or use default aircraft/device
-    device_id = int(args.device_id) if args.device_id else get_default_device_id(aircraft_data)
+    device_id = args.device_id if args.device_id else get_default_device_id(aircraft_data)
 
     # Get system serial number from aircraft data
     system_serial = get_system_serial(aircraft_data, device_id)
