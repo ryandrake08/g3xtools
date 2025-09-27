@@ -251,12 +251,13 @@ def get_cached_file_path_for_url(url: str) -> pathlib.Path:
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     return dest_path
 
-def download_file(url: str, expected_size: int) -> pathlib.Path:
+def download_file(url: str, expected_size: int, force: bool = False) -> pathlib.Path:
     """Download a file from the given URL with caching and size verification.
 
     Args:
         url: The complete URL to download from (e.g., "https://avdb.garmin.com/path/to/file.taw")
         expected_size: Expected file size in bytes for verification purposes
+        force: If True, re-download file even if it already exists in cache
 
     Returns:
         Path object pointing to the downloaded/cached file location
@@ -267,8 +268,8 @@ def download_file(url: str, expected_size: int) -> pathlib.Path:
     """
     dest_path = get_cached_file_path_for_url(url)
 
-    # Skip downloading if file already exists
-    if not dest_path.exists():
+    # Skip downloading if file already exists and force is False
+    if not dest_path.exists() or force:
         resp = session.get(url, stream=True)
         resp.raise_for_status()
 
@@ -360,6 +361,7 @@ def main() -> None:
     parser.add_argument('-F', '--force-login', action='store_true', help='Force a refresh of the flygarmin access token')
     parser.add_argument('-A', '--force-refresh-aircraft', action='store_true', help='Force a refresh of the aircraft data')
     parser.add_argument('-D', '--force-refresh-datasets', action='store_true', help='Force a refresh of the dataset data')
+    parser.add_argument('-F', '--force-file-download', action='store_true', help='Force a re-download of the actual data files')
 
     # Update SDCard
     parser.add_argument('-d', '--device-id', help='Specify avionics device ID for SD card programming. If not specified, use the first device in the first aircraft')
@@ -402,7 +404,7 @@ def main() -> None:
 
         # Download all files (main and auxiliary)
         for file_info in files_data.get('mainFiles', []) + files_data.get('auxiliaryFiles', []):
-            download_file(file_info['url'], file_info['fileSize'])
+            download_file(file_info['url'], file_info['fileSize'], args.force_file_download)
 
     # File copy / extraction
 
@@ -446,7 +448,7 @@ def main() -> None:
 
         if card_serial:
             if args.verbose:
-                print(f"Creating SD card (s/n: {card_serial:08X}) at {args.output}, installable on device {device_id}")
+                print(f"Creating SD card (s/n: {card_serial:08X}) at {output_path}, installable on device {device_id}")
 
             # Get system serial from aircraft data and filter databases to only include the specified device
             system_serial = get_system_serial(aircraft_data, device_id)
