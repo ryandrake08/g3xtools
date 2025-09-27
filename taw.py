@@ -221,7 +221,7 @@ def main() -> None:
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose debug output')
     args = parser.parse_args()
 
-    extract_taw(args.input_file, args.output_path, args.info_only, args.verbose)
+    extract_taw(args.input_file, args.output_path, info_only=args.info_only, verbose=args.verbose)
 
 if __name__ == "__main__":
     main()

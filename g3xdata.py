@@ -355,6 +355,7 @@ def main() -> None:
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('-l', '--list-devices', action='store_true', help='List aircraft IDs and avionics device IDs for each aircraft')
     parser.add_argument('-i', '--series-info', type=int, metavar='SERIES_ID', help='Show detailed information about a specific series ID')
+    parser.add_argument('-c', '--check-crc', action='store_true', help='Perform CRC check during TAW file extraction (slow)')
 
     # Update SDCard
     parser.add_argument('-d', '--device-id', help='Specify avionics device ID for SD card programming. If not specified, use the first device in the first aircraft')
@@ -395,6 +396,9 @@ def main() -> None:
 
     # Select a device id, or use default aircraft/device
     device_id = int(args.device_id) if args.device_id else get_default_device_id(aircraft_data)
+
+    # Get system serial number from aircraft data
+    system_serial = get_system_serial(aircraft_data, device_id)
 
     # List the installable databases
     databases = installable_databases(aircraft_data, device_id)
@@ -437,7 +441,7 @@ def main() -> None:
                 for taw_region_path, output_file_path in extract_taw(cached_path, output_path, skip_unknown_regions=True):
                     vprint(f"Extracted {cached_path} taw region {taw_region_path} to {output_file_path}")
                     if taw_region_path:
-                        features.append((output_file_path, taw_region_path))
+                        features.append((taw_region_path, output_file_path))
 
             # Copy auxiliary files
             for file_info in files_data.get('auxiliaryFiles', []):
@@ -449,15 +453,12 @@ def main() -> None:
         # Activate features on the sdcard
 
         if card_serial:
-            # Get system serial from aircraft data and filter databases to only include the specified device
-            system_serial = get_system_serial(aircraft_data, device_id)
-
             vprint(f"Creating SD card (s/n: {card_serial:08X}) at {output_path}, installable on device {device_id} (s/n: {system_serial})")
 
             # Activate all features
-            for output_file_path, taw_region_path in features:
+            for taw_region_path, output_file_path in features:
                 vprint(f"Unlocking feature {taw_region_path}")
-                update_feature_unlock(output_path, output_file_path, taw_region_path, card_serial, GARMIN_SECURITY_ID, system_serial)
+                update_feature_unlock(output_path, output_file_path, taw_region_path, card_serial, GARMIN_SECURITY_ID, system_serial, args.check_crc)
 
             vprint(f"Finished creating SD card")
 

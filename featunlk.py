@@ -134,7 +134,7 @@ def feat_unlk_checksum(data: bytes, value: int = 0xFFFFFFFF) -> int:
         value = _feat_unlk_lookup_table[index] ^ (value >> 8)
     return value
 
-def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path, region_path: str, vol_id: int, security_id: int, system_id: int):
+def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path, region_path: str, vol_id: int, security_id: int, system_id: int, check: bool=False):
     # Look up feature from region filename
     feature = FILENAME_TO_FEATURE.get(region_path)
     if feature is None:
@@ -150,10 +150,11 @@ def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path
         chk = 0xFFFFFFFF
         while block:
             last_block = block
-            chk = feat_unlk_checksum(block, chk)
+            if check:
+                chk = feat_unlk_checksum(block, chk)
             block = data.read(CHUNK_SIZE)
 
-    if chk != 0:
+    if check and chk != 0:
         raise ValueError(f"{output_file_path} failed the checksum")
 
     checksum = int.from_bytes(last_block[-4:], 'little')
@@ -224,21 +225,23 @@ def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Update feat_unlk.dat to enable a feature")
-    parser.add_argument("dest_dir", type=pathlib.Path, help="Destination directory")
-    parser.add_argument("data_file_path", type=pathlib.Path, help="Data file path")
-    parser.add_argument("region_path", help="Region name")
-    parser.add_argument("vol_id", type=int, help="Volume ID")
-    parser.add_argument("system_id", type=int, help="System ID")
+    parser.add_argument("-o", "--output", dest="dest_dir", type=pathlib.Path, required=True, help="Destination directory")
+    parser.add_argument("-f", "--file", dest="data_file_path", type=pathlib.Path, required=True, help="Data file path")
+    parser.add_argument("-r", "--region", dest="region_path", required=True, help="TAW region name")
+    parser.add_argument("-N", "--vsn", dest="vol_id", type=int, required=True, help="SD card volume serial number")
+    parser.add_argument("-S", "--system-serial", dest="system_id", type=int, required=True, help="System serial number")
+    parser.add_argument("-c", "--check-crc", action="store_true", help="Perform CRC check during processing (slow)")
 
     args = parser.parse_args()
 
     update_feature_unlock(
         args.dest_dir,
-        args.output_file_path,
+        args.data_file_path,
         args.region_path,
         args.vol_id,
         GARMIN_SECURITY_ID,
-        args.system_id
+        args.system_id,
+        args.check_crc
     )
 
 if __name__ == "__main__":
