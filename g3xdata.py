@@ -73,25 +73,78 @@ def cache_json_data(cache_filename: str, fetch_function, force: bool = False):
         return data
 
 def get_access_token(force: bool = False) -> str:
-    """Obtain OAuth access token either from data directory or by performing a login."""
+    """Obtain OAuth access token with caching support.
+
+    Args:
+        force: If True, ignore cache and perform fresh login
+
+    Returns:
+        Valid OAuth access token string for API authentication
+    """
     auth_data = cache_json_data("garmin_auth.json", flygarmin_login, force)
     return auth_data['access_token']
 
 def get_aircraft_data(access_token: str, force: bool = False) -> list:
-    """Obtain aircraft data either from the data directory or through flygarmin api."""
+    """Obtain aircraft data with caching support.
+
+    Args:
+        access_token: Valid OAuth token for flygarmin API authentication
+        force: If True, ignore cache and fetch fresh data from API
+
+    Returns:
+        List of aircraft dictionaries containing aircraft and device information
+    """
     return cache_json_data("aircraft.json", lambda: flygarmin_list_aircraft(access_token), force)
 
 def get_dataset_files(series_id: int, issue_name: str, force: bool = False) -> dict:
-    """Obtain dataset descriptor either from the data directory or through flygarmin api."""
+    """Obtain dataset file information with caching support.
+
+    Args:
+        series_id: Numeric identifier for the database series
+        issue_name: String identifier for the specific issue (e.g., "2509")
+        force: If True, ignore cache and fetch fresh data from API
+
+    Returns:
+        Dictionary containing file URLs, sizes, and destination paths for the dataset
+    """
     cache_filename = f"dataset-{series_id}-{issue_name}.json"
     return cache_json_data(cache_filename, lambda: flygarmin_list_files(series_id, issue_name), force)
 
 def get_unlock_data(access_token: str, series_id: int, issue_name: str, device_id: int, card_serial: int, force: bool = False) -> dict:
-    """Obtain unlock data either from cache or through flygarmin API."""
+    """Obtain unlock code data with caching support.
+
+    Args:
+        access_token: Valid OAuth token for flygarmin API authentication
+        series_id: Numeric identifier for the database series
+        issue_name: String identifier for the specific issue (e.g., "2509")
+        device_id: Target avionics device identifier
+        card_serial: SD card volume serial number for unlock generation
+        force: If True, ignore cache and fetch fresh data from API
+
+    Returns:
+        Dictionary containing unlock codes and activation data for the specified parameters
+    """
     cache_filename = f"unlock-{series_id}-{issue_name}-{device_id}-{card_serial:08X}.json"
     return cache_json_data(cache_filename, lambda: flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
 
-def get_system_serial(aircraft_data: list, device_id: int) -> int | None:
+def get_default_device_id(aircraft_data: list) -> int:
+    """Get the first available device ID from aircraft data.
+
+    Args:
+        aircraft_data: List of aircraft dictionaries from flygarmin API
+
+    Returns:
+        First device ID found
+
+    Raises:
+        ValueError: If no devices are found in aircraft data
+    """
+    for aircraft in aircraft_data:
+        for device in aircraft['devices']:
+            return device['id']
+    raise ValueError("No devices found in aircraft data")
+
+def get_system_serial(aircraft_data: list, device_id: int) -> int:
     """Get system serial number for a given device ID from aircraft data.
 
     Args:
@@ -99,13 +152,16 @@ def get_system_serial(aircraft_data: list, device_id: int) -> int | None:
         device_id: Target device ID to find serial for
 
     Returns:
-        Device serial number as integer, or None if not found
+        Device serial number as integer
+
+    Raises:
+        ValueError: If device ID is not found in aircraft data
     """
     for aircraft in aircraft_data:
         for device in aircraft['devices']:
             if device['id'] == device_id:
                 return device['serial']
-    return None
+    raise ValueError(f"Device ID {device_id} not found in aircraft data")
 
 def list_series_details(series_id: int) -> None:
     """List detailed information about a specific series and exit.
@@ -160,8 +216,12 @@ def list_series_details(series_id: int) -> None:
 
     sys.exit(0)
 
-def list_aircraft_devices(aircraft_data):
-    """List all aircraft and their devices, then exit."""
+def list_aircraft_devices(aircraft_data: list) -> None:
+    """List all aircraft and their devices in a human-readable format, then exit.
+
+    Args:
+        aircraft_data: List of aircraft dictionaries from flygarmin API.
+    """
     for aircraft in aircraft_data:
         device_info = [f"{device['name']} ({device['id']})" for device in aircraft['devices']]
         print(f"Aircraft: {aircraft['id']}: Devices: {', '.join(device_info)}")
@@ -176,10 +236,6 @@ def get_cached_file_path_for_url(url: str) -> pathlib.Path:
     Returns:
         Path object pointing to the cached file location
         Directory structure: CACHE_PATH/hostname/url_path
-
-    Note:
-        Creates parent directories if they don't exist.
-        Uses PurePosixPath for URL parsing to handle cross-platform compatibility.
     """
     # Parse URL to create destination path from hostname + path
     parsed_url = urllib.parse.urlparse(url)
@@ -196,7 +252,19 @@ def get_cached_file_path_for_url(url: str) -> pathlib.Path:
     return dest_path
 
 def download_file(url: str, expected_size: int) -> pathlib.Path:
-    """Download a file with conditional headers if it already exists."""
+    """Download a file from the given URL with caching and size verification.
+
+    Args:
+        url: The complete URL to download from (e.g., "https://avdb.garmin.com/path/to/file.taw")
+        expected_size: Expected file size in bytes for verification purposes
+
+    Returns:
+        Path object pointing to the downloaded/cached file location
+
+    Raises:
+        requests.HTTPError: If the HTTP request fails
+        OSError: If file operations fail (permissions, disk space, etc.)
+    """
     dest_path = get_cached_file_path_for_url(url)
 
     # Skip downloading if file already exists
@@ -232,39 +300,41 @@ def copy_file(file_info: dict, output_path: pathlib.Path) -> pathlib.Path:
     shutil.copy2(cached_path, output_file_path)
     return output_file_path
 
-def installable_databases(aircraft_data: list):
-    """Generate all installable series/issue combinations for all aircraft devices.
+def installable_databases(aircraft_data: list, device_id: int) -> list[tuple[int, str, int]]:
+    """Get all installable series/issue combinations for a specific device.
 
     Args:
         aircraft_data: List of aircraft dictionaries from flygarmin API
+        device_id: Device ID to get databases for
 
-    Yields:
-        Tuple of (series_id, issue_name, device_id) for each valid dataset
-
-    Note:
-        Filters out datasets that are not currently valid based on effective/invalid dates.
-        Prints warnings for datasets outside their validity window.
+    Returns:
+        List of (series_id, issue_name, device_id) tuples for each valid dataset
     """
-    # Generate all installable series/issue combinations
+    databases = []
+
+    # Generate all installable series/issue combinations for the specified device
     for aircraft in aircraft_data:
         for device in aircraft['devices']:
-            for avdb in device['avdbTypes']:
-                for series in avdb['series']:
-                    for issue in series['installableIssues']:
-                        # Parse the date strings and check if issue is currently valid
-                        effective_at = datetime.datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
-                        invalid_at = None if issue['invalidAt'] is None else datetime.datetime.fromisoformat(issue['invalidAt'].replace('Z', '+00:00'))
-                        now = datetime.datetime.now().astimezone()
+            if device_id == device['id']:
+                for avdb in device['avdbTypes']:
+                    for series in avdb['series']:
+                        for issue in series['installableIssues']:
+                            # Parse the date strings and check if issue is currently valid
+                            effective_at = datetime.datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
+                            invalid_at = None if issue['invalidAt'] is None else datetime.datetime.fromisoformat(issue['invalidAt'].replace('Z', '+00:00'))
+                            now = datetime.datetime.now().astimezone()
 
-                        # Warn if we are outside dataset's validity window
-                        if now < effective_at:
-                            print(f"Warning: dataset: {avdb['name']}, series: {series['region']['name']} ({series['id']}), issue: {issue['name']} becomes effective {effective_at}", file=sys.stderr)
+                            # Warn if we are outside dataset's validity window
+                            if now < effective_at:
+                                print(f"Warning: dataset: {avdb['name']}, series: {series['region']['name']} ({series['id']}), issue: {issue['name']} becomes effective {effective_at}", file=sys.stderr)
 
-                        if invalid_at and now >= invalid_at:
-                            print(f"Warning: dataset: {avdb['name']}, series: {series['region']['name']} ({series['id']}), issue: {issue['name']} expired {invalid_at}", file=sys.stderr)
+                            if invalid_at and now >= invalid_at:
+                                print(f"Warning: dataset: {avdb['name']}, series: {series['region']['name']} ({series['id']}), issue: {issue['name']} expired {invalid_at}", file=sys.stderr)
 
-                        # Add to generator
-                        yield (series['id'], issue['name'], device['id'])
+                            # Add to list
+                            databases.append((series['id'], issue['name'], device['id']))
+
+    return databases
 
 def main() -> None:
     # Build platform-specific device example
@@ -290,16 +360,21 @@ def main() -> None:
     parser.add_argument('-F', '--force-login', action='store_true', help='Force a refresh of the flygarmin access token')
     parser.add_argument('-A', '--force-refresh-aircraft', action='store_true', help='Force a refresh of the aircraft data')
     parser.add_argument('-D', '--force-refresh-datasets', action='store_true', help='Force a refresh of the dataset data')
-    parser.add_argument('-U', '--force-refresh-unlock-codes', action='store_true', help='Force a refresh of the unlock codes')
 
     # Update SDCard
-    parser.add_argument('-d', '--device-id', help='Specify avionics device ID for SD card programming')
-    parser.add_argument('-o', '--output', help='Specify output path (usually an SD card)')
+    parser.add_argument('-d', '--device-id', help='Specify avionics device ID for SD card programming. If not specified, use the first device in the first aircraft')
+    parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path)')
     parser.add_argument('-s', '--sddevice', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. Example: {device_example}")
     parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges")
 
-    # Development/debug arguments
+    # Parse arguments
     args = parser.parse_args()
+
+    # Get a path for the root output directory
+    output_path = pathlib.Path(args.output) if args.output else None
+
+    # Read the sdcard's serial number if it's not provided
+    card_serial = int(args.vsn, 16) if args.vsn else read_vsn(args.sddevice) if args.sddevice else None
 
     # List series details and exit
     args.series_info and list_series_details(args.series_info) # type: ignore
@@ -313,8 +388,11 @@ def main() -> None:
     # List the aircraft and devices and exit
     args.list_devices and list_aircraft_devices(aircraft_data) # type: ignore
 
+    # Select a device id, or use default aircraft/device
+    device_id = int(args.device_id) if args.device_id else get_default_device_id(aircraft_data)
+
     # List the installable databases
-    databases = list(installable_databases(aircraft_data))
+    databases = installable_databases(aircraft_data, device_id)
 
     # File downloading
 
@@ -326,29 +404,17 @@ def main() -> None:
         for file_info in files_data.get('mainFiles', []) + files_data.get('auxiliaryFiles', []):
             download_file(file_info['url'], file_info['fileSize'])
 
-    # Store list of data files / taw_regions
-    features = []
-
     # File copy / extraction
 
-    if args.device_id and args.output:
-        # Get a path for the root output directory
-        output_path = pathlib.Path(args.output)
-
-        # Only consider datasets for the given device_id
-        databases = [db for db in databases if db[2] == int(args.device_id)]
+    if output_path:
+        # Store list of data files / taw_regions
+        features = []
 
         # Iterate through all installable series/issue combinations
         for series_id, issue_name, _ in databases:
 
             if args.verbose:
                 print(f"Adding to SD card series {series_id}, issue {issue_name}")
-
-            # Receive unlock information for each database
-            #unlock_data = get_unlock_data(access_token, series_id, issue_name, device_id, card_serial, args.force_refresh_unlock_codes)
-
-            # Find unlock code for our device
-            #unlock_code = next((item['unlockCode'] for item in unlock_data['unlockCodes'] if item['deviceID'] == device_id)), None
 
             # Get the dataset descriptor for this series/issue
             files_data = get_dataset_files(series_id, issue_name)
@@ -364,7 +430,7 @@ def main() -> None:
                 cached_path = get_cached_file_path_for_url(file_info['url'])
 
                 # Extract each file to the root sdcard
-                for taw_region_path, output_file_path in extract_taw(cached_path, output_path, skip_unknown_regions=True, verbose=args.verbose):
+                for taw_region_path, output_file_path in extract_taw(cached_path, output_path, skip_unknown_regions=True):
                     if taw_region_path:
                         features.append((output_file_path, taw_region_path))
                     if args.verbose:
@@ -376,24 +442,18 @@ def main() -> None:
                 if args.verbose:
                     print(f"Copied {file_info['url']} to {output_file_path}")
 
-    # Read the sdcard's serial number if it's not provided
-    card_serial = int(args.vsn, 16) if args.vsn else read_vsn(args.sddevice) if args.sddevice else None
+        # Activate features on the sdcard
 
-    # Get system serial from aircraft data and filter databases to only include the specified device
-    system_serial = get_system_serial(aircraft_data, int(args.device_id))
+        if card_serial:
+            if args.verbose:
+                print(f"Creating SD card (s/n: {card_serial:08X}) at {args.output}, installable on device {device_id}")
 
-    # Activate features on the sdcard
+            # Get system serial from aircraft data and filter databases to only include the specified device
+            system_serial = get_system_serial(aircraft_data, device_id)
 
-    if args.device_id and args.output and card_serial and system_serial:
-        if args.verbose:
-            print(f"Creating SD card (s/n: {card_serial:08X}) at {args.output}, installable on device {args.device_id}")
-
-        # Get a path for the root output directory
-        output_path = pathlib.Path(args.output)
-
-        # Activate all features
-        for output_file_path, taw_region_path in features:
-            update_feature_unlock(output_path, output_file_path, taw_region_path, card_serial, GARMIN_SECURITY_ID, system_serial)
+            # Activate all features
+            for output_file_path, taw_region_path in features:
+                update_feature_unlock(output_path, output_file_path, taw_region_path, card_serial, GARMIN_SECURITY_ID, system_serial)
 
 if __name__ == "__main__":
     main()
