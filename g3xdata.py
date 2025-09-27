@@ -40,7 +40,7 @@ from garmin_login import flygarmin_login
 from garmin_api import flygarmin_list_aircraft, flygarmin_list_files, flygarmin_unlock, flygarmin_list_series
 from featunlk import update_feature_unlock, GARMIN_SECURITY_ID
 from taw import extract_taw
-from vsn import read_vsn
+from sdcard import read_vsn, detect_sd_card
 
 CACHE_PATH = platformdirs.user_cache_path("g3xavdb", "g3xavdb", ensure_exists=True)
 
@@ -363,7 +363,7 @@ def main() -> None:
 
     # Update SDCard
     parser.add_argument('-d', '--device-id', help='Specify avionics device ID for SD card programming. If not specified, use the first device in the first aircraft')
-    parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path)')
+    parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path). If not specified, try to detect a SD card mount point')
     parser.add_argument('-s', '--sddevice', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. Example: {device_example}")
     parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges")
 
@@ -380,8 +380,11 @@ def main() -> None:
     # Verbose printing
     vprint = print if args.verbose else lambda *_: None
 
+    # Try to detect a mounted SD card
+    sd_card = detect_sd_card()
+
     # Get a path for the root output directory
-    output_path = pathlib.Path(args.output) if args.output else None
+    output_path = pathlib.Path(args.output or sd_card or "") if (args.output or sd_card) else None
 
     # Read the sdcard's serial number if it's not provided
     card_serial = int(args.vsn, 16) if args.vsn else read_vsn(args.sddevice) if args.sddevice else None

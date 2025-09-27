@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-vsn.py
+sdcard.py
 
-Read volume serial number from FAT volume.
+Read volume serial number from FAT volume and detect SD card mount points.
 Assumes FAT32 format and reads VSN from offset 67.
 
-Usage: python3 vsn.py /dev/diskN
+Usage: python3 sdcard.py /dev/diskN
 """
 
 import sys
+import shutil
 
 SECTOR_SIZE = 512
 FAT32_VSN_OFFSET = 67  # FAT32 volume serial number offset
@@ -47,6 +48,64 @@ def windows_vsn(drive_letter: str) -> int:
     except Exception as e:
         raise IOError(f"Error accessing drive {drive_letter}: {e}")
 
+def detect_sd_card() -> str | None:
+    """Detect and select SD card mount point.
+
+    Returns:
+        Path to SD card mount point, or None if no suitable candidate found
+
+    Filters by:
+    - FAT32 filesystem only (includes 'msdos' which may be FAT32)
+    - SD card sizes between 8-32 GB only
+    - Excludes system mount points
+    """
+    try:
+        import psutil
+    except ImportError:
+        return None
+
+    candidates = []
+
+    for partition in psutil.disk_partitions():
+        mountpoint = partition.mountpoint
+
+        # Skip system partitions
+        if sys.platform == 'darwin' and mountpoint in ['/', '/System', '/Library', '/Applications', '/usr', '/var']:
+            continue
+        if sys.platform.startswith('linux') and mountpoint in ['/', '/boot', '/home', '/usr', '/var']:
+            continue
+        if sys.platform == 'win32' and mountpoint.upper() in ['C:\\']:
+            continue
+
+        # Filter for FAT32 filesystem only (msdos on macOS is typically FAT32)
+        if partition.fstype.lower() not in ['fat32', 'msdos']:
+            continue
+
+        # Check if size matches SD card sizes (8-32 GB)
+        try:
+            total, _, _ = shutil.disk_usage(mountpoint)
+            size_gb = total / (1024**3)
+
+            # Only accept SD cards between 8-32 GB (allowing some variance for formatting overhead)
+            if 7.5 <= size_gb <= 33.0:
+                candidates.append({
+                    'path': mountpoint,
+                    'size_gb': size_gb
+                })
+        except:
+            continue
+
+    # Selection logic
+    if len(candidates) == 0:
+        return None
+    elif len(candidates) == 1:
+        return candidates[0]['path']
+    else:
+        # Multiple candidates - prefer smaller sizes (more likely to be SD cards vs external drives)
+        candidates.sort(key=lambda x: x['size_gb'])
+        print(f"Warning: Multiple SD card candidates found. Selecting smallest: {candidates[0]['path']}")
+        return candidates[0]['path']
+
 def read_vsn(device: str) -> int:
     """Read volume serial number from device using appropriate platform-specific method.
 
@@ -68,8 +127,8 @@ def read_vsn(device: str) -> int:
 
 def main() -> None:
     if len(sys.argv) != 2:
-        print("Usage: python3 vsn.py <device>", file=sys.stderr)
-        print("Example: python3 vsn.py /dev/sdb1 (Linux) or python3 vsn.py /dev/rdisk2s1 (Mac) or python3 vsn.py D: (Windows)", file=sys.stderr)
+        print("Usage: python3 sdcard.py <device>", file=sys.stderr)
+        print("Example: python3 sdcard.py /dev/sdb1 (Linux) or python3 sdcard.py /dev/rdisk2s1 (Mac) or python3 sdcard.py D: (Windows)", file=sys.stderr)
         sys.exit(1)
 
     try:

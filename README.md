@@ -187,16 +187,16 @@ python3 featunlk.py -c -o /sdcard -f /sdcard/terrain_9as.tdb -r "terrain_9as.tdb
 python3 featunlk.py --help
 ```
 
-#### vsn.py - Volume Serial Number Reader
-Cross-platform utility for reading volume serial numbers from storage devices, supporting both Unix-style raw devices and Windows drive letters.
+#### sdcard.py - SD Card Detection and Volume Serial Number Reader
+Cross-platform utility for reading volume serial numbers from storage devices and detecting SD card mount points, supporting both Unix-style raw devices and Windows drive letters.
 
 **Usage:**
 ```bash
 # Unix/Mac (requires sudo for raw device access)
-sudo python3 vsn.py /dev/rdisk2s1
+sudo python3 sdcard.py /dev/rdisk2s1
 
 # Windows (no special privileges required)
-python3 vsn.py D:
+python3 sdcard.py D:
 
 # Output format: 8-character uppercase hexadecimal (e.g., A1B2C3D4)
 ```
@@ -215,7 +215,7 @@ python3 vsn.py D:
    - PyYAML (for g3xchecklist.py)
    - requests (for g3xdata.py)
    - platformdirs (for cross-platform cache directories)
-   - pywin32 (for vsn.py on Windows - optional)
+   - pywin32 (for sdcard.py on Windows - optional)
    - Standard library modules: csv, struct, zlib, argparse, pathlib, datetime, json
 
 ## YAML Checklist Format Specification
@@ -691,10 +691,10 @@ python3 garmin_api.py -t aircraft                   # Test API calls
 python3 g3xdata.py -l                               # List aircraft and devices
 
 # Test volume serial number reading (Unix/Mac)
-sudo python3 vsn.py /dev/rdisk2s1                   # Replace with actual device
+sudo python3 sdcard.py /dev/rdisk2s1                # Replace with actual device
 
 # Test volume serial number reading (Windows)
-python3 vsn.py D:                                   # Replace with actual drive
+python3 sdcard.py D:                                # Replace with actual drive
 
 # Test log processing (requires actual G3X log files)
 python3 g3xlog.py /path/to/logs -o /output/path -v
@@ -716,7 +716,7 @@ g3xtools/
 ├── garmin_login.py           # OAuth authentication module
 ├── garmin_api.py             # REST API client module
 ├── taw.py                    # TAW archive extractor
-└── vsn.py                    # Volume serial number reader
+└── sdcard.py                 # SD card detection and volume serial number reader
 ```
 
 ## License
