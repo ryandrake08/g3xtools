@@ -38,11 +38,11 @@ import urllib.parse
 
 from garmin_login import flygarmin_login
 from garmin_api import flygarmin_list_aircraft, flygarmin_list_files, flygarmin_unlock, flygarmin_list_series
+from featunlk import update_feature_unlock, GARMIN_SECURITY_ID
 from taw import extract_taw
 from vsn import read_vsn
 
 CACHE_PATH = platformdirs.user_cache_path("g3xavdb", "g3xavdb", ensure_exists=True)
-GARMIN_SECURITY_ID = 1727
 
 session = requests.Session()
 session.headers['User-Agent'] = None  # type: ignore
@@ -216,34 +216,21 @@ def download_file(url: str, expected_size: int) -> pathlib.Path:
 
     return dest_path
 
-def update_feature_unlock(dest_dir: pathlib.Path, region_path: str, card_serial: int, security_id: int, system_serial: int):
-    from featunlk import FILENAME_TO_FEATURE, CHUNK_SIZE, Feature, NAVIGATION_PREVIEW_START, NAVIGATION_PREVIEW_END, update_feat_unlk
-    from checksum import feat_unlk_checksum
+def copy_file(file_info: dict, output_path: pathlib.Path) -> pathlib.Path:
+    """Copy a file from cache to the output directory, preserving destination path.
 
-    feature = FILENAME_TO_FEATURE.get(region_path)
-    if feature is None:
-        raise ValueError(f"Unsupported region: {region_path}")
+    Args:
+        file_info: Dictionary containing 'url' and 'destination' keys
+        output_path: Base output directory path
 
-    preview = None
-    dest_path = dest_dir / region_path
-    with open(dest_path, 'rb') as data:
-        last_block = block = data.read(CHUNK_SIZE)
-
-        if feature == Feature.NAVIGATION:
-            preview = block[NAVIGATION_PREVIEW_START:NAVIGATION_PREVIEW_END]
-
-        chk = 0xFFFFFFFF
-        while block:
-            last_block = block
-            chk = feat_unlk_checksum(block, chk)
-            block = data.read(CHUNK_SIZE)
-
-    if chk != 0:
-        raise ValueError(f"{dest_path} failed the checksum")
-
-    checksum = int.from_bytes(last_block[-4:], 'little')
-
-    update_feat_unlk(dest_dir, feature, card_serial, security_id, system_serial, checksum, preview)
+    Returns:
+        Path to the copied file
+    """
+    cached_path = get_cached_file_path_for_url(file_info['url'])
+    output_file_path = output_path / pathlib.PurePosixPath(file_info['destination'])
+    output_file_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(cached_path, output_file_path)
+    return output_file_path
 
 def installable_databases(aircraft_data: list):
     """Generate all installable series/issue combinations for all aircraft devices.
@@ -279,7 +266,7 @@ def installable_databases(aircraft_data: list):
                         # Add to generator
                         yield (series['id'], issue['name'], device['id'])
 
-def main():
+def main() -> None:
     # Build platform-specific device example
     if sys.platform == 'darwin':
         device_example = "/dev/rdisk2s1"
@@ -326,36 +313,33 @@ def main():
     # List the aircraft and devices and exit
     args.list_devices and list_aircraft_devices(aircraft_data) # type: ignore
 
-    # Iterate through all installable series/issue combinations
-    for series_id, issue_name, _ in installable_databases(aircraft_data):
-        if args.verbose:
-            print(f"Downloading files for series {series_id}, issue {issue_name}")
+    # List the installable databases
+    databases = list(installable_databases(aircraft_data))
 
+    # File downloading
+
+    for series_id, issue_name, _ in databases:
         # Get the dataset descriptor for this series/issue
         files_data = get_dataset_files(series_id, issue_name, args.force_refresh_datasets)
 
         # Download all files (main and auxiliary)
         for file_info in files_data.get('mainFiles', []) + files_data.get('auxiliaryFiles', []):
-            if args.verbose:
-                print(f"Downloading {file_info['url']}, expected size: {file_info['fileSize']}")
-
             download_file(file_info['url'], file_info['fileSize'])
 
-    # Read the sdcard's serial number if it's not provided
-    card_serial = int(args.vsn, 16) if args.vsn else read_vsn(args.sddevice) if args.sddevice else None
+    # Store list of data files / taw_regions
+    features = []
 
-    # Get system serial from aircraft data
-    system_serial = get_system_serial(aircraft_data, int(args.device_id))
+    # File copy / extraction
 
-    if args.device_id and args.output and card_serial and system_serial:
-        if args.verbose:
-            print(f"Creating SD card (s/n: {card_serial:08X}) at {args.output}, installable on device {args.device_id}")
+    if args.device_id and args.output:
+        # Get a path for the root output directory
+        output_path = pathlib.Path(args.output)
+
+        # Only consider datasets for the given device_id
+        databases = [db for db in databases if db[2] == int(args.device_id)]
 
         # Iterate through all installable series/issue combinations
-        for series_id, issue_name, device_id in installable_databases(aircraft_data):
-            # Skip if this dataset is for a different device
-            if device_id != int(args.device_id):
-                continue
+        for series_id, issue_name, _ in databases:
 
             if args.verbose:
                 print(f"Adding to SD card series {series_id}, issue {issue_name}")
@@ -374,33 +358,42 @@ def main():
                 print(f"Warning: Unexpected issue type {files_data['issue_type']} for series {series_id}, issue {issue_name}", file=sys.stderr)
                 continue
 
-            # Get a path for the root output directory
-            output_path = pathlib.Path(args.output)
-
             # Extract main files
             for file_info in files_data.get('mainFiles', []):
                 # Get destination path
                 cached_path = get_cached_file_path_for_url(file_info['url'])
 
                 # Extract each file to the root sdcard
-                for region_path, output_file_path in extract_taw(cached_path, output_path, skip_unknown_regions=True, verbose=args.verbose):
+                for taw_region_path, output_file_path in extract_taw(cached_path, output_path, skip_unknown_regions=True, verbose=args.verbose):
+                    if taw_region_path:
+                        features.append((output_file_path, taw_region_path))
                     if args.verbose:
-                        print(f"Extracted {cached_path} taw region {region_path} to {output_file_path}")
-                    if region_path:
-                        update_feature_unlock(output_path, region_path, card_serial, GARMIN_SECURITY_ID, system_serial)
+                        print(f"Extracted {cached_path} taw region {taw_region_path} to {output_file_path}")
 
             # Copy auxiliary files
             for file_info in files_data.get('auxiliaryFiles', []):
-                # Get destination path
-                cached_path = get_cached_file_path_for_url(file_info['url'])
-
-                # Copy each file to the root sdcard, preserving the destination path
-                output_file_path = output_path / pathlib.PurePosixPath(file_info['destination'])
-                output_file_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(cached_path, output_file_path)
-
+                output_file_path = copy_file(file_info, output_path)
                 if args.verbose:
-                    print(f"Copied {cached_path} to {args.output}")
+                    print(f"Copied {file_info['url']} to {output_file_path}")
+
+    # Read the sdcard's serial number if it's not provided
+    card_serial = int(args.vsn, 16) if args.vsn else read_vsn(args.sddevice) if args.sddevice else None
+
+    # Get system serial from aircraft data and filter databases to only include the specified device
+    system_serial = get_system_serial(aircraft_data, int(args.device_id))
+
+    # Activate features on the sdcard
+
+    if args.device_id and args.output and card_serial and system_serial:
+        if args.verbose:
+            print(f"Creating SD card (s/n: {card_serial:08X}) at {args.output}, installable on device {args.device_id}")
+
+        # Get a path for the root output directory
+        output_path = pathlib.Path(args.output)
+
+        # Activate all features
+        for output_file_path, taw_region_path in features:
+            update_feature_unlock(output_path, output_file_path, taw_region_path, card_serial, GARMIN_SECURITY_ID, system_serial)
 
 if __name__ == "__main__":
     main()
