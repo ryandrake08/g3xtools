@@ -356,21 +356,24 @@ def main() -> None:
     parser.add_argument('-l', '--list-devices', action='store_true', help='List aircraft IDs and avionics device IDs for each aircraft')
     parser.add_argument('-i', '--series-info', type=int, metavar='SERIES_ID', help='Show detailed information about a specific series ID')
 
-    # FlyGarmin authenitcation and queries
-    parser.add_argument('-T', '--access-token', help='Specify flygarmin access token')
-    parser.add_argument('-F', '--force-login', action='store_true', help='Force a refresh of the flygarmin access token')
-    parser.add_argument('-A', '--force-refresh-aircraft', action='store_true', help='Force a refresh of the aircraft data')
-    parser.add_argument('-D', '--force-refresh-datasets', action='store_true', help='Force a refresh of the dataset data')
-    parser.add_argument('-F', '--force-file-download', action='store_true', help='Force a re-download of the actual data files')
-
     # Update SDCard
     parser.add_argument('-d', '--device-id', help='Specify avionics device ID for SD card programming. If not specified, use the first device in the first aircraft')
     parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path)')
     parser.add_argument('-s', '--sddevice', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. Example: {device_example}")
     parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges")
 
+    # FlyGarmin authenitcation, query, and download overrides
+    parser.add_argument('-T', '--access-token', help='Specify flygarmin access token')
+    parser.add_argument('-L', '--force-login', action='store_true', help='Force a refresh of the flygarmin access token')
+    parser.add_argument('-A', '--force-refresh-aircraft', action='store_true', help='Force a refresh of the aircraft data')
+    parser.add_argument('-D', '--force-refresh-datasets', action='store_true', help='Force a refresh of the dataset data')
+    parser.add_argument('-F', '--force-file-download', action='store_true', help='Force a re-download of the actual data files')
+
     # Parse arguments
     args = parser.parse_args()
+
+    # Verbose printing
+    vprint = print if args.verbose else lambda *_: None
 
     # Get a path for the root output directory
     output_path = pathlib.Path(args.output) if args.output else None
@@ -404,6 +407,7 @@ def main() -> None:
 
         # Download all files (main and auxiliary)
         for file_info in files_data.get('mainFiles', []) + files_data.get('auxiliaryFiles', []):
+            vprint(f"Obtaining {file_info['url']}")
             download_file(file_info['url'], file_info['fileSize'], args.force_file_download)
 
     # File copy / extraction
@@ -414,9 +418,7 @@ def main() -> None:
 
         # Iterate through all installable series/issue combinations
         for series_id, issue_name, _ in databases:
-
-            if args.verbose:
-                print(f"Adding to SD card series {series_id}, issue {issue_name}")
+            vprint(f"Adding to SD card series {series_id}, issue {issue_name}")
 
             # Get the dataset descriptor for this series/issue
             files_data = get_dataset_files(series_id, issue_name)
@@ -433,29 +435,31 @@ def main() -> None:
 
                 # Extract each file to the root sdcard
                 for taw_region_path, output_file_path in extract_taw(cached_path, output_path, skip_unknown_regions=True):
+                    vprint(f"Extracted {cached_path} taw region {taw_region_path} to {output_file_path}")
                     if taw_region_path:
                         features.append((output_file_path, taw_region_path))
-                    if args.verbose:
-                        print(f"Extracted {cached_path} taw region {taw_region_path} to {output_file_path}")
 
             # Copy auxiliary files
             for file_info in files_data.get('auxiliaryFiles', []):
                 output_file_path = copy_file(file_info, output_path)
-                if args.verbose:
-                    print(f"Copied {file_info['url']} to {output_file_path}")
+                vprint(f"Copied {file_info['url']} to {output_file_path}")
+
+            vprint(f"Finished adding series")
 
         # Activate features on the sdcard
 
         if card_serial:
-            if args.verbose:
-                print(f"Creating SD card (s/n: {card_serial:08X}) at {output_path}, installable on device {device_id}")
-
             # Get system serial from aircraft data and filter databases to only include the specified device
             system_serial = get_system_serial(aircraft_data, device_id)
 
+            vprint(f"Creating SD card (s/n: {card_serial:08X}) at {output_path}, installable on device {device_id} (s/n: {system_serial})")
+
             # Activate all features
             for output_file_path, taw_region_path in features:
+                vprint(f"Unlocking feature {taw_region_path}")
                 update_feature_unlock(output_path, output_file_path, taw_region_path, card_serial, GARMIN_SECURITY_ID, system_serial)
+
+            vprint(f"Finished creating SD card")
 
 if __name__ == "__main__":
     main()
