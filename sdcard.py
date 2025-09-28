@@ -48,6 +48,17 @@ def windows_vsn(drive_letter: str) -> int:
     except Exception as e:
         raise IOError(f"Error accessing drive {drive_letter}: {e}")
 
+def get_platform_device_example() -> str:
+    """Get platform-specific device path example"""
+    if sys.platform == 'darwin':
+        return "/dev/rdisk2s1"
+    elif sys.platform.startswith('linux'):
+        return "/dev/sdb1"
+    elif sys.platform == 'win32':
+        return "D:"
+    else:
+        return "/dev/block_device"
+
 def detect_sd_card() -> str | None:
     """Detect and select SD card mount point.
 

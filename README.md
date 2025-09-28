@@ -77,12 +77,13 @@ python3 g3xchecklist.py -c checklist.yaml -o checklist.ace
 Downloads current aviation database updates from Garmin's fly.garmin.com service and creates complete SD card images for G3X systems.
 
 **Features:**
+- Automatic SD card detection (FAT32, 8-32GB) when output path not specified
 - Modular design with separate authentication and API modules
 - OAuth authentication with automatic token caching using platformdirs
 - URL-based file caching with organized directory structure
 - Conditional downloads (skip if file already cached)
 - TAW archive extraction for navigation databases
-- Cross-platform volume serial number reading
+- Cross-platform volume serial number reading and SD card auto-detection
 - Device-specific unlock code generation
 - Supports all aviation database types (obstacles, terrain, navigation, charts)
 
@@ -94,26 +95,32 @@ python3 g3xdata.py -l
 # Download databases for all devices (to cache)
 python3 g3xdata.py
 
+# Create SD card image with automatic SD card detection
+python3 g3xdata.py -d DEVICE_ID
+
+# Create SD card image with specified output path
+python3 g3xdata.py -d DEVICE_ID -o /path/to/sdcard
+
 # Create SD card image with automatic volume serial number detection
-python3 g3xdata.py -d DEVICE_ID -s /dev/rdisk2s1 -o /path/to/sdcard
+python3 g3xdata.py -d DEVICE_ID -s /dev/rdisk2s1
 
 # Create SD card image with manual volume serial number (no root required)
-python3 g3xdata.py -d DEVICE_ID -N A1B2C3D4 -o /path/to/sdcard
+python3 g3xdata.py -d DEVICE_ID -N A1B2C3D4
 
 # Include specific series/issue combinations
-python3 g3xdata.py -d DEVICE_ID -I 2054 2509 -I 2056 25D4 -o /path/to/sdcard
+python3 g3xdata.py -d DEVICE_ID -I 2054 2509 -I 2056 25D4
 
 # Include custom TAW files
-python3 g3xdata.py -d DEVICE_ID -W /path/to/custom.taw -W /path/to/other.taw -o /path/to/sdcard
+python3 g3xdata.py -d DEVICE_ID -W /path/to/custom.taw -W /path/to/other.taw
 
 # Force refresh of cached data
 python3 g3xdata.py -A -D -F  # Force refresh aircraft, datasets, and file downloads
 
-# Enable CRC checking during TAW extraction (slower but more reliable)
-python3 g3xdata.py -c -d DEVICE_ID -o /path/to/sdcard
+# Enable CRC checking during feature unlock generation (slower but more reliable)
+python3 g3xdata.py -c -d DEVICE_ID
 
 # Verbose output for debugging
-python3 g3xdata.py -v -d DEVICE_ID -o /path/to/sdcard
+python3 g3xdata.py -v -d DEVICE_ID
 
 # Show detailed series information
 python3 g3xdata.py -i 2054  # Show details for series ID 2054
@@ -189,6 +196,12 @@ python3 featunlk.py --help
 
 #### sdcard.py - SD Card Detection and Volume Serial Number Reader
 Cross-platform utility for reading volume serial numbers from storage devices and detecting SD card mount points, supporting both Unix-style raw devices and Windows drive letters.
+
+**Features:**
+- Automatic SD card detection filtering by FAT32 filesystem and 8-32GB size range
+- Cross-platform volume serial number reading (Unix/Windows)
+- Platform-specific device path examples
+- Used by g3xdata.py for automatic SD card discovery
 
 **Usage:**
 ```bash

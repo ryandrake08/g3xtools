@@ -40,7 +40,7 @@ from garmin_login import flygarmin_login
 from garmin_api import flygarmin_list_aircraft, flygarmin_list_files, flygarmin_unlock, flygarmin_list_series
 from featunlk import update_feature_unlock, GARMIN_SECURITY_ID
 from taw import extract_taw
-from sdcard import read_vsn, detect_sd_card
+from sdcard import read_vsn, detect_sd_card, get_platform_device_example
 
 CACHE_PATH = platformdirs.user_cache_path("g3xavdb", "g3xavdb", ensure_exists=True)
 
@@ -338,16 +338,6 @@ def installable_databases(aircraft_data: list, device_id: int) -> list[tuple[int
     return databases
 
 def main() -> None:
-    # Build platform-specific device example
-    if sys.platform == 'darwin':
-        device_example = "/dev/rdisk2s1"
-    elif sys.platform.startswith('linux'):
-        device_example = "/dev/sdb1"
-    elif sys.platform == 'win32':
-        device_example = "D:"
-    else:
-        device_example = "/dev/block_device"
-
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Download G3X data update and create SD card')
 
@@ -364,7 +354,7 @@ def main() -> None:
     # Update SDCard
     parser.add_argument('-d', '--device-id', type=int, help='Specify avionics device ID for SD card programming. If not specified, use the first device in the first aircraft')
     parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path). If not specified, try to detect a SD card mount point')
-    parser.add_argument('-s', '--sddevice', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. Example: {device_example}")
+    parser.add_argument('-s', '--sddevice', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. Example: {get_platform_device_example()}")
     parser.add_argument('-N', '--vsn', type=lambda x: int(x, 16), help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges")
 
     # FlyGarmin authenitcation, query, and download overrides
