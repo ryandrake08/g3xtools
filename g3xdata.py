@@ -22,8 +22,8 @@ Features:
 
 Example usage:
     python3 g3xdata.py -l                              # List aircraft
-    python3 g3xdata.py -a 12345 -d 67890               # Download databases
-    python3 g3xdata.py -a 12345 -d 67890 -o /sdcard    # Create SD card image
+    python3 g3xdata.py -s ABC123                       # Create SD card for system ABC123
+    python3 g3xdata.py -s ABC123 -o /sdcard            # Create SD card with specific output path
 """
 
 import argparse
@@ -128,41 +128,32 @@ def get_unlock_data(access_token: str, series_id: int, issue_name: str, device_i
     cache_filename = f"unlock-{series_id}-{issue_name}-{device_id}-{card_serial:08X}.json"
     return cache_json_data(cache_filename, lambda: flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
 
-def get_default_device_id(aircraft_data: list) -> int:
-    """Get the first available device ID from aircraft data.
+def get_device_info(aircraft_data: list, display_serial: str | None = None) -> tuple[int, int]:
+    """Get device ID and system serial from aircraft data.
 
     Args:
         aircraft_data: List of aircraft dictionaries from flygarmin API
+        display_serial: Optional display serial number to lookup. If None, uses first device.
 
     Returns:
-        First device ID found
+        Tuple of (device_id, system_serial)
 
     Raises:
-        ValueError: If no devices are found in aircraft data
+        ValueError: If display serial is not found or no devices exist
     """
-    for aircraft in aircraft_data:
-        for device in aircraft['devices']:
-            return device['id']
-    raise ValueError("No devices found in aircraft data")
+    if display_serial:
+        for aircraft in aircraft_data:
+            for device in aircraft['devices']:
+                if device.get('displaySerial') == display_serial:
+                    return device['id'], device['serial']
+        raise ValueError(f"Display serial {display_serial} not found in aircraft data")
+    else:
+        # Get first device
+        for aircraft in aircraft_data:
+            for device in aircraft['devices']:
+                return device['id'], device['serial']
+        raise ValueError("No devices found in aircraft data")
 
-def get_system_serial(aircraft_data: list, device_id: int) -> int:
-    """Get system serial number for a given device ID from aircraft data.
-
-    Args:
-        aircraft_data: List of aircraft dictionaries from flygarmin API
-        device_id: Target device ID to find serial for
-
-    Returns:
-        Device serial number as integer
-
-    Raises:
-        ValueError: If device ID is not found in aircraft data
-    """
-    for aircraft in aircraft_data:
-        for device in aircraft['devices']:
-            if device['id'] == device_id:
-                return device['serial']
-    raise ValueError(f"Device ID {device_id} not found in aircraft data")
 
 def list_series_details(series_id: int) -> None:
     """List detailed information about a specific series and exit.
@@ -358,9 +349,9 @@ def main() -> None:
     parser.add_argument('-W', '--include-taw', action='append', metavar='TAW_FILE', help='Include specific TAW file for extraction (can be specified multiple times, e.g., -W /path/to/file.taw -W /path/to/other.taw)')
 
     # Update SDCard
-    parser.add_argument('-d', '--device-id', type=int, help='Specify avionics device ID for SD card programming. If not specified, use the first device in the first aircraft')
+    parser.add_argument('-s', '--system-serial', help='Specify avionics system serial number for SD card programming. If not specified, use G3X_SYSTEM_SERIAL environment variable or the first device in the first aircraft')
     parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path). If not specified, use G3X_SDCARD_PATH environment variable or try to detect a SD card mount point')
-    parser.add_argument('-s', '--sddevice', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. If not specified, use G3X_SDCARD_DEVICE environment variable. Example: {get_platform_device_example()}")
+    parser.add_argument('-d', '--sd-device', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. If not specified, use G3X_SDCARD_DEVICE environment variable. Example: {get_platform_device_example()}")
     parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges. If not specified, use G3X_SDCARD_SERIAL environment variable or read from device")
 
     # FlyGarmin authenitcation, query, and download overrides
@@ -380,19 +371,19 @@ def main() -> None:
     # Verbose printing
     vprint = print if args.verbose else lambda *_: None
 
-    # Device ID from command line only
-    device_id = args.device_id
+    # Determine system serial: command line > environment
+    system_serial_arg = args.system_serial or os.getenv('G3X_SYSTEM_SERIAL')
 
     # Determine output path: command line > environment > SD card detection
     output_arg = args.output or os.getenv('G3X_SDCARD_PATH') or detect_sd_card()
     output_path = pathlib.Path(output_arg) if output_arg else None
 
     # Determine SD device: command line > environment > none
-    sddevice_arg = args.sddevice or os.getenv('G3X_SDCARD_DEVICE')
+    sd_device_arg = args.sd_device or os.getenv('G3X_SDCARD_DEVICE')
 
     # Determine VSN: command line > environment > read from device
     vsn_arg = args.vsn or os.getenv('G3X_SDCARD_SERIAL')
-    card_serial = int(vsn_arg, 16) if vsn_arg else read_vsn(sddevice_arg) if sddevice_arg else None
+    card_serial = int(vsn_arg, 16) if vsn_arg else read_vsn(sd_device_arg) if sd_device_arg else None
 
     # Get access token: command line > environment > auth cache > flygarmin login
     access_token = args.access_token or os.getenv('G3X_GARMIN_ACCESS_TOKEN') or get_access_token(args.force_login)
@@ -403,11 +394,8 @@ def main() -> None:
     # List the aircraft and devices and exit
     args.list_devices and list_aircraft_devices(aircraft_data) # type: ignore
 
-    # Use default device if not specified via command line or environment
-    device_id = device_id or get_default_device_id(aircraft_data)
-
-    # Get system serial number from aircraft data
-    system_serial = get_system_serial(aircraft_data, device_id)
+    # Get device ID and system serial in one call
+    device_id, system_serial = get_device_info(aircraft_data, system_serial_arg)
 
     # List the installable databases
     databases = installable_databases(aircraft_data, device_id)

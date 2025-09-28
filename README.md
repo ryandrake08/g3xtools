@@ -96,31 +96,31 @@ python3 g3xdata.py -l
 python3 g3xdata.py
 
 # Create SD card image with automatic SD card detection
-python3 g3xdata.py -d DEVICE_ID
+python3 g3xdata.py -s ABC123
 
 # Create SD card image with specified output path
-python3 g3xdata.py -d DEVICE_ID -o /path/to/sdcard
+python3 g3xdata.py -s ABC123 -o /path/to/sdcard
 
 # Create SD card image with automatic volume serial number detection
-python3 g3xdata.py -d DEVICE_ID -s /dev/rdisk2s1
+python3 g3xdata.py -s ABC123 -d /dev/rdisk2s1
 
 # Create SD card image with manual volume serial number (no root required)
-python3 g3xdata.py -d DEVICE_ID -N A1B2C3D4
+python3 g3xdata.py -s ABC123 -N A1B2C3D4
 
 # Include specific series/issue combinations
-python3 g3xdata.py -d DEVICE_ID -I 2054 2509 -I 2056 25D4
+python3 g3xdata.py -s ABC123 -I 2054 2509 -I 2056 25D4
 
 # Include custom TAW files
-python3 g3xdata.py -d DEVICE_ID -W /path/to/custom.taw -W /path/to/other.taw
+python3 g3xdata.py -s ABC123 -W /path/to/custom.taw -W /path/to/other.taw
 
 # Force refresh of cached data
 python3 g3xdata.py -A -D -F  # Force refresh aircraft, datasets, and file downloads
 
 # Enable CRC checking during feature unlock generation (slower but more reliable)
-python3 g3xdata.py -c -d DEVICE_ID
+python3 g3xdata.py -c -s ABC123
 
 # Verbose output for debugging
-python3 g3xdata.py -v -d DEVICE_ID
+python3 g3xdata.py -v -s ABC123
 
 # Show detailed series information
 python3 g3xdata.py -i 2054  # Show details for series ID 2054
@@ -691,6 +691,7 @@ pip install pyyaml requests platformdirs
 ### Environment Variables
 - `G3X_SEARCH_PATH`: Default search path for input log files (g3xlog.py, g3xheaders.py)
 - `G3X_LOG_PATH`: Default output path for processed logs (g3xlog.py, g3xheaders.py)
+- `G3X_SYSTEM_SERIAL`: Default avionics system serial number, e.g., ABC123 (g3xdata.py)
 - `G3X_SDCARD_PATH`: Default output path for SD card creation (g3xdata.py)
 - `G3X_SDCARD_DEVICE`: Default SD card block device for volume serial number reading (g3xdata.py)
 - `G3X_SDCARD_SERIAL`: Default SD card volume serial number in hex format, e.g., A1B2C3D4 (g3xdata.py)
