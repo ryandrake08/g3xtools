@@ -285,12 +285,13 @@ def download_file(url: str, expected_size: int, force: bool = False) -> pathlib.
 
     return dest_path
 
-def copy_file(file_info: dict, output_path: pathlib.Path) -> pathlib.Path:
+def copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) -> pathlib.Path:
     """Copy a file from cache to the output directory, preserving destination path.
 
     Args:
         file_info: Dictionary containing 'url' and 'destination' keys
         output_path: Base output directory path
+        force: If True, copy unconditionally. If False, skip if destination exists and same size
 
     Returns:
         Path to the copied file
@@ -298,7 +299,11 @@ def copy_file(file_info: dict, output_path: pathlib.Path) -> pathlib.Path:
     cached_path = get_cached_file_path_for_url(file_info['url'])
     output_file_path = output_path / pathlib.PurePosixPath(file_info['destination'])
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(cached_path, output_file_path)
+
+    # Only if destination is missing or has different size size
+    if force or not output_file_path.exists() or cached_path.stat().st_size != output_file_path.stat().st_size:
+        shutil.copy2(cached_path, output_file_path)
+
     return output_file_path
 
 def installable_databases(aircraft_data: list, device_id: int) -> list[tuple[int, str]]:
@@ -363,6 +368,7 @@ def main() -> None:
     parser.add_argument('-A', '--force-refresh-aircraft', action='store_true', help='Force a refresh of the aircraft data')
     parser.add_argument('-D', '--force-refresh-datasets', action='store_true', help='Force a refresh of the dataset data')
     parser.add_argument('-F', '--force-file-download', action='store_true', help='Force a re-download of the actual data files')
+    parser.add_argument('-C', '--force-file-copy', action='store_true', help='Force copying files even if destination exists with same size')
 
     # Parse arguments
     args = parser.parse_args()
@@ -448,7 +454,7 @@ def main() -> None:
 
             # Copy auxiliary files
             for file_info in files_data.get('auxiliaryFiles', []):
-                output_file_path = copy_file(file_info, output_path)
+                output_file_path = copy_file(file_info, output_path, args.force_file_copy)
                 vprint(f"Copied {file_info['url']} to {output_file_path}")
 
             vprint(f"Finished adding series")
