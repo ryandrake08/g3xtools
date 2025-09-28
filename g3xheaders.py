@@ -26,40 +26,33 @@ import os
 import sys
 
 class G3XLogFileData:
-
-    # initialize with filename
     def __init__(self, filename):
-        # store the filename
         self.filename = filename
 
     def __enter__(self):
         return self.open()
 
-    def __exit__(self, exc_type, exc_value, exc_tb):
+    def __exit__(self, *_):
         self.close()
 
     def open(self):
-        # open the file
         self.file = open(self.filename)
+        self.csv_reader = csv.reader(self.file)
 
-        # read it as a csv
-        self.csv_reader = csv.reader(self.file, delimiter = ',')
-
-        # first line is airframe information
+        # Parse airframe information from first line
         airframe_infos = next(self.csv_reader)
         self.airframe_info = {key: val.strip('\"') for key, val in dict(x.split('=') for x in airframe_infos[1:]).items()}
 
-        # second and third lines are headers
+        # Read headers and stable keys
         self.full_headers = next(self.csv_reader)
         self.short_headers = next(self.csv_reader)
 
-        # leave the file ready at the first line of actual data
         return self
 
     def close(self):
         self.file.close()
 
-def compare_headers(prev_file: 'G3XLogFileData', curr_file: 'G3XLogFileData') -> None:
+def compare_headers(prev_file: G3XLogFileData, curr_file: G3XLogFileData) -> bool:
     """Compare headers between two G3X files and report changes"""
     prev_headers = prev_file.full_headers
     prev_stable_keys = dict(zip(prev_file.full_headers, prev_file.short_headers))
@@ -81,15 +74,14 @@ def compare_headers(prev_file: 'G3XLogFileData', curr_file: 'G3XLogFileData') ->
         # Find renamed headers (same stable key, different header name)
         renamed_headers = []
         for new_header in list(new_headers):
-            if curr_stable_keys.get(new_header):
-                # Look for old header with same stable key
-                for old_header in list(removed_headers):
-                    if (prev_stable_keys and
-                        prev_stable_keys.get(old_header) == curr_stable_keys.get(new_header)):
-                        renamed_headers.append(f"{old_header} -> {new_header} ({curr_stable_keys.get(new_header)})")
-                        new_headers.discard(new_header)
-                        removed_headers.discard(old_header)
-                        break
+            stable_key = curr_stable_keys.get(new_header)
+            if stable_key:
+                # Find old header with same stable key
+                old_header = next((h for h in removed_headers if prev_stable_keys.get(h) == stable_key), None)
+                if old_header:
+                    renamed_headers.append(f"{old_header} -> {new_header} ({stable_key})")
+                    new_headers.discard(new_header)
+                    removed_headers.discard(old_header)
 
         # Only report changes if there are actual structural changes
         if new_headers or removed_headers or renamed_headers:
@@ -121,22 +113,9 @@ def main() -> None:
     src_logs = sorted(glob.glob(f"{log_path}/**/log_*.csv", recursive=True), key=os.path.basename)
 
     # Process files and compare headers
-    prev_file_data = None
-
-    for filename in src_logs:
-        with G3XLogFileData(filename) as curr_file:
-            if prev_file_data:
-                compare_headers(prev_file_data, curr_file)
-
-            # Store current file data for next comparison
-            class FileData:
-                def __init__(self, filename, full_headers, short_headers, airframe_info):
-                    self.filename = filename
-                    self.full_headers = full_headers
-                    self.short_headers = short_headers
-                    self.airframe_info = airframe_info
-
-            prev_file_data = FileData(curr_file.filename, curr_file.full_headers, curr_file.short_headers, curr_file.airframe_info)
+    for prev_filename, curr_filename in zip(src_logs, src_logs[1:]):
+        with G3XLogFileData(prev_filename) as prev_file, G3XLogFileData(curr_filename) as curr_file:
+            compare_headers(prev_file, curr_file)
 
 if __name__ == "__main__":
     """ This is executed when run from the command line """
