@@ -75,7 +75,6 @@ TAW_REGION_PATHS = {
 }
 
 def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bool = False, skip_unknown_regions: bool = False, verbose: bool = False):
-
     debug = print if verbose else lambda *_: None
 
     with open(input_path, 'rb') as fd:
@@ -221,7 +220,7 @@ def main() -> None:
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose debug output')
     args = parser.parse_args()
 
-    extract_taw(args.input_file, args.output_path, info_only=args.info_only, verbose=args.verbose)
+    list(extract_taw(args.input_file, args.output_path, info_only=args.info_only, verbose=args.verbose))
 
 if __name__ == "__main__":
     main()
