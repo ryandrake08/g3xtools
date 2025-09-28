@@ -689,8 +689,12 @@ pip install pyyaml requests platformdirs
 ```
 
 ### Environment Variables
-- `G3X_SEARCH_PATH`: Default search path for input log files
-- `G3X_LOG_PATH`: Default output path for processed logs
+- `G3X_SEARCH_PATH`: Default search path for input log files (g3xlog.py, g3xheaders.py)
+- `G3X_LOG_PATH`: Default output path for processed logs (g3xlog.py, g3xheaders.py)
+- `G3X_SDCARD_PATH`: Default output path for SD card creation (g3xdata.py)
+- `G3X_SDCARD_DEVICE`: Default SD card block device for volume serial number reading (g3xdata.py)
+- `G3X_SDCARD_SERIAL`: Default SD card volume serial number in hex format, e.g., A1B2C3D4 (g3xdata.py)
+- `G3X_GARMIN_ACCESS_TOKEN`: Default Garmin flygarmin access token for authentication (g3xdata.py)
 
 ### Testing
 Basic functionality tests:

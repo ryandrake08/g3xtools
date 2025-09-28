@@ -29,6 +29,7 @@ Example usage:
 import argparse
 import datetime
 import json
+import os
 import pathlib
 import platformdirs
 import requests
@@ -358,12 +359,12 @@ def main() -> None:
 
     # Update SDCard
     parser.add_argument('-d', '--device-id', type=int, help='Specify avionics device ID for SD card programming. If not specified, use the first device in the first aircraft')
-    parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path). If not specified, try to detect a SD card mount point')
-    parser.add_argument('-s', '--sddevice', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. Example: {get_platform_device_example()}")
-    parser.add_argument('-N', '--vsn', type=lambda x: int(x, 16), help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges")
+    parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path). If not specified, use G3X_SDCARD_PATH environment variable or try to detect a SD card mount point')
+    parser.add_argument('-s', '--sddevice', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. If not specified, use G3X_SDCARD_DEVICE environment variable. Example: {get_platform_device_example()}")
+    parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges. If not specified, use G3X_SDCARD_SERIAL environment variable or read from device")
 
     # FlyGarmin authenitcation, query, and download overrides
-    parser.add_argument('-T', '--access-token', help='Specify flygarmin access token')
+    parser.add_argument('-T', '--access-token', help='Specify flygarmin access token. If not specified, use G3X_GARMIN_ACCESS_TOKEN environment variable or cached token')
     parser.add_argument('-L', '--force-login', action='store_true', help='Force a refresh of the flygarmin access token')
     parser.add_argument('-A', '--force-refresh-aircraft', action='store_true', help='Force a refresh of the aircraft data')
     parser.add_argument('-D', '--force-refresh-datasets', action='store_true', help='Force a refresh of the dataset data')
@@ -373,23 +374,28 @@ def main() -> None:
     # Parse arguments
     args = parser.parse_args()
 
-    # Verbose printing
-    vprint = print if args.verbose else lambda *_: None
-
-    # Try to detect a mounted SD card
-    sd_card = detect_sd_card()
-
-    # Get a path for the root output directory
-    output_path = pathlib.Path(args.output or sd_card or "") if (args.output or sd_card) else None
-
-    # Read the sdcard's serial number if it's not provided
-    card_serial = args.vsn if args.vsn else read_vsn(args.sddevice) if args.sddevice else None
-
     # List series details and exit
     args.series_info and list_series_details(args.series_info) # type: ignore
 
-    # Get access token either from the comand line, from the auth_json, or from flygarmin
-    access_token = args.access_token or get_access_token(args.force_login)
+    # Verbose printing
+    vprint = print if args.verbose else lambda *_: None
+
+    # Device ID from command line only
+    device_id = args.device_id
+
+    # Determine output path: command line > environment > SD card detection
+    output_arg = args.output or os.getenv('G3X_SDCARD_PATH') or detect_sd_card()
+    output_path = pathlib.Path(output_arg) if output_arg else None
+
+    # Determine SD device: command line > environment > none
+    sddevice_arg = args.sddevice or os.getenv('G3X_SDCARD_DEVICE')
+
+    # Determine VSN: command line > environment > read from device
+    vsn_arg = args.vsn or os.getenv('G3X_SDCARD_SERIAL')
+    card_serial = int(vsn_arg, 16) if vsn_arg else read_vsn(sddevice_arg) if sddevice_arg else None
+
+    # Get access token: command line > environment > auth cache > flygarmin login
+    access_token = args.access_token or os.getenv('G3X_GARMIN_ACCESS_TOKEN') or get_access_token(args.force_login)
 
     # Get aircraft data either from aircraft_json or from flygarmin
     aircraft_data = get_aircraft_data(access_token, args.force_refresh_aircraft)
@@ -397,8 +403,8 @@ def main() -> None:
     # List the aircraft and devices and exit
     args.list_devices and list_aircraft_devices(aircraft_data) # type: ignore
 
-    # Select a device id, or use default aircraft/device
-    device_id = args.device_id if args.device_id else get_default_device_id(aircraft_data)
+    # Use default device if not specified via command line or environment
+    device_id = device_id or get_default_device_id(aircraft_data)
 
     # Get system serial number from aircraft data
     system_serial = get_system_serial(aircraft_data, device_id)
