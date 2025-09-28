@@ -219,12 +219,11 @@ python3 sdcard.py D:
 1. **Python Environment:**
    ```bash
    source env/bin/activate
-   pip install pyyaml requests pandas platformdirs
+   pip install pyyaml requests platformdirs
    ```
 
 2. **Dependencies:**
    - Python 3.13 (virtual environment in `./env/`)
-   - pandas (for g3xlog.py)
    - PyYAML (for g3xchecklist.py)
    - requests (for g3xdata.py)
    - platformdirs (for cross-platform cache directories)
@@ -686,7 +685,7 @@ For now, see featunlk.py for this information.
 source env/binactivate
 
 # Install dependencies
-pip install pyyaml pandas requests platformdirs
+pip install pyyaml requests platformdirs
 ```
 
 ### Environment Variables

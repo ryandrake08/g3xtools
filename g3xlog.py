@@ -20,9 +20,9 @@ categorized subdirectories while preserving modification times.
 """
 
 import argparse
+import csv
 import glob
 import os
-import pandas
 import re
 import shutil
 import sys
@@ -73,26 +73,41 @@ def main() -> None:
                 key, value = match.groups()
                 metadata[key] = value
 
-        # Read row 2 as stable column keys
-        stable_keys_row = pandas.read_csv(log, skiprows=[0,1], nrows=1)
-        stable_keys = dict(zip(stable_keys_row.columns, stable_keys_row.iloc[0]))
+        # Parse CSV with standard library using stable keys
+        with open(log, 'r') as file:
+            # Skip metadata line (row 0)
+            file.readline()  # Skip row 0 (metadata)
+            file.readline()  # Skip row 1 (headers)
+            stable_keys = file.readline().strip().split(',')  # Row 2 (stable keys)
 
-        # Parse CSV
-        df = pandas.read_csv(log, skiprows=[0,2])
+            # Find column indices using stable keys
+            oil_press_idx = stable_keys.index('E1 OilP')
+            ground_speed_idx = stable_keys.index('GndSpd')
 
-        # Store the stable key mapping for cross-file analysis
-        df.attrs['stable_keys'] = stable_keys
+            # Read data rows and find max values
+            reader = csv.reader(file)
+            oil_press_max = 0
+            ground_speed_max = 0
+            data_rows = 0
 
-        if df.empty:
+            for row in reader:
+                if len(row) > max(oil_press_idx, ground_speed_idx):
+                    data_rows += 1
+                    oil_press = int(row[oil_press_idx])
+                    ground_speed = float(row[ground_speed_idx])
+                    oil_press_max = max(oil_press_max, oil_press)
+                    ground_speed_max = max(ground_speed_max, ground_speed)
+
+        if data_rows == 0:
             # If file has zero data, recommend deleting, for now just skip
             flight_type = "empty"
         else:
-            if df["Oil Press (PSI)"].max() < 1:
+            if oil_press_max < 1:
                 # If no oil pressure in all of log, assume this session was testing/configuration
                 flight_type = "config"
-            elif df["GPS Ground Speed (kt)"].max() < 50:
+            elif ground_speed_max < 50:
                 # If airplane did not achieve a ground speed sufficient for flight, assume taxi-only
-                flight_type = "flight"
+                flight_type = "taxi"
             else:
                 # Otherwise, the airplane was flying
                 flight_type = "flight"
