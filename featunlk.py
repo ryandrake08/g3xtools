@@ -138,7 +138,7 @@ def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path
     # Look up feature from region filename
     feature = FILENAME_TO_FEATURE.get(region_path)
     if feature is None:
-        raise ValueError(f"Unsupported region: {region_path}")
+        return
 
     preview = None
     with open(output_file_path, 'rb') as data:
