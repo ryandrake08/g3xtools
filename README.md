@@ -691,8 +691,8 @@ Each region contains:
 | 0x21 | `terrain.tdb` |
 | 0x22 | `terrain_9as.tdb` |
 | 0x23 | `trn.dat` |
-| 0x24 | `FCharts.dat` |
-| 0x25 | `Fcharts.fca` |
+| 0x24 | `fc_tpc/fc_tpc.dat` |
+| 0x25 | `fc_tpc/fc_tpc.fca` |
 | 0x26 | `standard.odb` |
 | 0x27 | `terrain.odb` |
 | 0x28 | `terrain.adb` |
