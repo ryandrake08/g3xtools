@@ -1,6 +1,10 @@
 env
+venv
+.venv
 __pycache__
+*.pyc
+*.pyo
+
 sdcard
 cache
 re
-*.json

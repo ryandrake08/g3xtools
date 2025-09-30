@@ -59,11 +59,11 @@ def get_platform_device_example() -> str:
     else:
         return "/dev/block_device"
 
-def detect_sd_card() -> str | None:
+def detect_sd_card() -> str:
     """Detect and select SD card mount point.
 
     Returns:
-        Path to SD card mount point, or None if no suitable candidate found
+        Path to SD card mount point, or empty string if no suitable candidate found
 
     Filters by:
     - FAT32 filesystem only (includes 'msdos' which may be FAT32)
@@ -73,7 +73,8 @@ def detect_sd_card() -> str | None:
     try:
         import psutil
     except ImportError:
-        return None
+        print("Warning: psutil library not available for SD card detection", file=sys.stderr)
+        return ""
 
     candidates = []
 
@@ -108,7 +109,8 @@ def detect_sd_card() -> str | None:
 
     # Selection logic
     if len(candidates) == 0:
-        return None
+        print("Warning: No suitable SD card detected", file=sys.stderr)
+        return ""
     elif len(candidates) == 1:
         return candidates[0]['path']
     else:

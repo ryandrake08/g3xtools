@@ -128,33 +128,43 @@ def get_unlock_data(access_token: str, series_id: int, issue_name: str, device_i
     cache_filename = f"unlock-{series_id}-{issue_name}-{device_id}-{card_serial:08X}.json"
     return cache_json_data(cache_filename, lambda: flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
 
-def get_device(aircraft_data: list, display_serial: str | None = None) -> dict:
-    """Get device structure from aircraft data.
+def get_default_device_system_serial(aircraft_data: list) -> str:
+    """Get display serial of first device from aircraft data.
 
     Args:
         aircraft_data: List of aircraft dictionaries from flygarmin API
-        display_serial: Optional display serial number to lookup. If None, uses first device.
+
+    Returns:
+        Display serial string of first device
+
+    Raises:
+        ValueError: If no devices exist
+    """
+    for aircraft in aircraft_data:
+        for device in aircraft['devices']:
+            return device['displaySerial']
+    raise ValueError("No devices found in aircraft data")
+
+def get_device(aircraft_data: list, display_serial: str) -> dict:
+    """Get device structure from aircraft data by display serial.
+
+    Args:
+        aircraft_data: List of aircraft dictionaries from flygarmin API
+        display_serial: Display serial number to lookup
 
     Returns:
         Device dictionary
 
     Raises:
-        ValueError: If display serial is not found or no devices exist
+        ValueError: If display serial is not found
     """
-    if display_serial:
-        for aircraft in aircraft_data:
-            for device in aircraft['devices']:
-                if device.get('displaySerial') == display_serial:
-                    return device
-        raise ValueError(f"Display serial {display_serial} not found in aircraft data")
-    else:
-        # Get first device
-        for aircraft in aircraft_data:
-            for device in aircraft['devices']:
+    for aircraft in aircraft_data:
+        for device in aircraft['devices']:
+            if device.get('displaySerial') == display_serial:
                 return device
-        raise ValueError("No devices found in aircraft data")
+    raise ValueError(f"Display serial {display_serial} not found in aircraft data")
 
-def get_device_info(aircraft_data: list, display_serial: str | None = None) -> tuple[int, int]:
+def get_device_info(aircraft_data: list, display_serial: str) -> tuple[int, int]:
     """Get device ID and system serial from aircraft data.
 
     Args:
@@ -442,9 +452,6 @@ def main() -> None:
     # Verbose printing
     vprint = print if args.verbose else lambda *_: None
 
-    # Determine system serial: command line > environment
-    system_serial_arg = args.system_serial or os.getenv('G3X_SYSTEM_SERIAL')
-
     # Determine output path: command line > environment > SD card detection
     output_arg = args.output or os.getenv('G3X_SDCARD_PATH') or detect_sd_card()
     output_path = pathlib.Path(output_arg) if output_arg else None
@@ -467,6 +474,9 @@ def main() -> None:
 
     # List device details and exit
     args.device_info and list_device_details(aircraft_data, args.device_info) # type: ignore
+
+    # Determine system serial: command line > environment > default device
+    system_serial_arg = args.system_serial or os.getenv('G3X_SYSTEM_SERIAL') or get_default_device_system_serial(aircraft_data)
 
     # Get device ID and system serial in one call
     device_id, system_serial = get_device_info(aircraft_data, system_serial_arg)

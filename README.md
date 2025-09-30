@@ -227,18 +227,35 @@ python3 sdcard.py D:
 
 ## Installation
 
-1. **Python Environment:**
+1. **Create Python Virtual Environment:**
+
+   The virtual environment is not included in the repository. You must create it yourself:
+
    ```bash
-   source env/bin/activate
+   # Create virtual environment (first time only)
+   python3 -m venv env
+
+   # Activate the virtual environment
+   source env/bin/activate  # Unix/Mac
+   # OR
+   env\Scripts\activate     # Windows
+
+   # Install required dependencies
    pip install pyyaml requests platformdirs
+
+   # Optional: For automatic SD card detection
+   pip install psutil
    ```
 
 2. **Dependencies:**
-   - Python 3.13 (virtual environment in `./env/`)
-   - PyYAML (for g3xchecklist.py)
-   - requests (for g3xdata.py)
-   - platformdirs (for cross-platform cache directories)
-   - pywin32 (for sdcard.py on Windows - optional)
+   - Python 3.9+ required
+   - **Required:**
+     - PyYAML (for g3xchecklist.py)
+     - requests (for g3xdata.py)
+     - platformdirs (for cross-platform cache directories)
+   - **Optional:**
+     - **psutil** - Enables automatic SD card detection in g3xdata.py. Without psutil, you must manually specify the output path using `-o` or `G3X_SDCARD_PATH` environment variable.
+     - **pywin32** - Required for volume serial number reading on Windows systems
    - Standard library modules: csv, struct, zlib, argparse, pathlib, datetime, json
 
 ## YAML Checklist Format Specification

@@ -1,4 +1,26 @@
-from __future__ import annotations
+#!/usr/bin/env python3
+"""
+Feature Unlock File Generator for Garmin Aviation Systems
+
+Generates feature unlock files (feat_unlk.dat) that activate database features
+on Garmin aviation systems. Unlock codes are tied to specific SD card volume
+serial numbers and aircraft device serial numbers.
+
+This tool creates device-specific unlock codes for navigation databases, terrain,
+obstacles, and chart data. Each feature unlock entry is calculated using the
+SD card volume serial number, device serial number, file CRC, and feature-specific
+metadata.
+
+Example usage:
+    python3 featunlk.py -o /sdcard -f nav_data.bin -r "ldr_sys/avtn_db.bin" -N A1B2C3D4 -S 12345678
+    python3 featunlk.py -c -o /sdcard -f terrain.bin -r "terrain.gca" -N A1B2C3D4 -S 12345678
+
+This module is used by g3xdata.py to generate unlock codes for downloaded
+aviation databases but can also be used standalone for manual unlock generation.
+
+Upstream credit: https://github.com/dimaryaz/jdmtool/blob/main/src/jdmtool/featunlk.py
+
+"""
 
 import argparse
 import pathlib
