@@ -95,6 +95,29 @@ def get_aircraft_data(access_token: str, force: bool = False) -> list:
     Returns:
         List of aircraft dictionaries containing aircraft and device information
     """
+    # Check if any device has a past nextExpectedAvdbAvailability date
+    if not force:
+        cache_path = CACHE_PATH / "aircraft.json"
+        try:
+            with open(cache_path, encoding="utf-8") as fd:
+                cached_data = json.load(fd)
+                now = datetime.datetime.now().astimezone()
+
+                # Check each device's nextExpectedAvdbAvailability
+                for aircraft in cached_data:
+                    for device in aircraft.get('devices', []):
+                        if 'nextExpectedAvdbAvailability' in device:
+                            expected_date = datetime.datetime.fromisoformat(device['nextExpectedAvdbAvailability'].replace('Z', '+00:00'))
+                            if expected_date < now:
+                                # Auto-force refresh if any device has a past date
+                                force = True
+                                break
+                    if force:
+                        break
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            # If we can't read the cache, proceed normally
+            pass
+
     return cache_json_data("aircraft.json", lambda: flygarmin_list_aircraft(access_token), force)
 
 def get_dataset_files(series_id: int, issue_name: str, force: bool = False) -> dict:
@@ -378,17 +401,19 @@ def copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) -
 
     return output_file_path
 
-def installable_databases(aircraft_data: list, device_id: int) -> list[tuple[int, str]]:
+def installable_databases(aircraft_data: list, device_id: int, force_latest: bool = False) -> list[tuple[int, str]]:
     """Get all installable series/issue combinations for a specific device.
 
     Args:
         aircraft_data: List of aircraft dictionaries from flygarmin API
         device_id: Device ID to get databases for
+        force_latest: If True, select issue with latest effectiveAt date regardless of validity window
 
     Returns:
         List of (series_id, issue_name) tuples for each valid dataset
     """
     databases = []
+    now = datetime.datetime.now().astimezone()
 
     # Generate all installable series/issue combinations for the specified device
     for aircraft in aircraft_data:
@@ -396,21 +421,35 @@ def installable_databases(aircraft_data: list, device_id: int) -> list[tuple[int
             if device_id == device['id']:
                 for avdb in device['avdbTypes']:
                     for series in avdb['series']:
-                        for issue in series['installableIssues']:
-                            # Parse the date strings and check if issue is currently valid
-                            effective_at = datetime.datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
-                            invalid_at = None if issue['invalidAt'] is None else datetime.datetime.fromisoformat(issue['invalidAt'].replace('Z', '+00:00'))
-                            now = datetime.datetime.now().astimezone()
+                        selected_issue = None
 
-                            # Warn if we are outside dataset's validity window
-                            if now < effective_at:
-                                print(f"Warning: dataset: {avdb['name']}, series: {series['region']['name']} ({series['id']}), issue: {issue['name']} becomes effective {effective_at}", file=sys.stderr)
+                        if force_latest:
+                            # Select the issue with the latest effectiveAt date
+                            latest_issue = None
+                            latest_effective_at = None
+                            for issue in series['installableIssues']:
+                                effective_at = datetime.datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
+                                if latest_effective_at is None or effective_at > latest_effective_at:
+                                    latest_issue = issue
+                                    latest_effective_at = effective_at
+                            selected_issue = latest_issue
+                        else:
+                            # Find the first issue where now is within the effective window
+                            for issue in series['installableIssues']:
+                                effective_at = datetime.datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
+                                invalid_at = None if issue['invalidAt'] is None else datetime.datetime.fromisoformat(issue['invalidAt'].replace('Z', '+00:00'))
 
-                            if invalid_at and now >= invalid_at:
-                                print(f"Warning: dataset: {avdb['name']}, series: {series['region']['name']} ({series['id']}), issue: {issue['name']} expired {invalid_at}", file=sys.stderr)
+                                # Check if now is within the effective window
+                                if effective_at <= now and (invalid_at is None or now < invalid_at):
+                                    selected_issue = issue
+                                    break
 
-                            # Add to list
-                            databases.append((series['id'], issue['name']))
+                        # If we found a valid issue, add it to the list
+                        if selected_issue:
+                            databases.append((series['id'], selected_issue['name']))
+                        else:
+                            # No valid issue found, warn the user
+                            print(f"Warning: No valid issue found for dataset: {avdb['name']}, series: {series['region']['name']} ({series['id']})", file=sys.stderr)
 
     return databases
 
@@ -437,6 +476,7 @@ def main() -> None:
     parser.add_argument('-D', '--force-refresh-datasets', action='store_true', help='Force a refresh of the dataset data')
     parser.add_argument('-F', '--force-file-download', action='store_true', help='Force a re-download of the actual data files')
     parser.add_argument('-C', '--force-file-copy', action='store_true', help='Force copying files even if destination exists with same size')
+    parser.add_argument('-U', '--force-use-latest-issues', action='store_true', help='Force use of latest issues regardless of effective date window')
 
     # Debug only
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
@@ -482,7 +522,7 @@ def main() -> None:
     device_id, system_serial = get_device_info(aircraft_data, system_serial_arg)
 
     # List the installable databases
-    databases = installable_databases(aircraft_data, device_id)
+    databases = installable_databases(aircraft_data, device_id, args.force_use_latest_issues)
 
     # Add manually specified series/issue pairs
     if args.include_series:

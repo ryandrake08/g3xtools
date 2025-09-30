@@ -75,15 +75,17 @@ python3 g3xchecklist.py -c checklist.yaml -o checklist.ace
 Downloads current aviation database updates from Garmin's fly.garmin.com service and creates complete SD card images for G3X systems.
 
 **Features:**
-- Automatic SD card detection (FAT32, 8-32GB) when output path not specified
 - Modular design with separate authentication and API modules
 - OAuth authentication with automatic token caching using platformdirs
 - URL-based file caching with organized directory structure
 - Conditional downloads (skip if file already cached)
-- TAW archive extraction for navigation databases
+- TAW archive extraction
 - Cross-platform volume serial number reading and SD card auto-detection
 - Device-specific unlock code generation
-- Supports all aviation database types (obstacles, terrain, navigation, charts)
+- Supports many aviation database types (obstacles, terrain, navigation, charts)
+- Automatic SD card detection (FAT32, 8-32GB) when output path not specified
+- Automatic aircraft data refresh when database updates are available
+- Issue selection based on effective date windows
 
 **Usage:**
 ```bash
@@ -96,9 +98,6 @@ python3 g3xdata.py -l -L
 
 # List all chart data associated with given G3X system and exit
 python3 g3xdata.py -e 60001A2345BC0
-
-# NOTE: The list of systems and available data downloads will change at a rate depending on your subscription, and you'll need to refresh those, too:
-python3 g3xdata.py -e 60001A2345BC0 -A
 
 # Show detailed chart series information and exit, does not require account login
 python3 g3xdata.py -i 2054
@@ -130,11 +129,22 @@ python3 g3xdata.py
 # Create non-installable SD card image with automatic sdcard detection for the default system serial number
 python3 g3xdata.py
 
+# Force use of latest issues regardless of effective date (e.g., to get upcoming charts before effective date)
+python3 g3xdata.py -U -s 60001A2345BC0 -N 1234ABCD
+
 # (DEBUG only) Include specific series/issue combinations
 python3 g3xdata.py -I 2054 2509 -I 2056 25D4
 
 # (DEBUG only) Include custom TAW files
 python3 g3xdata.py -W /path/to/custom.taw -W /path/to/other.taw
+```
+
+**Issue Selection:**
+By default, g3xdata.py selects the most appropriate database issue for each series based on the current date:
+- Selects the first issue where today's date falls within the effective window (effectiveAt ≤ now < invalidAt)
+- Automatically refreshes aircraft data when any device's `nextExpectedAvdbAvailability` date has passed
+- Use `-U/--force-use-latest-issues` to override and always select the latest issue regardless of effective date
+- Use `-A/--force-refresh-aircraft` to manually force a refresh of aircraft data from Garmin's servers
 ```
 
 ### Supporting Modules
