@@ -1,0 +1,48 @@
+[project]
+name = "g3xtools"
+version = "1.0.0"
+description = "Python toolset for processing and analyzing Garmin G3X aircraft systems"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "See LICENSE file"}
+authors = [
+    {name = "Ryan"}
+]
+
+dependencies = [
+    "pyyaml>=6.0",
+    "requests>=2.28.0",
+    "platformdirs>=3.0.0",
+]
+
+[project.optional-dependencies]
+sdcard = [
+    "psutil>=5.9.0",
+]
+windows = [
+    "pywin32>=304; sys_platform == 'win32'",
+]
+dev = [
+    "psutil>=5.9.0",
+    "pywin32>=304; sys_platform == 'win32'",
+]
+
+[project.scripts]
+g3xlog = "g3xlog:main"
+g3xheaders = "g3xheaders:main"
+g3xchecklist = "g3xchecklist:main"
+g3xdata = "g3xdata:main"
+taw = "taw:main"
+featunlk = "featunlk:main"
+sdcard = "sdcard:main"
+
+[project.urls]
+Homepage = "https://github.com/ryandrake08/g3xtools"
+Issues = "https://github.com/ryandrake08/g3xtools/issues"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_backend"
+
+[tool.setuptools]
+py-modules = ["g3xlog", "g3xheaders", "g3xchecklist", "g3xdata", "garmin_login", "garmin_api", "taw", "featunlk", "sdcard"]

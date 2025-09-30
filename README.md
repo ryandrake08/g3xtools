@@ -227,36 +227,66 @@ python3 sdcard.py D:
 
 ## Installation
 
-1. **Create Python Virtual Environment:**
+The virtual environment is not included in the repository. You must create it yourself:
 
-   The virtual environment is not included in the repository. You must create it yourself:
+```bash
+# Create virtual environment (first time only)
+python3 -m venv env
 
-   ```bash
-   # Create virtual environment (first time only)
-   python3 -m venv env
+# Activate the virtual environment
+source env/bin/activate  # Unix/Mac
+# OR
+env\Scripts\activate     # Windows
 
-   # Activate the virtual environment
-   source env/bin/activate  # Unix/Mac
-   # OR
-   env\Scripts\activate     # Windows
+# Install the project with required dependencies
+pip install -e .
 
-   # Install required dependencies
-   pip install pyyaml requests platformdirs
+# Optional: Install with SD card detection support
+pip install -e ".[sdcard]"
 
-   # Optional: For automatic SD card detection
-   pip install psutil
-   ```
+# Optional: Install with all optional dependencies for development
+pip install -e ".[dev]"
+```
 
-2. **Dependencies:**
-   - Python 3.9+ required
-   - **Required:**
-     - PyYAML (for g3xchecklist.py)
-     - requests (for g3xdata.py)
-     - platformdirs (for cross-platform cache directories)
-   - **Optional:**
-     - **psutil** - Enables automatic SD card detection in g3xdata.py. Without psutil, you must manually specify the output path using `-o` or `G3X_SDCARD_PATH` environment variable.
-     - **pywin32** - Required for volume serial number reading on Windows systems
-   - Standard library modules: csv, struct, zlib, argparse, pathlib, datetime, json
+### Alternative: Install Dependencies Manually
+
+If you prefer not to install the project as a package, you can install dependencies directly:
+
+```bash
+pip install pyyaml requests platformdirs
+
+# Optional: For automatic SD card detection
+pip install psutil
+```
+
+### Dependencies
+
+- Python 3.9+ required
+- **Required:**
+  - PyYAML (for g3xchecklist.py)
+  - requests (for g3xdata.py)
+  - platformdirs (for cross-platform cache directories)
+- **Optional:**
+  - **psutil** - Enables automatic SD card detection in g3xdata.py. Without psutil, you must manually specify the output path using `-o` or `G3X_SDCARD_PATH` environment variable.
+  - **pywin32** - Required for volume serial number reading on Windows systems
+- Standard library modules: csv, struct, zlib, argparse, pathlib, datetime, json
+
+### Using Installed Commands
+
+After installing with `pip install -e .`, the tools are available as commands:
+
+```bash
+# Run tools directly by name (no need for "python3 script.py")
+g3xlog /path/to/logs -o /output -v
+g3xdata -l
+g3xchecklist -x checklist.ace -o checklist.yaml
+```
+
+Or continue using them as scripts:
+
+```bash
+python3 g3xlog.py /path/to/logs -o /output -v
+```
 
 ## YAML Checklist Format Specification
 
@@ -773,5 +803,5 @@ See LICENSE file.
 
 ## Disclaimer
 
-This software is not affiliated with Garmin. Always verify function and content in actual devices before flight. Checklists created with these tools are not intended to replace official AFM procedures.
-Update cards created with these tools are unofficial, and to be used at the users's own risk.
+This software is unofficial and not affiliated with Garmin. Always verify function and content in actual devices before flight. Checklists created with these tools are not intended to replace official AFM procedures.
+Update cards created with these tools are unofficial, and to be used at the user's own risk.
