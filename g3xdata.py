@@ -128,6 +128,32 @@ def get_unlock_data(access_token: str, series_id: int, issue_name: str, device_i
     cache_filename = f"unlock-{series_id}-{issue_name}-{device_id}-{card_serial:08X}.json"
     return cache_json_data(cache_filename, lambda: flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
 
+def get_device(aircraft_data: list, display_serial: str | None = None) -> dict:
+    """Get device structure from aircraft data.
+
+    Args:
+        aircraft_data: List of aircraft dictionaries from flygarmin API
+        display_serial: Optional display serial number to lookup. If None, uses first device.
+
+    Returns:
+        Device dictionary
+
+    Raises:
+        ValueError: If display serial is not found or no devices exist
+    """
+    if display_serial:
+        for aircraft in aircraft_data:
+            for device in aircraft['devices']:
+                if device.get('displaySerial') == display_serial:
+                    return device
+        raise ValueError(f"Display serial {display_serial} not found in aircraft data")
+    else:
+        # Get first device
+        for aircraft in aircraft_data:
+            for device in aircraft['devices']:
+                return device
+        raise ValueError("No devices found in aircraft data")
+
 def get_device_info(aircraft_data: list, display_serial: str | None = None) -> tuple[int, int]:
     """Get device ID and system serial from aircraft data.
 
@@ -141,18 +167,8 @@ def get_device_info(aircraft_data: list, display_serial: str | None = None) -> t
     Raises:
         ValueError: If display serial is not found or no devices exist
     """
-    if display_serial:
-        for aircraft in aircraft_data:
-            for device in aircraft['devices']:
-                if device.get('displaySerial') == display_serial:
-                    return device['id'], device['serial']
-        raise ValueError(f"Display serial {display_serial} not found in aircraft data")
-    else:
-        # Get first device
-        for aircraft in aircraft_data:
-            for device in aircraft['devices']:
-                return device['id'], device['serial']
-        raise ValueError("No devices found in aircraft data")
+    device = get_device(aircraft_data, display_serial)
+    return device['id'], device['serial']
 
 
 def list_series_details(series_id: int) -> None:
@@ -208,6 +224,60 @@ def list_series_details(series_id: int) -> None:
 
     sys.exit(0)
 
+def list_device_details(aircraft_data: list, display_serial: str) -> None:
+    """List detailed information about a specific device and its installable charts, then exit.
+
+    Args:
+        aircraft_data: List of aircraft dictionaries from flygarmin API
+        display_serial: Display serial number to lookup
+    """
+    # Get device using helper function
+    device = get_device(aircraft_data, display_serial)
+
+    # Print device header information
+    print(f"Serial: {device['displaySerial']}")
+    print(f"Name: {device['name']}")
+    print(f"Aircraft: {device['aircraftID']}")
+    if 'nextExpectedAvdbAvailability' in device:
+        next_expected = datetime.datetime.fromisoformat(device['nextExpectedAvdbAvailability'].replace('Z', '+00:00'))
+        print(f"Next Expected Chart Availability: {next_expected.strftime('%b %d, %Y')}")
+    print()
+
+    # Collect all installable issues from all database types
+    all_installable = []
+
+    for avdb in device['avdbTypes']:
+        for series in avdb['series']:
+            for issue in series['installableIssues']:
+                all_installable.append({
+                    'avdbType': avdb['name'],
+                    'region': series['region']['name'],
+                    'seriesId': series['id'],
+                    'issue': issue
+                })
+
+    # Sort by effectiveAt date
+    all_installable.sort(key=lambda x: datetime.datetime.fromisoformat(x['issue']['effectiveAt'].replace('Z', '+00:00')))
+
+    # Print table header
+    print(f"{'Type':<20} {'Region':<30} {'Series':<8} {'Issue':<8} {'Available At':<15} {'Effective At':<15} {'Invalid At':<15}")
+    print("-" * 116)
+
+    # Print each installable issue
+    for item in all_installable:
+        issue = item['issue']
+        available_at = datetime.datetime.fromisoformat(issue['availableAt'].replace('Z', '+00:00'))
+        effective_at = datetime.datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
+        invalid_at = datetime.datetime.fromisoformat(issue['invalidAt'].replace('Z', '+00:00')) if issue['invalidAt'] else None
+
+        available_str = available_at.strftime('%b %d, %Y')
+        effective_str = effective_at.strftime('%b %d, %Y')
+        invalid_str = invalid_at.strftime('%b %d, %Y') if invalid_at else 'N/A'
+
+        print(f"{item['avdbType']:<20} {item['region']:<30} {item['seriesId']:<8} {issue['name']:<8} {available_str:<15} {effective_str:<15} {invalid_str:<15}")
+
+    sys.exit(0)
+
 def list_aircraft_devices(aircraft_data: list) -> None:
     """List all aircraft and their devices in a human-readable format, then exit.
 
@@ -215,8 +285,8 @@ def list_aircraft_devices(aircraft_data: list) -> None:
         aircraft_data: List of aircraft dictionaries from flygarmin API.
     """
     for aircraft in aircraft_data:
-        device_info = [f"{device['name']} ({device['id']})" for device in aircraft['devices']]
-        print(f"Aircraft: {aircraft['id']}: Devices: {', '.join(device_info)}")
+        for device in aircraft['devices']:
+            print(f"{device['displaySerial']} ({device['name']}) {device['aircraftID']}")
     sys.exit(0)
 
 def get_cached_file_path_for_url(url: str) -> pathlib.Path:
@@ -339,20 +409,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Download G3X data update and create SD card')
 
     # Informational
-    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('-l', '--list-devices', action='store_true', help='List aircraft IDs and avionics device IDs for each aircraft')
     parser.add_argument('-i', '--series-info', type=int, metavar='SERIES_ID', help='Show detailed information about a specific series ID')
-
-    # Data
-    parser.add_argument('-c', '--check-crc', action='store_true', help='Perform CRC check during feature unlock generation (slow)')
-    parser.add_argument('-I', '--include-series', action='append', nargs=2, metavar=('SERIES_ID', 'ISSUE_NAME'), help='Add specific series ID and issue name to output (can be specified multiple times, e.g., -I 2054 2509 -I 2056 25D4)')
-    parser.add_argument('-W', '--include-taw', action='append', metavar='TAW_FILE', help='Include specific TAW file for extraction (can be specified multiple times, e.g., -W /path/to/file.taw -W /path/to/other.taw)')
+    parser.add_argument('-e', '--device-info', metavar='SYSTEM_SERIAL', help='Show detailed information about a specific device and its installable charts')
 
     # Update SDCard
     parser.add_argument('-s', '--system-serial', help='Specify avionics system serial number for SD card programming. If not specified, use G3X_SYSTEM_SERIAL environment variable or the first device in the first aircraft')
     parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path). If not specified, use G3X_SDCARD_PATH environment variable or try to detect a SD card mount point')
     parser.add_argument('-d', '--sd-device', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. If not specified, use G3X_SDCARD_DEVICE environment variable. Example: {get_platform_device_example()}")
     parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges. If not specified, use G3X_SDCARD_SERIAL environment variable or read from device")
+    parser.add_argument('-c', '--check-crc', action='store_true', help='Perform CRC check on each data file during feat_unlk.dat generation (slow)')
 
     # FlyGarmin authenitcation, query, and download overrides
     parser.add_argument('-T', '--access-token', help='Specify flygarmin access token. If not specified, use G3X_GARMIN_ACCESS_TOKEN environment variable or cached token')
@@ -361,6 +427,11 @@ def main() -> None:
     parser.add_argument('-D', '--force-refresh-datasets', action='store_true', help='Force a refresh of the dataset data')
     parser.add_argument('-F', '--force-file-download', action='store_true', help='Force a re-download of the actual data files')
     parser.add_argument('-C', '--force-file-copy', action='store_true', help='Force copying files even if destination exists with same size')
+
+    # Debug only
+    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
+    parser.add_argument('-I', '--include-series', action='append', nargs=2, metavar=('SERIES_ID', 'ISSUE_NAME'), help='Add specific series ID and issue name to output (can be specified multiple times, e.g., -I 2054 2509 -I 2056 25D4)')
+    parser.add_argument('-W', '--include-taw', action='append', metavar='TAW_FILE', help='Include specific TAW file for extraction (can be specified multiple times, e.g., -W /path/to/file.taw -W /path/to/other.taw)')
 
     # Parse arguments
     args = parser.parse_args()
@@ -393,6 +464,9 @@ def main() -> None:
 
     # List the aircraft and devices and exit
     args.list_devices and list_aircraft_devices(aircraft_data) # type: ignore
+
+    # List device details and exit
+    args.device_info and list_device_details(aircraft_data, args.device_info) # type: ignore
 
     # Get device ID and system serial in one call
     device_id, system_serial = get_device_info(aircraft_data, system_serial_arg)

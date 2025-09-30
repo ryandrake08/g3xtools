@@ -60,9 +60,7 @@ Converts Garmin G3X aviation checklist files between binary (.ace) and human-rea
 **Features:**
 - Bidirectional conversion: ACE ↔ YAML
 - Full support for all ACE item types (challenges, responses, warnings, etc.)
-- CRC32 validation for file integrity
-- Enables version control and collaborative editing of aviation checklists
-- Maintains full compatibility with Garmin G3X displays
+- Xompatibile with Garmin G3X and G3X Touch displays
 
 **Usage:**
 ```bash
@@ -89,41 +87,54 @@ Downloads current aviation database updates from Garmin's fly.garmin.com service
 
 **Usage:**
 ```bash
-# List all aircraft and their device IDs
+# List all G3X systems associated with account and exit. Will print the serial number, product type, and associated aircraft
 python3 g3xdata.py -l
 
-# Download databases for all devices (to cache)
+# NOTE: The first time g3xdata.py is run, it will launch a web browser to authenticate via Garmin's server and generate an access token.
+# NOTE: This access token will expire eventually, and you'll need to re-authenticate in that case:
+python3 g3xdata.py -l -L
+
+# List all chart data associated with given G3X system and exit
+python3 g3xdata.py -e 60001A2345BC0
+
+# NOTE: The list of systems and available data downloads will change at a rate depending on your subscription, and you'll need to refresh those, too:
+python3 g3xdata.py -e 60001A2345BC0 -A
+
+# Show detailed chart series information and exit, does not require account login
+python3 g3xdata.py -i 2054
+
+# Create SD card image for a given G3X system, sdcard at given mount point, using known sdcard serial number
+sudo python3 sdcard.py /dev/rdisk2s1 (--> outputs 1234ABCD)
+python3 g3xdata.py -s 60001A2345BC0 -o /path/to/sdcard -N 1234ABCD
+
+# Create SD card image for a given G3X system, sdcard at given mount point, using given sdcard block device
+sudo python3 g3xdata.py -s 60001A2345BC0 -o /path/to/sdcard -d /dev/sdc1
+
+# Create SD card image for the default (first) G3X system, automatically detecting sdcard path, using known sdcard serial number
+python3 g3xdata.py -N 1234ABCD
+
+# Create SD card image for the given G3X system, automatically detecting sdcard path, using known sdcard serial number
+python3 g3xdata.py -s 60001A2345BC0 -N 1234ABCD
+
+# Create SD card image for the default (first) G3X system, sdcard at a given mount point, using known sdcard serial number
+python3 g3xdata.py -o /path/to/sdcard -N 1234ABCD
+
+# NOTE: Environment variables can be set to specify certain features
+export G3X_SYSTEM_SERIAL=60001A2345BC0
+export G3X_SDCARD_PATH=/path/to/sdcard
+export G3X_SDCARD_SERIAL=1234ABCD
 python3 g3xdata.py
 
-# Create SD card image with automatic SD card detection
-python3 g3xdata.py -s ABC123
+# NOTE: Exactly one of: sdcard serial number -N or the sdcard block device -d must be specified. If neither are specified, data will be copied but not installable on G3X device
 
-# Create SD card image with specified output path
-python3 g3xdata.py -s ABC123 -o /path/to/sdcard
+# Create non-installable SD card image with automatic sdcard detection for the default system serial number
+python3 g3xdata.py
 
-# Create SD card image with automatic volume serial number detection
-python3 g3xdata.py -s ABC123 -d /dev/rdisk2s1
+# (DEBUG only) Include specific series/issue combinations
+python3 g3xdata.py -I 2054 2509 -I 2056 25D4
 
-# Create SD card image with manual volume serial number (no root required)
-python3 g3xdata.py -s ABC123 -N A1B2C3D4
-
-# Include specific series/issue combinations
-python3 g3xdata.py -s ABC123 -I 2054 2509 -I 2056 25D4
-
-# Include custom TAW files
-python3 g3xdata.py -s ABC123 -W /path/to/custom.taw -W /path/to/other.taw
-
-# Force refresh of cached data
-python3 g3xdata.py -A -D -F  # Force refresh aircraft, datasets, and file downloads
-
-# Enable CRC checking during feature unlock generation (slower but more reliable)
-python3 g3xdata.py -c -s ABC123
-
-# Verbose output for debugging
-python3 g3xdata.py -v -s ABC123
-
-# Show detailed series information
-python3 g3xdata.py -i 2054  # Show details for series ID 2054
+# (DEBUG only) Include custom TAW files
+python3 g3xdata.py -W /path/to/custom.taw -W /path/to/other.taw
 ```
 
 ### Supporting Modules
@@ -705,10 +716,13 @@ python3 garmin_login.py                             # Test authentication
 python3 garmin_api.py -t aircraft                   # Test API calls
 
 # Test database discovery
-python3 g3xdata.py -l                               # List aircraft and devices
+python3 g3xdata.py -l                               # List systems
 
-# Test volume serial number reading (Unix/Mac)
-sudo python3 sdcard.py /dev/rdisk2s1                # Replace with actual device
+# Test volume serial number reading (Linux)
+sudo python3 sdcard.py /dev/sdc1                    # Replace with actual device
+
+# Test volume serial number reading (Mac)
+sudo python3 sdcard.py /dev/rdisk2s1                # Replace with actual device (always use /dev/r*, the raw device)
 
 # Test volume serial number reading (Windows)
 python3 sdcard.py D:                                # Replace with actual drive
