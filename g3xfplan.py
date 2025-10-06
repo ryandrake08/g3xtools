@@ -305,10 +305,10 @@ def main():
     parser.add_argument('destination', help='Destination airport code')
 
     # Optional via waypoints
-    parser.add_argument('--via', action='append', help='Generated route must include this waypoint (airport, VOR, NDB, VFR waypoint, etc.). Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.', default=[])
+    parser.add_argument('--via', action='extend', nargs='+', help='Generated route must include these waypoints (airport, VOR, NDB, VFR waypoint, etc.). Multiple waypoints can be specified in one --via or use --via multiple times. Route planner will determine the shortest route between each via.', default=[])
 
     # Optional user waypoints
-    parser.add_argument('--waypoint', action='append', help='Add a user waypoint (format: ID,LAT,LON) that can be used during routing. User waypoints are treated with PREFER preference by default (configurable with --route-user-waypoint).', default=[])
+    parser.add_argument('--waypoint', action='extend', nargs='+', help='Add user waypoints (format: ID,LAT,LON) that can be used during routing. Multiple waypoints can be specified in one --waypoint or use --waypoint multiple times. User waypoints are treated with PREFER preference by default (configurable with --route-user-waypoint).', default=[])
 
     # Output preferences
     parser.add_argument('--output-minimal-airway', action='store_true', help='Output a condensed flight plan showing only airway entry and exit waypoints.')

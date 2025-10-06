@@ -345,6 +345,10 @@ Generates flight plans using A* pathfinding with configurable routing preference
 python3 g3xfplan.py KHAF KUAO
 
 # Direct routing with multiple via points (shortest path)
+# NEW: Multiple waypoints can be specified in one --via flag
+python3 g3xfplan.py --direct KLVK KAPC --via KVCB KHAF KCCR
+
+# Old style still works (multiple --via flags)
 python3 g3xfplan.py --direct KLVK KAPC --via KVCB --via KHAF --via KCCR
 
 # IFR routing with airways
@@ -354,6 +358,10 @@ python3 g3xfplan.py --airway KMOD KPSP
 python3 g3xfplan.py KSFO KLAX --max-leg-length 60
 
 # Add user waypoints as routing candidates (PREFER by default)
+# NEW: Multiple waypoints can be specified in one --waypoint flag
+python3 g3xfplan.py KHAF KUAO --waypoint "USR001,37.5,-122.0" "USR002,38.0,-121.5"
+
+# Old style still works (multiple --waypoint flags)
 python3 g3xfplan.py KHAF KUAO --waypoint "USR001,37.5,-122.0" --waypoint "USR002,38.0,-121.5"
 
 # User waypoints with AVOID preference
@@ -367,6 +375,15 @@ python3 g3xfplan.py --airway KMOD KPSP --output-minimal-airway
 
 # Export as Garmin FPL file for G3X
 python3 g3xfplan.py KHAF KUAO --output-fpl flight.fpl
+
+# Real-world example: VFR route through Bay Area with multiple waypoints
+python3 g3xfplan.py O61 KHAF --via VPMIN VPBCB VPCOY VPBDW VPWFR VPBEB VPCRY VPBBV --output-fpl flight.fpl
+
+# Real-world example: Route with user waypoints
+python3 g3xfplan.py KTVL KTRK \
+  --waypoint "USR003,39.21,-119.93" "USR004,39.233,-120.032" \
+  --via USR003 USR004 \
+  --output-fpl flight.fpl
 ```
 
 **Routing Preferences:**
