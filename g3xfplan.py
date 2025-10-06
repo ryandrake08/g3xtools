@@ -9,6 +9,11 @@ import urllib.parse
 import webbrowser
 import astar
 import rtree
+from fpl import (
+    create_flight_plan_from_route_list, write_fpl,
+    WAYPOINT_TYPE_AIRPORT, WAYPOINT_TYPE_USER, WAYPOINT_TYPE_NDB,
+    WAYPOINT_TYPE_VOR, WAYPOINT_TYPE_INT
+)
 
 _CACHE_PATH = platformdirs.user_cache_path("g3xfplan", "g3xfplan", ensure_exists=True)
 
@@ -299,6 +304,7 @@ def main():
     # Output preferences
     parser.add_argument('--output-minimal-airway', action='store_true', help='Output a condensed flight plan showing only airway entry and exit waypoints.')
     parser.add_argument('--output-skyvector', action='store_true', help='Open a web browser with the route depicted by Skyvector.')
+    parser.add_argument('--output-fpl', type=str, metavar='FILE', help='Output route as a Garmin FPL v1 XML file.')
 
     # Route generation preferences
     parser.add_argument('--direct', action='store_true', help='Generate a shortest-path direct flight plan between origin and destination, via any optional vias and exit. No intermediate legs are calculated.')
@@ -497,6 +503,37 @@ def main():
         encoded_route = urllib.parse.quote_plus(route_text)
         skyvector_url = f'https://skyvector.com/?fpl={encoded_route}'
         webbrowser.open(skyvector_url)
+
+    # Output FPL file if requested
+    if args.output_fpl:
+        # Map NASR waypoint types to FPL waypoint types
+        waypoint_type_map = {
+            'A': WAYPOINT_TYPE_AIRPORT, 'B': WAYPOINT_TYPE_AIRPORT,
+            'C': WAYPOINT_TYPE_AIRPORT, 'G': WAYPOINT_TYPE_AIRPORT,
+            'H': WAYPOINT_TYPE_AIRPORT, 'U': WAYPOINT_TYPE_AIRPORT,
+            'NDB': WAYPOINT_TYPE_NDB, 'NDB/DME': WAYPOINT_TYPE_NDB,
+            'VOR': WAYPOINT_TYPE_VOR, 'VORTAC': WAYPOINT_TYPE_VOR,
+            'VOR/DME': WAYPOINT_TYPE_VOR, 'DME': WAYPOINT_TYPE_INT,
+            'VFR': WAYPOINT_TYPE_INT,
+        }
+
+        # Build route list: (identifier, lat, lon, waypoint_type, country_code)
+        route_data = []
+        for idx in route:
+            wp = r.waypoints[idx]
+            # wp structure: [id, type, lat, lon, country, icao_id]
+            waypoint_id = wp[5] if len(wp) > 5 and wp[5] else wp[0]
+            fpl_type = waypoint_type_map.get(wp[1], WAYPOINT_TYPE_USER)
+            country = (wp[4] if len(wp) > 4 else 'US') if fpl_type == WAYPOINT_TYPE_AIRPORT else ''
+            route_data.append((waypoint_id, wp[2], wp[3], fpl_type, country))
+
+        # Create route name from origin to destination
+        route_name = f"{airport_name(origin_id)}/{airport_name(destination_id)}"
+
+        # Create and write flight plan
+        flight_plan = create_flight_plan_from_route_list(route_data, route_name)
+        write_fpl(flight_plan, args.output_fpl)
+        print(f"Flight plan written to {args.output_fpl}")
 
 if __name__ == '__main__':
     main()

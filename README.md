@@ -336,6 +336,7 @@ Generates flight plans using A* pathfinding with configurable routing preference
 - Multi-airport routing with waypoint sequencing
 - SkyVector integration for route visualization
 - Condensed airway output (entry/exit waypoints only)
+- Garmin FPL v1 XML file export for G3X systems
 
 **Usage:**
 ```bash
@@ -356,6 +357,9 @@ python3 g3xfplan.py KSFO KLAX --output-skyvector
 
 # Condensed airway output (entry/exit only)
 python3 g3xfplan.py --airway KMOD KPSP --output-minimal-airway
+
+# Export as Garmin FPL file for G3X
+python3 g3xfplan.py KHAF KUAO --output-fpl flight.fpl
 ```
 
 **Routing Preferences:**

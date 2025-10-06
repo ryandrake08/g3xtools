@@ -108,7 +108,7 @@ Data Model:
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 import xml.etree.ElementTree as ET
@@ -139,6 +139,7 @@ __all__ = [
     'create_waypoint',
     'create_route',
     'create_flight_plan',
+    'create_flight_plan_from_route_list',
     'get_waypoint',
     'validate_flight_plan',
     # Validation functions
@@ -1140,6 +1141,63 @@ def create_flight_plan(
         author=author,
         link=link,
     )
+
+
+def create_flight_plan_from_route_list(
+    route_waypoints: list[tuple[str, float, float, str, str]],
+    route_name: str | None = None,
+    created: datetime | None = None,
+) -> FlightPlan:
+    """
+    Convenience function to create a FlightPlan from a simple list of waypoint data.
+
+    This function simplifies creating flight plans by accepting a simple list format
+    commonly used by route planning tools.
+
+    Args:
+        route_waypoints: List of (identifier, lat, lon, waypoint_type, country_code) tuples
+        route_name: Route name (default: derived from first and last waypoint)
+        created: UTC timestamp of creation (default: current time)
+
+    Returns:
+        A FlightPlan dataclass instance
+
+    Example:
+        >>> route_data = [
+        ...     ("KBLU", 39.274964, -120.709748, WAYPOINT_TYPE_AIRPORT, "K2"),
+        ...     ("KAUN", 38.954827, -121.081717, WAYPOINT_TYPE_AIRPORT, "K2"),
+        ... ]
+        >>> fp = create_flight_plan_from_route_list(route_data)
+    """
+    if not route_waypoints:
+        raise ValueError("Route must contain at least one waypoint")
+
+    # Create waypoints
+    waypoints = [
+        create_waypoint(identifier, lat, lon, waypoint_type, country_code)
+        for identifier, lat, lon, waypoint_type, country_code in route_waypoints
+    ]
+
+    # Create route references
+    route_refs = [
+        (identifier, waypoint_type, country_code)
+        for identifier, _, _, waypoint_type, country_code in route_waypoints
+    ]
+
+    # Generate route name if not provided
+    if route_name is None:
+        first_id = route_waypoints[0][0]
+        last_id = route_waypoints[-1][0]
+        route_name = f"{first_id}/{last_id}"
+
+    # Create route
+    route = create_route(route_name, route_refs)
+
+    # Use current time if not provided
+    if created is None:
+        created = datetime.now(timezone.utc)
+
+    return create_flight_plan(waypoints, route, created)
 
 
 def get_waypoint(
