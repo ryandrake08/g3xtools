@@ -16,6 +16,12 @@ from fpl import (
 )
 from nasr import NASR_DATABASE_PATH
 
+# Geographic constants
+EARTH_RADIUS_METERS = 6371000  # Mean radius of Earth in meters
+
+# Flight planning defaults
+DEFAULT_MAX_LEG_LENGTH_NM = 80  # Default maximum leg length for VFR routing
+
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
     Calculate the great-circle distance between two points on the Earth's surface using the Haversine formula.
@@ -40,8 +46,7 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     d = 2 * math.asin(math.sqrt(a))
 
     # Convert from angular distance to meters
-    r = 6371000 # Radius of Earth in meters
-    return d * r
+    return d * EARTH_RADIUS_METERS
 
 def bounding_box(lat1: float, lon1: float, distance: float) -> Tuple[float, float, float, float]:
     """
@@ -65,8 +70,7 @@ def bounding_box(lat1: float, lon1: float, distance: float) -> Tuple[float, floa
     lat1, lon1 = map(math.radians, [lat1, lon1])
 
     # Convert from meters to angular distance
-    r = 6371000 # Radius of Earth in meters
-    d = distance / r
+    d = distance / EARTH_RADIUS_METERS
 
     # Shortcut for 45 and 225 degree bearings
     root1_2 = 0.7071067811865476 # sqrt(0.5)
@@ -316,7 +320,7 @@ def main() -> None:
     # Route generation preferences
     parser.add_argument('--direct', action='store_true', help='Generate a shortest-path direct flight plan between origin and destination, via any optional vias and exit. No intermediate legs are calculated.')
     parser.add_argument('--airway', action='store_true', help='Generate a flight plan between origin and destination, via any optional vias, considering airways as well as waypoint-to-waypoint legs.')
-    parser.add_argument('--max-leg-length', type=float, default=80, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
+    parser.add_argument('--max-leg-length', type=float, default=DEFAULT_MAX_LEG_LENGTH_NM, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
 
     # Waypoint preferences
     parser.add_argument('--route-airport',       choices=route_choices, default='INCLUDE', help='Specify how to handle airports in the route.')

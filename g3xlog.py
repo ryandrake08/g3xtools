@@ -27,6 +27,10 @@ import shutil
 import sys
 from pathlib import Path
 
+# Classification thresholds
+OIL_PRESSURE_THRESHOLD_PSI = 1  # Minimum oil pressure to indicate engine running
+GROUND_SPEED_THRESHOLD_KT = 50  # Minimum ground speed to indicate flight vs taxi
+
 def main() -> None:
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Process and categorize Garmin G3X aircraft data logs')
@@ -106,10 +110,10 @@ def main() -> None:
             # If file has zero data, recommend deleting, for now just skip
             flight_type = "empty"
         else:
-            if oil_press_max < 1:
+            if oil_press_max < OIL_PRESSURE_THRESHOLD_PSI:
                 # If no oil pressure in all of log, assume this session was testing/configuration
                 flight_type = "config"
-            elif ground_speed_max < 50:
+            elif ground_speed_max < GROUND_SPEED_THRESHOLD_KT:
                 # If airplane did not achieve a ground speed sufficient for flight, assume taxi-only
                 flight_type = "taxi"
             else:

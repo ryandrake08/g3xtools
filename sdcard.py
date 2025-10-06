@@ -11,8 +11,13 @@ Usage: python3 sdcard.py /dev/diskN
 import sys
 import shutil
 
+# FAT32 filesystem constants
 SECTOR_SIZE = 512
 FAT32_VSN_OFFSET = 67  # FAT32 volume serial number offset
+
+# SD card detection thresholds (per Garmin specifications)
+SD_CARD_MIN_SIZE_GB = 7.5   # Minimum size to consider as SD card
+SD_CARD_MAX_SIZE_GB = 33.0  # Maximum size to consider as SD card
 
 def unix_vsn(device_path: str) -> int:
     """Extract volume serial number from FAT32 device and return as integer."""
@@ -98,8 +103,8 @@ def detect_sd_card() -> str:
             total, _, _ = shutil.disk_usage(mountpoint)
             size_gb = total / (1024**3)
 
-            # Only accept SD cards between 8-32 GB (allowing some variance for formatting overhead)
-            if 7.5 <= size_gb <= 33.0:
+            # Only accept SD cards within expected size range
+            if SD_CARD_MIN_SIZE_GB <= size_gb <= SD_CARD_MAX_SIZE_GB:
                 candidates.append({
                     'path': mountpoint,
                     'size_gb': size_gb
