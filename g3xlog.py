@@ -21,11 +21,11 @@ categorized subdirectories while preserving modification times.
 
 import argparse
 import csv
-import glob
 import os
 import re
 import shutil
 import sys
+from pathlib import Path
 
 def main() -> None:
     # Parse command line arguments
@@ -36,20 +36,24 @@ def main() -> None:
     args = parser.parse_args()
 
     # Determine search path: command line > environment > error
-    mount_root = args.search_path or os.getenv('G3X_SEARCH_PATH')
-    if not mount_root:
+    mount_root_str = args.search_path or os.getenv('G3X_SEARCH_PATH')
+    if not mount_root_str:
         print("Error: Search path must be provided via G3X_SEARCH_PATH environment variable or command line argument", file=sys.stderr)
         sys.exit(1)
 
+    mount_root = Path(mount_root_str)
+
     # Search recursively for G3X log files (log_*.csv)
-    src_logs = sorted(glob.glob(f"{mount_root}/**/log_*.csv", recursive=True))
+    src_logs = sorted(mount_root.glob("**/log_*.csv"))
 
     # Determine output path: command line > environment. If not specified, no files are output
-    log_path = args.output or os.getenv('G3X_LOG_PATH')
+    log_path_str = args.output or os.getenv('G3X_LOG_PATH')
+    log_path = Path(log_path_str) if log_path_str else None
 
     # Create destination subfolders
     if log_path:
-        [os.makedirs(os.path.join(log_path, subdir), exist_ok=True) for subdir in ["config", "flight", "taxi"]]
+        for subdir in ["config", "flight", "taxi"]:
+            (log_path / subdir).mkdir(parents=True, exist_ok=True)
 
     # Process each log source
     for log in src_logs:
@@ -114,13 +118,13 @@ def main() -> None:
 
             if log_path:
                 # Copy the file into the correct destination path, preserving modification time
-                dest_file = os.path.join(log_path, flight_type, os.path.basename(log))
-                if not os.path.exists(dest_file):
+                dest_file = log_path / flight_type / log.name
+                if not dest_file.exists():
                     shutil.copy2(log, dest_file)
 
         # Print out flight type
         if args.verbose:
-            print(f"{os.path.basename(log)}: {metadata['aircraft_ident']} {metadata['product']} {metadata['unit']} {metadata['software_version']} {flight_type}")
+            print(f"{log.name}: {metadata['aircraft_ident']} {metadata['product']} {metadata['unit']} {metadata['software_version']} {flight_type}")
 
 if __name__ == "__main__":
     """ This is executed when run from the command line """

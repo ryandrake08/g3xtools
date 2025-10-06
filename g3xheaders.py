@@ -21,9 +21,9 @@ and reports structural differences with software version information.
 
 import argparse
 import csv
-import glob
 import os
 import sys
+from pathlib import Path
 from typing import Any, Dict, List
 
 class G3XLogFileData:
@@ -86,7 +86,7 @@ def compare_headers(prev_file: G3XLogFileData, curr_file: G3XLogFileData) -> boo
 
         # Only report changes if there are actual structural changes
         if new_headers or removed_headers or renamed_headers:
-            print(f"{os.path.basename(curr_file.filename)}: File structure changed: {prev_software_version} -> {curr_software_version}")
+            print(f"{Path(curr_file.filename).name}: File structure changed: {prev_software_version} -> {curr_software_version}")
 
             if new_headers:
                 new_with_keys = [f"{h} ({curr_stable_keys.get(h, 'no key')})" for h in new_headers]
@@ -105,13 +105,15 @@ def main() -> None:
     parser.add_argument('search_path', nargs='?', help='Path to search for log files')
     args = parser.parse_args()
 
-    log_path = args.search_path or os.getenv('G3X_LOG_PATH')
-    if not log_path:
+    log_path_str = args.search_path or os.getenv('G3X_LOG_PATH')
+    if not log_path_str:
         print("Error: Logs path must be provided via G3X_LOG_PATH environment variable or command line argument", file=sys.stderr)
         sys.exit(1)
 
+    log_path = Path(log_path_str)
+
     # Search recursively for G3X log files (log_*.csv)
-    src_logs = sorted(glob.glob(f"{log_path}/**/log_*.csv", recursive=True), key=os.path.basename)
+    src_logs = sorted(log_path.glob("**/log_*.csv"), key=lambda p: p.name)
 
     # Process files and compare headers
     for prev_filename, curr_filename in zip(src_logs, src_logs[1:]):
