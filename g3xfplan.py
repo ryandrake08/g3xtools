@@ -575,6 +575,13 @@ def main() -> None:
             'USER': WAYPOINT_TYPE_USER,
         }
 
+        # Map NASR country codes to FPL country codes
+        country_code_map = {
+            'US': "K2", # With some exceptions, Garmin seems to use K2 for country code in the .fpl file
+            'CA': "CY", # Found on the Internet. Unconfirmed
+            '': '' # User waypoints are always blank country code
+        }
+
         # Build route list: (identifier, lat, lon, waypoint_type, country_code)
         route_data = []
         for idx in route:
@@ -582,8 +589,7 @@ def main() -> None:
             # wp structure: [id, type, lat, lon, country, icao_id]
             waypoint_id = wp[5] if len(wp) > 5 and wp[5] else wp[0]
             fpl_type = waypoint_type_map.get(wp[1], WAYPOINT_TYPE_USER)
-            # Use empty country code for all waypoints (Garmin proprietary encoding not documented)
-            country = ''
+            country = country_code_map.get(wp[4], '')
             route_data.append((waypoint_id, wp[2], wp[3], fpl_type, country))
 
         # Create route name from origin to destination

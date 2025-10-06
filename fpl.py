@@ -1040,6 +1040,7 @@ def write_fpl(
         path,
         encoding="utf-8",
         xml_declaration=True,
+        short_empty_elements=False,
     )
 
 
