@@ -325,33 +325,6 @@ python3 nasr.py --filename <file.zip>
 - **Linux**: `~/.cache/g3xfplan/nasr.msgpack`
 - **Windows**: `%LOCALAPPDATA%\g3xfplan\Cache\nasr.msgpack`
 
-#### nasr2sqlite.py - SQLite Database Tool (Optional)
-Creates a SQLite database from NASR data for visualization and GIS tools.
-
-**Features:**
-- Converts NASR data to SQLite format
-- Supports spatialite geometry extensions when installed
-- Useful for data exploration and visualization
-- Not required for flight planning
-
-**Usage:**
-```bash
-# Create SQLite database from current NASR data
-python3 nasr2sqlite.py --current [--filename <filename>] [--db <filename>]
-
-# Create from preview data
-python3 nasr2sqlite.py --preview [--filename <filename>] [--db <filename>]
-
-# Create from specific archive
-python3 nasr2sqlite.py --name <name> [--filename <filename>] [--db <filename>]
-
-# List available archives
-python3 nasr2sqlite.py --list
-
-# Process existing NASR file
-python3 nasr2sqlite.py --filename <filename> [--db <filename>]
-```
-
 #### plan.py - Flight Route Planner
 Generates flight plans using A* pathfinding with configurable routing preferences.
 
@@ -447,7 +420,7 @@ pip install psutil
 - **Optional:**
   - **psutil** - Enables automatic SD card detection in g3xdata.py. Without psutil, you must manually specify the output path using `-o` or `G3X_SDCARD_PATH` environment variable.
   - **pywin32** - Required for volume serial number reading on Windows systems
-- Standard library modules: csv, struct, zlib, argparse, pathlib, datetime, json, xml, sqlite3
+- Standard library modules: csv, struct, zlib, argparse, pathlib, datetime, json, xml
 
 ### Using Installed Commands
 
@@ -976,8 +949,6 @@ g3xtools/
 ├── taw.py                    # TAW archive extractor
 ├── sdcard.py                 # SD card detection and volume serial number reader
 ├── nasr.py                   # NASR database generator
-├── nasr2sqlite.py            # SQLite database converter (optional)
-├── nasr_initialize.sql       # SQLite schema initialization
 └── plan.py                   # Flight route planner
 ```
 
