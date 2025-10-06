@@ -71,6 +71,64 @@ python3 g3xchecklist.py -x checklist.ace -o checklist.yaml
 python3 g3xchecklist.py -c checklist.yaml -o checklist.ace
 ```
 
+### fpl.py - Flight Plan File Module
+Python module for reading and writing Garmin Flight Plan (FPL) v1 XML files with complete XSD schema support.
+
+**Features:**
+- Complete implementation of Garmin FPL v1 XML schema
+- Type-safe dataclass representation with full type annotations
+- Functional API with `read_fpl()`, `write_fpl()`, and helper functions
+- Optional validation with descriptive error messages
+- Support for all 6 waypoint types (USER WAYPOINT, AIRPORT, NDB, VOR, INT, INT-VRP)
+- Round-trip safe (read → write → read produces identical data)
+- Zero external dependencies (uses only Python standard library)
+
+**Usage:**
+```python
+# Read a flight plan file
+from fpl import read_fpl, write_fpl
+flight_plan = read_fpl("flight.fpl")
+print(f"Route: {flight_plan.route.route_name}")
+print(f"Waypoints: {len(flight_plan.waypoint_table)}")
+
+# Create a flight plan from scratch
+from fpl import *
+from datetime import datetime, timezone
+
+waypoints = [
+    create_waypoint("KBLU", 39.274964, -120.709748, WAYPOINT_TYPE_AIRPORT, "K2"),
+    create_waypoint("USR001", 39.2, -120.8, comment="CUSTOM WAYPOINT"),
+    create_waypoint("KAUN", 38.954827, -121.081717, WAYPOINT_TYPE_AIRPORT, "K2"),
+]
+
+route = create_route("KBLU/KAUN", [
+    ("KBLU", WAYPOINT_TYPE_AIRPORT, "K2"),
+    ("USR001", WAYPOINT_TYPE_USER, ""),
+    ("KAUN", WAYPOINT_TYPE_AIRPORT, "K2"),
+])
+
+flight_plan = create_flight_plan(waypoints, route, created=datetime.now(timezone.utc))
+
+# Validate and write
+validate_flight_plan(flight_plan)
+write_fpl(flight_plan, "output.fpl")
+```
+
+**Public API (29 exports):**
+- Primary: `read_fpl()`, `write_fpl()`
+- Helpers: `create_waypoint()`, `create_route()`, `create_flight_plan()`, `get_waypoint()`, `validate_flight_plan()`
+- Dataclasses: `Email`, `Person`, `Waypoint`, `RoutePoint`, `Route`, `FlightPlan`
+- Constants: `WAYPOINT_TYPE_*` (6 types), `WAYPOINT_TYPES`, `FPL_NAMESPACE`
+- Validators: 8 validation functions for XSD constraints
+
+**Validation Features:**
+- Optional validation (enabled by default, can be disabled)
+- String pattern validation (identifiers, country codes, comments, route names)
+- Numeric range validation (latitude, longitude, flight plan index)
+- Enum validation (waypoint types)
+- Collection size validation (1-3000 waypoints, 0-300 route points)
+- XSD key/keyref validation (route points must reference existing waypoints)
+
 ### g3xdata.py - Aviation Database Downloader and SD Card Creator
 Downloads current aviation database updates from Garmin's fly.garmin.com service and creates complete SD card images for G3X systems.
 
@@ -800,6 +858,7 @@ g3xtools/
 ├── g3xheaders.py             # Log structure analyzer
 ├── g3xchecklist.py           # Checklist converter
 ├── g3xdata.py                # Aviation database downloader and SD card creator
+├── fpl.py                    # Flight plan file reader/writer (FPL v1 XML)
 ├── featunlk.py               # Feature unlock file generator
 ├── garmin_login.py           # OAuth authentication module
 ├── garmin_api.py             # REST API client module
