@@ -121,7 +121,7 @@ def list_archives() -> Dict[str, str]:
 
     # Extract the fullzip link from the Archives section
     article = _article()
-    archives_h2 = article.find('h2', string='Archives')
+    archives_h2 = article.find('h2', string='Archives')  # type: ignore
     if archives_h2 is None:
         raise ValueError("Archives section not found")
     archives_section = archives_h2.find_next('ul')
@@ -150,7 +150,7 @@ def current_or_preview(which: str) -> Dict[str, str]:
 
     # Extract the fullzip link from the selected section
     article = _article()
-    section_h2 = article.find('h2', string=which)
+    section_h2 = article.find('h2', string=which)  # type: ignore
     if section_h2 is None:
         raise ValueError(f"{which} section not found")
     section_ul = section_h2.find_next('ul')
@@ -174,7 +174,7 @@ def current_or_preview(which: str) -> Dict[str, str]:
         subpage_article = subpage_soup.find('article', id='content')
         if subpage_article is None:
             continue
-        download_link = subpage_article.find('a', string='Download')
+        download_link = subpage_article.find('a', string='Download')  # type: ignore
         if download_link:
             fullzip_link = download_link['href']
 
@@ -286,7 +286,7 @@ class CsvZip():
         self.csv_archive = zipfile.ZipFile(self.archive.open(csv_data_name))
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):  # type: ignore
         """
         Exit the runtime context related to this object.
         This method is called when the 'with' statement is used. It closes the
@@ -372,6 +372,8 @@ def main():
     elif args.name:
         # Look up fullzip link by name
         fullzip_link = list_archives().get(args.name)
+        if not fullzip_link:
+            raise ValueError(f"Archive '{args.name}' not found")
 
         # Download the file
         filename = download(fullzip_link, args.filename)

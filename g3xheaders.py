@@ -24,11 +24,11 @@ import csv
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 class G3XLogFileData:
-    def __init__(self, filename: str) -> None:
-        self.filename = filename
+    def __init__(self, filename: Union[str, Path]) -> None:
+        self.filename = str(filename)
 
     def __enter__(self) -> 'G3XLogFileData':
         return self.open()

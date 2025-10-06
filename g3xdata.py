@@ -36,6 +36,7 @@ import requests
 import shutil
 import sys
 import urllib.parse
+from typing import Any
 
 from garmin_login import flygarmin_login
 from garmin_api import flygarmin_list_aircraft, flygarmin_list_files, flygarmin_unlock, flygarmin_list_series
@@ -48,7 +49,7 @@ CACHE_PATH = platformdirs.user_cache_path("g3xavdb", "g3xavdb", ensure_exists=Tr
 session = requests.Session()
 session.headers['User-Agent'] = None  # type: ignore
 
-def cache_json_data(cache_filename: str, fetch_function, force: bool = False) -> dict:
+def cache_json_data(cache_filename: str, fetch_function, force: bool = False) -> Any:
     """Helper function to cache JSON data with consistent pattern.
 
     Args:
