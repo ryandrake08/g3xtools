@@ -40,7 +40,7 @@ taw = "taw:main"
 featunlk = "featunlk:main"
 sdcard = "sdcard:main"
 nasr = "nasr:main"
-plan = "plan:main"
+g3xfplan = "g3xfplan:main"
 
 [project.urls]
 Homepage = "https://github.com/ryandrake08/g3xtools"
@@ -51,4 +51,4 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_backend"
 
 [tool.setuptools]
-py-modules = ["g3xlog", "g3xheaders", "g3xchecklist", "g3xdata", "garmin_login", "garmin_api", "taw", "featunlk", "sdcard", "fpl", "nasr", "plan"]
+py-modules = ["g3xlog", "g3xheaders", "g3xchecklist", "g3xdata", "garmin_login", "garmin_api", "taw", "featunlk", "sdcard", "fpl", "nasr", "g3xfplan"]

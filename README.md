@@ -325,7 +325,7 @@ python3 nasr.py --filename <file.zip>
 - **Linux**: `~/.cache/g3xfplan/nasr.msgpack`
 - **Windows**: `%LOCALAPPDATA%\g3xfplan\Cache\nasr.msgpack`
 
-#### plan.py - Flight Route Planner
+#### g3xfplan.py - Flight Route Planner
 Generates flight plans using A* pathfinding with configurable routing preferences.
 
 **Features:**
@@ -340,22 +340,22 @@ Generates flight plans using A* pathfinding with configurable routing preference
 **Usage:**
 ```bash
 # Generate VFR plan with default 80NM leg length
-python3 plan.py KHAF KUAO
+python3 g3xfplan.py KHAF KUAO
 
 # Direct routing with multiple via points (shortest path)
-python3 plan.py --direct KLVK KAPC --via KVCB --via KHAF --via KCCR
+python3 g3xfplan.py --direct KLVK KAPC --via KVCB --via KHAF --via KCCR
 
 # IFR routing with airways
-python3 plan.py --airway KMOD KPSP
+python3 g3xfplan.py --airway KMOD KPSP
 
 # Custom max leg length
-python3 plan.py KSFO KLAX --max-leg-length 60
+python3 g3xfplan.py KSFO KLAX --max-leg-length 60
 
 # Output to SkyVector
-python3 plan.py KSFO KLAX --output-skyvector
+python3 g3xfplan.py KSFO KLAX --output-skyvector
 
 # Condensed airway output (entry/exit only)
-python3 plan.py --airway KMOD KPSP --output-minimal-airway
+python3 g3xfplan.py --airway KMOD KPSP --output-minimal-airway
 ```
 
 **Routing Preferences:**
@@ -366,10 +366,10 @@ python3 plan.py --airway KMOD KPSP --output-minimal-airway
 Examples:
 ```bash
 # Prefer VOR waypoints, reject heliports
-python3 plan.py KSFO KLAX --route-vor PREFER --route-heliport REJECT
+python3 g3xfplan.py KSFO KLAX --route-vor PREFER --route-heliport REJECT
 
 # Airway routing with preferences
-python3 plan.py --airway KMOD KPSP --route-airway-victor PREFER --route-airway-jet REJECT
+python3 g3xfplan.py --airway KMOD KPSP --route-airway-victor PREFER --route-airway-jet REJECT
 ```
 
 ## Installation
@@ -949,7 +949,7 @@ g3xtools/
 ├── taw.py                    # TAW archive extractor
 ├── sdcard.py                 # SD card detection and volume serial number reader
 ├── nasr.py                   # NASR database generator
-└── plan.py                   # Flight route planner
+└── g3xfplan.py               # Flight route planner
 ```
 
 ## License
