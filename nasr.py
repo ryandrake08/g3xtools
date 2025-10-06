@@ -1,14 +1,34 @@
  #!/usr/bin/env python3
 
 """
-This module provides functions to interact with the FAA NASR Subscription page.
-It includes functions to extract archive links, current or preview NASR zip links,
-and download files from given URLs.
+This module provides functions to interact with the FAA NASR Subscription page
+and processes NASR data into a msgpack database for flight planning.
+
+CSV files processed:
+    - APT_BASE.csv: Contains airport waypoint data.
+    - FIX_BASE.csv: Contains fix waypoint data.
+    - NAV_BASE.csv: Contains navigation waypoint data.
+    - AWY_BASE.csv: Contains airway data.
+    - AWY_SEG_ALT.csv: Contains airway segment data.
+
+Command Line Arguments:
+    --current: Downloads the Current data.
+    --preview: Downloads the Preview data.
+    --name: Downloads archived data by name.
+    --list: Lists the available NASR data in the Archive section.
+    --filename: Specifies the NASR data filename. Uses basename of URL if not provided.
+
+Usage:
+    python nasr.py --current [--filename <filename>]
+    python nasr.py --preview [--filename <filename>]
+    python nasr.py --list
+        (then)
+    python nasr.py --name <name> [--filename <filename>]
+
+        (to skip downloading)
+    python nasr.py --filename <filename>
 
 Functions:
-    article() -> bs4.element.Tag:
-        Retrieves the main NASR page and finds the article element.
-
     list_archives() -> dict:
         Extracts and returns a dictionary of archive links from the NASR page.
 
@@ -16,8 +36,15 @@ Functions:
         Extracts the NASR zip link from the specified section ('Preview' or 'Current').
 
     download(url: str, filename: str = None) -> str:
+        Downloads a file from the given URL to the cache directory.
 """
 
+import argparse
+import collections
+import csv
+import io
+import itertools
+import msgpack
 import os
 import re
 import time
@@ -291,3 +318,144 @@ class CsvZip():
         if self.csv_archive is None:
             raise RuntimeError("CSV archive not opened")
         return self.csv_archive.open(name)
+
+def read_csv_file(csv_archive, file_name, columns, rowdata):
+    """
+    Reads a CSV file from a given archive and extracts specified columns into a list.
+
+    Args:
+        csv_archive (zipfile.ZipFile): The archive containing the CSV file.
+        file_name (str): The name of the CSV file within the archive.
+        columns (list of str): The list of column headers to extract from the CSV file.
+        rowdata (list of list): The list to append the extracted row data to.
+
+    Returns:
+        None: This function modifies the rowdata list in place.
+
+    Notes:
+        - The function strips whitespace from all column values.
+        - If the column header is 'LAT_DECIMAL' or 'LONG_DECIMAL', the value is converted to a float.
+    """
+
+    with csv_archive.open(file_name) as csv_file:
+        csv_reader = csv.DictReader(io.TextIOWrapper(csv_file, encoding='iso-8859-1', errors='strict'))
+        for row in csv_reader:
+            values = [
+                # Handling CSV rows: Strip whitespace and convert to float if necessary
+                float(row[csv_header]) if csv_header in ['LAT_DECIMAL', 'LONG_DECIMAL'] else
+                row[csv_header].strip()
+                    for csv_header in columns]
+            rowdata.append(values)
+
+def main():
+    """
+    Main function to download NASR data and store it in data structures useful for flight planning.
+    """
+
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Download NASR data and store it in data structures useful for flight planning.')
+    parser.add_argument('--current', action='store_true', help='Download the Current data.')
+    parser.add_argument('--preview', action='store_true', help='Download the Preview data.')
+    parser.add_argument('--name', help='Download archived data by name.')
+    parser.add_argument('--list', action='store_true', help='List of NASR data in the Archive section.')
+    parser.add_argument('--filename', help='Specify the NASR data filename. Uses basename of URL if not provided.')
+    args = parser.parse_args()
+
+    # Process the archive section
+    if args.list:
+        # List available NASR data if --list is passed, then exit
+        print('\n'.join(list_archives().keys()))
+        return
+
+    elif args.name:
+        # Look up fullzip link by name
+        fullzip_link = list_archives().get(args.name)
+
+        # Download the file
+        filename = download(fullzip_link, args.filename)
+
+    elif args.preview or args.current:
+        # Process the Preview or Current section
+        fullzip_link = list(current_or_preview('Preview' if args.preview else 'Current').values())[0]
+
+        # Download the file
+        filename = download(fullzip_link, args.filename)
+
+    elif args.filename:
+        filename = args.filename
+
+    else:
+        raise FileNotFoundError('nasr: No data found or specified.')
+
+    waypoints = []
+    airways = []
+    airway_seg = []
+
+    # Open archive
+    with CsvZip(filename) as csv_archive:
+        # Read waypoint data
+        read_csv_file(csv_archive, 'APT_BASE.csv', ['ARPT_ID', 'SITE_TYPE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE', 'ICAO_ID'], waypoints)
+        read_csv_file(csv_archive, 'FIX_BASE.csv', ['FIX_ID', 'FIX_USE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
+        read_csv_file(csv_archive, 'NAV_BASE.csv', ['NAV_ID', 'NAV_TYPE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
+
+        # Read airway data
+        read_csv_file(csv_archive, 'AWY_BASE.csv', ['AWY_ID', 'AWY_LOCATION', 'AWY_DESIGNATION'], airways)
+        read_csv_file(csv_archive, 'AWY_SEG_ALT.csv', ['AWY_ID', 'AWY_LOCATION', 'FROM_POINT', 'FROM_PT_TYPE', 'TO_POINT', 'COUNTRY_CODE', 'AWY_SEG_GAP_FLAG'], airway_seg)
+
+    # Build a temporary reverse lookup dictionary of waypoint_id to [list of waypoint index]
+    # Unfortunately waypoint_id are not unique
+    waypoint_lookup = collections.defaultdict(list)
+    for i, waypoint in enumerate(waypoints):
+        waypoint_lookup[waypoint[0]].append(i)
+
+    # Build a temporary dictionary of (airway_id, airway_location) to airway_index
+    # Also, airway_id are not unique, but (airway_id, airway_location) are
+    airway_lookup = {(row[0], row[1]): i for i, row in enumerate(airways)}
+
+    # Build a temporary list of airway_index, [list of waypoint index]
+    # An airway_index can be associated with multiple lists of waypoints if the airway has gaps
+    airway_lists = []
+    current_waypoint_index_list = []
+    for airway_id, airway_location, from_point, from_point_type, to_point, country_code, gap in airway_seg:
+        # Look up airway index
+        airway_index = airway_lookup[airway_id, airway_location]
+
+        # Look up the waypoint indices from our temporary reverse lookup dictionary
+        waypoint_indices = waypoint_lookup.get(from_point, [])
+
+        # Find the waypoint index that matches the type and country code
+        matching_waypoint_indices = [i for i in waypoint_indices if waypoints[i][1] == from_point_type and waypoints[i][4] == country_code]
+
+        # Error if multiple waypoints found, this should not happen
+        if len(matching_waypoint_indices) > 1:
+            raise ValueError(f'Multiple waypoints found for {from_point} with type {from_point_type} and country {country_code}. Indices: {waypoint_indices}')
+
+        if matching_waypoint_indices:
+            # Add the waypoint index to the current waypoint index list
+            current_waypoint_index_list.append(matching_waypoint_indices[0])
+
+        # If there is a gap, or if we are at the end of the airway, start a new list
+        if gap == 'Y' or not to_point:
+            airway_lists.append((airway_index, current_waypoint_index_list))
+            current_waypoint_index_list = []
+
+    # Go through each list pairwise and build a dictionary of airway connections: waypoint_index to (neighbor waypoint_index, airway_index)
+    connections = collections.defaultdict(list)
+    for airway_index, waypoint_indices in airway_lists:
+        for i1, i2 in itertools.pairwise(waypoint_indices):
+            connections[i1].append((i2, airway_index))
+            connections[i2].append((i1, airway_index))
+
+    # Serialize all data into a single database file
+    database = {
+        'waypoints': waypoints,
+        'airways': airways,
+        'connections': connections
+    }
+    output_path = _CACHE_PATH / 'nasr.msgpack'
+    with open(output_path, 'wb') as f:
+        packed_data: bytes = msgpack.packb(database)  # type: ignore[assignment]
+        f.write(packed_data)
+
+if __name__ == '__main__':
+    main()

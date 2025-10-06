@@ -5,19 +5,25 @@ Welcome to the FPlan project! This guide will help you get started with setting 
 ## Prerequisites
 
 Before you begin, ensure you have met the following requirements:
- - [ ] You have installed a recent version of [Python](https://www.python.org/downloads/).
+ - [ ] You have installed a recent version of [Python](https://www.python.org/downloads/) (Python 3.10+).
  - [ ] You have a working internet connection.
- - [ ] You have the following Python dependencies installed, recommend using pip in a venv:
-   - `beautifulsoup4` (for NASR downloader)
-   - `astar`
-   - `rtree`
+ - [ ] You have installed dependencies (recommend using pip in a venv):
+   ```sh
+   pip install -r requirements.txt
+   ```
+   Dependencies: `beautifulsoup4`, `astar`, `rtree`, `msgpack`, `platformdirs`
 
 ## Initial Setup
 
-To set up the project's database, you need to download current NASR data from FAA and build some pre-processed data files from the NASR data, so the planner doesn't have to navigate ZIP and CSV files:
-    ```sh
-    python3 makedb.py --current
-    ```
+To set up the project's database, download current NASR data from FAA and build the preprocessed database file:
+```sh
+python3 nasr.py --current
+```
+
+This downloads NASR data and creates `nasr.msgpack` in your OS cache directory:
+- **macOS**: `~/Library/Caches/g3xfplan/`
+- **Linux**: `~/.cache/g3xfplan/`
+- **Windows**: `%LOCALAPPDATA%\g3xfplan\Cache\`
 
 # Usage
 
@@ -132,26 +138,34 @@ python3 plan.py origin destination [options] [routing preferences]
 
 # Development Reference
 
-## Spatialite database tool
+## Database Management
 
-Although not required for the FPlan tool, nasr2sqlite.py will create a sqlite database represntation of the NASR data (with spatialite geometry if you have spatialite installed). This database can be used to easily visualize and navigate NASR data.
-
-```sh
-python3 nasr2sql.py --current [--filename <filename>] [--db <filename>]
-python3 nasr2sql.py --preview [--filename <filename>] [--db <filename>]
-python3 nasr2sql.py --name <name> [--filename <filename>] [--db <filename>]
-```
-    Downloads the current, preview, or named NASR release
+### NASR Database Generation
+The primary database tool is `nasr.py`:
 
 ```sh
-python3 nasr2sql.py --list
+python3 nasr.py --current                    # Download current NASR data and generate database
+python3 nasr.py --preview                    # Download preview NASR data
+python3 nasr.py --name <name>                # Download specific archive by name
+python3 nasr.py --list                       # List available NASR archives
+python3 nasr.py --filename <file.zip>        # Process existing NASR zip file
 ```
-    Lists the named archive NASR releases available to download
+
+This creates a MessagePack database file (`nasr.msgpack`) in the cache directory containing waypoints, airways, and connections optimized for the A* pathfinding algorithm.
+
+### SQLite Database Tool (Optional)
+
+For data visualization and exploration, `nasr2sqlite.py` creates a SQLite database (with spatialite geometry if installed):
 
 ```sh
-python3 nasr2sql.py --filename <filename> [--db <filename>]
+python3 nasr2sqlite.py --current [--filename <filename>] [--db <filename>]
+python3 nasr2sqlite.py --preview [--filename <filename>] [--db <filename>]
+python3 nasr2sqlite.py --name <name> [--filename <filename>] [--db <filename>]
+python3 nasr2sqlite.py --list
+python3 nasr2sqlite.py --filename <filename> [--db <filename>]
 ```
-    Skips the download and processes the given NASR zip file directly
+
+This is not required for flight planning but useful for GIS visualization tools.
 
 ## Feature Ideas
 
