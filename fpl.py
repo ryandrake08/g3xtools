@@ -52,8 +52,7 @@ Quick Start - Modifying:
     >>> if wp:
     ...     print(f"Found: {wp.identifier} at {wp.lat}, {wp.lon}")
     >>>
-    >>> # Modify and write (note: dataclasses are immutable by default)
-    >>> # You'll need to create new instances with modified values
+    >>> # Modify and write
     >>> write_fpl(fp, "modified.fpl")
 
 Validation:
@@ -110,7 +109,7 @@ Data Model:
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Union
 import xml.etree.ElementTree as ET
 import re
 
@@ -177,6 +176,10 @@ IDENTIFIER_PATTERN = re.compile(r'^[A-Z0-9]{1,12}$')
 COUNTRY_CODE_PATTERN = re.compile(r'^([A-Z0-9]{2})?$')
 COMMENT_PATTERN = re.compile(r'^([A-Z0-9 /]{1,25})?$')
 ROUTE_NAME_PATTERN = re.compile(r'^([A-Z0-9 /]{1,25})?$')
+
+# Security limits
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+COORDINATE_DECIMAL_PLACES = 6  # 6 decimal places
 
 
 # Validation functions
@@ -353,9 +356,9 @@ class Person:
         email: The author's email address
         link: A link to more information (anyURI)
     """
-    author_name: str | None = None
-    email: Email | None = None
-    link: str | None = None
+    author_name: Optional[str] = None
+    email: Optional[Email] = None
+    link: Optional[str] = None
 
 
 @dataclass
@@ -381,10 +384,10 @@ class Waypoint:
     lat: float
     lon: float
     comment: str
-    elevation: float | None = None
-    waypoint_description: str | None = None
-    symbol: str | None = None
-    extensions: Any | None = None
+    elevation: Optional[float] = None
+    waypoint_description: Optional[str] = None
+    symbol: Optional[str] = None
+    extensions: Optional[Any] = None
 
 
 @dataclass
@@ -401,7 +404,7 @@ class RoutePoint:
     waypoint_identifier: str
     waypoint_type: str
     waypoint_country_code: str
-    extensions: Any | None = None
+    extensions: Optional[Any] = None
 
 
 @dataclass
@@ -419,8 +422,8 @@ class Route:
     route_name: str
     flight_plan_index: int
     route_points: list[RoutePoint]
-    route_description: str | None = None
-    extensions: Any | None = None
+    route_description: Optional[str] = None
+    extensions: Optional[Any] = None
 
 
 @dataclass
@@ -438,12 +441,12 @@ class FlightPlan:
         extensions: Extensions element for additional data
     """
     waypoint_table: list[Waypoint]
-    created: datetime | None = None
-    route: Route | None = None
-    file_description: str | None = None
-    author: Person | None = None
-    link: str | None = None
-    extensions: Any | None = None
+    created: Optional[datetime] = None
+    route: Optional[Route] = None
+    file_description: Optional[str] = None
+    author: Optional[Person] = None
+    link: Optional[str] = None
+    extensions: Optional[Any] = None
 
 
 # XML Reading (Deserialization)
@@ -461,7 +464,7 @@ def _ns(tag: str) -> str:
     return f"{{{FPL_NAMESPACE}}}{tag}"
 
 
-def _find_text_optional(elem: ET.Element, tag: str, default: str | None = None) -> str | None:
+def _find_text_optional(elem: ET.Element, tag: str, default: Optional[str] = None) -> str | None:
     """
     Find text content of child element with namespace handling (optional field).
 
@@ -692,6 +695,11 @@ def _parse_flight_plan(root: ET.Element, validate: bool) -> FlightPlan:
     created = None
     if created_str:
         created = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
+        # Validate timezone is UTC
+        if created.tzinfo is None or created.utcoffset().total_seconds() != 0:
+            raise ValueError(
+                f"Timestamp must be in UTC timezone, got: {created_str}"
+            )
 
     # Parse author
     author_elem = root.find(_ns("author"))
@@ -732,7 +740,7 @@ def _parse_flight_plan(root: ET.Element, validate: bool) -> FlightPlan:
     )
 
 
-def read_fpl(file_path: str | Path, validate: bool = True) -> FlightPlan:
+def read_fpl(file_path: Union[str, Path], validate: bool = True) -> FlightPlan:
     """
     Read a Garmin FPL file and return a FlightPlan dataclass.
 
@@ -754,14 +762,26 @@ def read_fpl(file_path: str | Path, validate: bool = True) -> FlightPlan:
         >>> print(f"Waypoints: {len(flight_plan.waypoint_table)}")
     """
     path = Path(file_path)
-    tree = ET.parse(path)
+
+    # Validate file size to prevent memory exhaustion
+    file_size = path.stat().st_size
+    if file_size > MAX_FILE_SIZE:
+        raise ValueError(
+            f"File too large: {file_size} bytes (max {MAX_FILE_SIZE} bytes)"
+        )
+
+    # Configure XML parser to prevent XXE attacks
+    parser = ET.XMLParser()
+    parser.parser.SetParamEntityParsing(0)  # Disable external entity expansion
+
+    tree = ET.parse(path, parser=parser)
     root = tree.getroot()
     return _parse_flight_plan(root, validate)
 
 
 # XML Writing (Serialization)
 
-def _add_optional_text(parent: ET.Element, tag: str, value: str | None) -> None:
+def _add_optional_text(parent: ET.Element, tag: str, value: Optional[str]) -> None:
     """
     Add child element with text only if value is not None.
 
@@ -834,11 +854,14 @@ def _create_waypoint_elem(waypoint: Waypoint, validate: bool) -> ET.Element:
     elem = ET.Element("waypoint")
     ET.SubElement(elem, "identifier").text = waypoint.identifier
     ET.SubElement(elem, "type").text = waypoint.type
+
     # Use empty string to ensure closing tag for empty elements
     country_elem = ET.SubElement(elem, "country-code")
     country_elem.text = waypoint.country_code if waypoint.country_code else None
-    ET.SubElement(elem, "lat").text = str(waypoint.lat)
-    ET.SubElement(elem, "lon").text = str(waypoint.lon)
+
+    # Format coordinates with controlled precision
+    ET.SubElement(elem, "lat").text = f"{waypoint.lat:.{COORDINATE_DECIMAL_PLACES}f}"
+    ET.SubElement(elem, "lon").text = f"{waypoint.lon:.{COORDINATE_DECIMAL_PLACES}f}"
     comment_elem = ET.SubElement(elem, "comment")
     comment_elem.text = waypoint.comment if waypoint.comment else None
 
@@ -953,6 +976,12 @@ def _create_flight_plan_elem(flight_plan: FlightPlan, validate: bool) -> ET.Elem
     _add_optional_text(elem, "link", flight_plan.link)
 
     if flight_plan.created is not None:
+        # Validate timezone is UTC when writing
+        if validate:
+            if flight_plan.created.tzinfo is None or flight_plan.created.utcoffset().total_seconds() != 0:
+                raise ValueError(
+                    f"Timestamp must be in UTC timezone, got offset: {flight_plan.created.utcoffset()}"
+                )
         created_str = flight_plan.created.isoformat().replace('+00:00', 'Z')
         ET.SubElement(elem, "created").text = created_str
 
@@ -1021,9 +1050,9 @@ def create_waypoint(
     waypoint_type: str = WAYPOINT_TYPE_USER,
     country_code: str = "",
     comment: str = "",
-    elevation: float | None = None,
-    waypoint_description: str | None = None,
-    symbol: str | None = None,
+    elevation: Optional[float] = None,
+    waypoint_description: Optional[str] = None,
+    symbol: Optional[str] = None,
 ) -> Waypoint:
     """
     Create a new Waypoint with the given parameters.
@@ -1063,7 +1092,7 @@ def create_route(
     name: str,
     waypoint_refs: list[tuple[str, str, str]],
     flight_plan_index: int = 1,
-    route_description: str | None = None,
+    route_description: Optional[str] = None,
 ) -> Route:
     """
     Create a new Route with the given waypoint references.
@@ -1102,11 +1131,11 @@ def create_route(
 
 def create_flight_plan(
     waypoints: list[Waypoint],
-    route: Route | None = None,
-    created: datetime | None = None,
-    file_description: str | None = None,
-    author: Person | None = None,
-    link: str | None = None,
+    route: Optional[Route] = None,
+    created: Optional[datetime] = None,
+    file_description: Optional[str] = None,
+    author: Optional[Person] = None,
+    link: Optional[str] = None,
 ) -> FlightPlan:
     """
     Create a new FlightPlan with the given waypoints and optional route.
@@ -1145,8 +1174,8 @@ def create_flight_plan(
 
 def create_flight_plan_from_route_list(
     route_waypoints: list[tuple[str, float, float, str, str]],
-    route_name: str | None = None,
-    created: datetime | None = None,
+    route_name: Optional[str] = None,
+    created: Optional[datetime] = None,
 ) -> FlightPlan:
     """
     Convenience function to create a FlightPlan from a simple list of waypoint data.
@@ -1259,7 +1288,11 @@ def validate_flight_plan(flight_plan: FlightPlan) -> None:
             f"Too many waypoints: {len(flight_plan.waypoint_table)} (max 3000)"
         )
 
-    # Validate each waypoint
+    # Build waypoint lookup cache for O(1) lookups (composite key: identifier, type, country_code)
+    waypoint_cache = {}
+    seen_waypoints = set()
+
+    # Validate each waypoint and build cache
     for waypoint in flight_plan.waypoint_table:
         validate_identifier(waypoint.identifier)
         validate_waypoint_type(waypoint.type)
@@ -1267,6 +1300,15 @@ def validate_flight_plan(flight_plan: FlightPlan) -> None:
         validate_latitude(waypoint.lat)
         validate_longitude(waypoint.lon)
         validate_comment(waypoint.comment)
+
+        # Check for duplicate waypoints (XSD composite key uniqueness)
+        waypoint_key = (waypoint.identifier, waypoint.type, waypoint.country_code)
+        if waypoint_key in seen_waypoints:
+            raise ValueError(
+                f"Duplicate waypoint: {waypoint.identifier}/{waypoint.type}/{waypoint.country_code}"
+            )
+        seen_waypoints.add(waypoint_key)
+        waypoint_cache[waypoint_key] = waypoint
 
     # Validate route if present
     if flight_plan.route is not None:
@@ -1279,18 +1321,14 @@ def validate_flight_plan(flight_plan: FlightPlan) -> None:
             )
 
         # Validate key/keyref constraint: route points must reference waypoints
+        # Uses O(1) cache lookup instead of O(n) linear search
         for rp in flight_plan.route.route_points:
             validate_identifier(rp.waypoint_identifier)
             validate_waypoint_type(rp.waypoint_type)
             validate_country_code(rp.waypoint_country_code)
 
-            waypoint = get_waypoint(
-                flight_plan,
-                rp.waypoint_identifier,
-                rp.waypoint_type,
-                rp.waypoint_country_code
-            )
-            if waypoint is None:
+            waypoint_key = (rp.waypoint_identifier, rp.waypoint_type, rp.waypoint_country_code)
+            if waypoint_key not in waypoint_cache:
                 raise ValueError(
                     f"Route point references non-existent waypoint: "
                     f"{rp.waypoint_identifier}/{rp.waypoint_type}/{rp.waypoint_country_code}"
