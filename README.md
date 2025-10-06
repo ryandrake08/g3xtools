@@ -332,6 +332,7 @@ Generates flight plans using A* pathfinding with configurable routing preference
 - VFR and IFR flight planning
 - Airway routing support (Victor, RNAV, Jet, Color, Atlantic, etc.)
 - Configurable waypoint preferences (airports, VOR, NDB, VFR waypoints, etc.)
+- User-defined waypoints with configurable routing preference
 - Shortest-path direct routing
 - Multi-airport routing with waypoint sequencing
 - SkyVector integration for route visualization
@@ -352,6 +353,12 @@ python3 g3xfplan.py --airway KMOD KPSP
 # Custom max leg length
 python3 g3xfplan.py KSFO KLAX --max-leg-length 60
 
+# Add user waypoints as routing candidates (PREFER by default)
+python3 g3xfplan.py KHAF KUAO --waypoint "USR001,37.5,-122.0" --waypoint "USR002,38.0,-121.5"
+
+# User waypoints with AVOID preference
+python3 g3xfplan.py KHAF KUAO --waypoint "USR001,37.5,-122.0" --route-user-waypoint AVOID
+
 # Output to SkyVector
 python3 g3xfplan.py KSFO KLAX --output-skyvector
 
@@ -363,7 +370,7 @@ python3 g3xfplan.py KHAF KUAO --output-fpl flight.fpl
 ```
 
 **Routing Preferences:**
-- **Waypoint Types**: Configure handling for airports, balloonports, seaplane bases, gliderports, heliports, ultralight fields, VFR waypoints, DME, NDB, VOR, VORTAC, VOR/DME
+- **Waypoint Types**: Configure handling for airports, balloonports, seaplane bases, gliderports, heliports, ultralight fields, user waypoints, VFR waypoints, DME, NDB, VOR, VORTAC, VOR/DME
 - **Airway Types**: Configure handling for Victor, RNAV (T/Q), Jet, Color, Atlantic, Bahama, Pacific, Puerto Rico airways
 - **Preference Levels**: PREFER, INCLUDE (default), AVOID, REJECT
 
@@ -375,6 +382,9 @@ python3 g3xfplan.py KSFO KLAX --route-vor PREFER --route-heliport REJECT
 # Airway routing with preferences
 python3 g3xfplan.py --airway KMOD KPSP --route-airway-victor PREFER --route-airway-jet REJECT
 ```
+
+**User Waypoints:**
+User waypoints are custom locations added via `--waypoint ID,LAT,LON` that become available as routing candidates. The route may or may not include them based on the A* pathfinding algorithm. They default to PREFER routing preference but can be configured with `--route-user-waypoint`. In FPL exports, they appear as "USER WAYPOINT" type with empty country code.
 
 ## Installation
 

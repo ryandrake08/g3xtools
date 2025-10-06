@@ -114,15 +114,15 @@ class Router(astar.AStar):
             Estimates the heuristic cost between the current waypoint and the goal waypoint.
     '''
 
-    def __init__(self, waypoint_preferences, airway_preferences, max_leg_length):
+    def __init__(self, waypoint_preferences, airway_preferences, max_leg_length, user_waypoints=None):
         """
         Initialize all the state needed to implement the a-star pathfinding algorithm.
 
         Args:
             waypoint_preferences (dict): A dictionary mapping waypoint types to routing preferences.
                                          Possible values are PREFER, INCLUDE, AVOID, and REJECT.
-
             max_leg_length (float): The maximum allowable length for any leg of the route.
+            user_waypoints (list): Optional list of user waypoints to add. Each entry is (id, lat, lon).
         """
 
         # Deserialize database
@@ -132,6 +132,12 @@ class Router(astar.AStar):
             self.waypoints = database['waypoints']
             self.airways = database['airways']
             self.connections = database['connections']
+
+        # Add user waypoints to the waypoints list
+        # User waypoint structure: [id, type, lat, lon, country] - country is empty string for user waypoints
+        if user_waypoints:
+            for wp_id, lat, lon in user_waypoints:
+                self.waypoints.append([wp_id, 'USER', lat, lon, ''])
 
         # Store the route preferences
         self.waypoint_preferences = waypoint_preferences
@@ -299,7 +305,10 @@ def main():
     parser.add_argument('destination', help='Destination airport code')
 
     # Optional via waypoints
-    parser.add_argument('--via', action='append', help='Generated route must include this airport. Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.', default=[])
+    parser.add_argument('--via', action='append', help='Generated route must include this waypoint (airport, VOR, NDB, VFR waypoint, etc.). Each via must be specified separately, and they can be in any order. Route planner will determine the shortest route between each via.', default=[])
+
+    # Optional user waypoints
+    parser.add_argument('--waypoint', action='append', help='Add a user waypoint (format: ID,LAT,LON) that can be used during routing. User waypoints are treated with PREFER preference by default (configurable with --route-user-waypoint).', default=[])
 
     # Output preferences
     parser.add_argument('--output-minimal-airway', action='store_true', help='Output a condensed flight plan showing only airway entry and exit waypoints.')
@@ -318,6 +327,7 @@ def main():
     parser.add_argument('--route-gliderport',    choices=route_choices, default='REJECT',  help='Specify how to handle gliderports in the route.')
     parser.add_argument('--route-heliport',      choices=route_choices, default='REJECT',  help='Specify how to handle heliports in the route.')
     parser.add_argument('--route-ultralight',    choices=route_choices, default='REJECT',  help='Specify how to handle ultralight aerodromes in the route.')
+    parser.add_argument('--route-user-waypoint', choices=route_choices, default='PREFER',  help='Specify how to handle user-defined waypoints in the route.')
     parser.add_argument('--route-vfr-waypoint',  choices=route_choices, default='INCLUDE', help='Specify how to handle VFR waypoints in the route.')
     parser.add_argument('--route-dme',           choices=route_choices, default='REJECT',  help='Specify how to handle DMEs in the route.')
     parser.add_argument('--route-ndb',           choices=route_choices, default='REJECT',  help='Specify how to handle NDBs in the route.')
@@ -348,6 +358,9 @@ def main():
         'G': args.route_gliderport,
         'H': args.route_heliport,
         'U': args.route_ultralight,
+
+        # User waypoints can be configured
+        'USER': args.route_user_waypoint,
 
         # VFR waypoints can be configured
         'VFR': args.route_vfr_waypoint,
@@ -399,8 +412,30 @@ def main():
     # Calculate maximum leg length in meters
     max_leg_length = args.max_leg_length * 1852
 
+    # Parse user waypoints
+    user_waypoints = []
+    if args.waypoint:
+        for wp_spec in args.waypoint:
+            parts = wp_spec.split(',')
+            if len(parts) != 3:
+                parser.error(f'Invalid waypoint format: {wp_spec}. Expected format: ID,LAT,LON')
+            wp_id = parts[0].strip()
+            try:
+                lat = float(parts[1].strip())
+                lon = float(parts[2].strip())
+            except ValueError:
+                parser.error(f'Invalid coordinates in waypoint: {wp_spec}')
+            user_waypoints.append((wp_id, lat, lon))
+
     # Initialize the router
-    r = Router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length)
+    r = Router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length, user_waypoints)
+
+    # Find any waypoint by waypoint_id or icao_id
+    def find_waypoint(waypoint_id):
+        i = next((index for index, waypoint in enumerate(r.waypoints) if waypoint[0] == waypoint_id or (len(waypoint) > 5 and waypoint[5] == waypoint_id)), None)
+        if i is None:
+            parser.error(f'Waypoint "{waypoint_id}" not found')
+        return i
 
     # Find airport by airport_id or icao_id
     def find_airport(airport_id):
@@ -420,8 +455,8 @@ def main():
     # Get the destination id, and print an error if it does not exist
     destination_id = find_airport(args.destination.upper())
 
-    # Map waypoint_id to id all vias
-    via_ids = [find_airport(via.upper()) for via in args.via]
+    # Map waypoint_id to id all vias (supports all waypoint types)
+    via_ids = [find_waypoint(via.upper()) for via in args.via]
 
     # Calculate candidate route list
     candidate_routes = [[origin_id] + list(perm) + [destination_id] for perm in itertools.permutations(via_ids)]
@@ -514,7 +549,7 @@ def main():
             'NDB': WAYPOINT_TYPE_NDB, 'NDB/DME': WAYPOINT_TYPE_NDB,
             'VOR': WAYPOINT_TYPE_VOR, 'VORTAC': WAYPOINT_TYPE_VOR,
             'VOR/DME': WAYPOINT_TYPE_VOR, 'DME': WAYPOINT_TYPE_INT,
-            'VFR': WAYPOINT_TYPE_INT,
+            'VFR': WAYPOINT_TYPE_INT, 'USER': WAYPOINT_TYPE_USER,
         }
 
         # Build route list: (identifier, lat, lon, waypoint_type, country_code)
@@ -524,7 +559,8 @@ def main():
             # wp structure: [id, type, lat, lon, country, icao_id]
             waypoint_id = wp[5] if len(wp) > 5 and wp[5] else wp[0]
             fpl_type = waypoint_type_map.get(wp[1], WAYPOINT_TYPE_USER)
-            country = (wp[4] if len(wp) > 4 else 'US') if fpl_type == WAYPOINT_TYPE_AIRPORT else ''
+            # Use empty country code for all waypoints (Garmin proprietary encoding not documented)
+            country = ''
             route_data.append((waypoint_id, wp[2], wp[3], fpl_type, country))
 
         # Create route name from origin to destination
