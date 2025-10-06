@@ -4,7 +4,6 @@ import argparse
 import math
 import itertools
 import msgpack
-import platformdirs
 import urllib.parse
 import webbrowser
 import astar
@@ -14,8 +13,7 @@ from fpl import (
     WAYPOINT_TYPE_AIRPORT, WAYPOINT_TYPE_USER, WAYPOINT_TYPE_NDB,
     WAYPOINT_TYPE_VOR, WAYPOINT_TYPE_INT
 )
-
-_CACHE_PATH = platformdirs.user_cache_path("g3xfplan", "g3xfplan", ensure_exists=True)
+from nasr import NASR_DATABASE_PATH
 
 def haversine(lat1, lon1, lat2, lon2):
     """
@@ -126,8 +124,7 @@ class Router(astar.AStar):
         """
 
         # Deserialize database
-        database_path = _CACHE_PATH / 'nasr.msgpack'
-        with open(database_path, 'rb') as f:
+        with open(NASR_DATABASE_PATH, 'rb') as f:
             database = msgpack.unpackb(f.read(), strict_map_key=False)
             self.waypoints = database['waypoints']
             self.airways = database['airways']

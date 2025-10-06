@@ -58,6 +58,7 @@ import platformdirs
 _NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
 _DEFAULT_FILENAME = 'downloaded_file'
 _CACHE_PATH = platformdirs.user_cache_path("g3xfplan", "g3xfplan", ensure_exists=True)
+NASR_DATABASE_PATH = _CACHE_PATH / 'nasr.msgpack'
 
 def sanitize_filename(filename, max_length=255):
     """Sanitize a filename to prevent path traversal and other security issues."""
@@ -452,8 +453,7 @@ def main():
         'airways': airways,
         'connections': connections
     }
-    output_path = _CACHE_PATH / 'nasr.msgpack'
-    with open(output_path, 'wb') as f:
+    with open(NASR_DATABASE_PATH, 'wb') as f:
         packed_data: bytes = msgpack.packb(database)  # type: ignore[assignment]
         f.write(packed_data)
 
