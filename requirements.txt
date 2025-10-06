@@ -2,3 +2,4 @@ beautifulsoup4
 astar
 rtree
 msgpack
+platformdirs

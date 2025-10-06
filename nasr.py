@@ -25,9 +25,11 @@ import urllib.request
 import urllib.parse
 import zipfile
 import bs4
+import platformdirs
 
 _NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
 _DEFAULT_FILENAME = 'downloaded_file'
+_CACHE_PATH = platformdirs.user_cache_path("g3xfplan", "g3xfplan", ensure_exists=True)
 
 def sanitize_filename(filename, max_length=255):
     """Sanitize a filename to prevent path traversal and other security issues."""
@@ -148,12 +150,13 @@ def download(url, filename=None):
         url_basename = os.path.basename(url)
         filename = sanitize_filename(url_basename) if url_basename else _DEFAULT_FILENAME
 
-    # Ensure we're writing to current directory only
+    # Ensure we're writing to cache directory
     filename = os.path.basename(filename)  # Extra safety measure
+    filepath = _CACHE_PATH / filename
 
     # Check if the file already exists on the filesystem and add the If-Modified-Since header to the request
-    if os.path.exists(filename):
-        last_modified_time = os.path.getmtime(filename)
+    if filepath.exists():
+        last_modified_time = filepath.stat().st_mtime
         last_modified_time_str = time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.gmtime(last_modified_time))
         request.add_header('If-Modified-Since', last_modified_time_str)
 
@@ -161,7 +164,7 @@ def download(url, filename=None):
     try:
         with urllib.request.urlopen(request) as response:
             if response.status == 200:
-                with open(filename, 'wb') as f:
+                with open(filepath, 'wb') as f:
                     f.write(response.read())
 
     except urllib.error.HTTPError as e:
@@ -169,7 +172,7 @@ def download(url, filename=None):
         if e.code != 304:
             raise
 
-    return filename
+    return str(filepath)
 
 class CsvZip():
     """

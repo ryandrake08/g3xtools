@@ -1,7 +1,10 @@
 env
+venv
+.venv
+__pycache__
+*.pyc
+*.pyo
+
 *.db
-*.zip
-*.pdf
 *.pstats
 *.msgpack
-__pycache__

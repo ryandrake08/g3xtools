@@ -43,7 +43,10 @@ import csv
 import io
 import itertools
 import msgpack
+import platformdirs
 import nasr
+
+_CACHE_PATH = platformdirs.user_cache_path("g3xfplan", "g3xfplan", ensure_exists=True)
 
 # Read CSV file
 def read_csv_file(csv_archive, file_name, columns, rowdata):
@@ -180,7 +183,8 @@ def main():
         'airways': airways,
         'connections': connections
     }
-    with open('nasr.msgpack', 'wb') as f:
+    output_path = _CACHE_PATH / 'nasr.msgpack'
+    with open(output_path, 'wb') as f:
         packed_data: bytes = msgpack.packb(database)  # type: ignore[assignment]
         f.write(packed_data)
 
