@@ -3,5 +3,5 @@ env
 *.zip
 *.pdf
 *.pstats
-*.pickle
+*.msgpack
 __pycache__

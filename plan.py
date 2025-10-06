@@ -3,7 +3,7 @@
 import argparse
 import math
 import itertools
-import pickle
+import msgpack
 import urllib.parse
 import webbrowser
 import astar
@@ -117,17 +117,12 @@ class Router(astar.AStar):
             max_leg_length (float): The maximum allowable length for any leg of the route.
         """
 
-        # Deserialize waypoints
-        with open('waypoints.pickle', 'rb') as f:
-            self.waypoints = pickle.load(f)
-
-        # Deserialize airways
-        with open('airways.pickle', 'rb') as f:
-            self.airways = pickle.load(f)
-
-        # Deserialize connections
-        with open('connections.pickle', 'rb') as f:
-            self.connections = pickle.load(f)
+        # Deserialize database
+        with open('nasr.msgpack', 'rb') as f:
+            database = msgpack.unpackb(f.read(), strict_map_key=False)
+            self.waypoints = database['waypoints']
+            self.airways = database['airways']
+            self.connections = database['connections']
 
         # Store the route preferences
         self.waypoint_preferences = waypoint_preferences

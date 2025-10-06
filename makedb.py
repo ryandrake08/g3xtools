@@ -42,7 +42,7 @@ import collections
 import csv
 import io
 import itertools
-import pickle
+import msgpack
 import nasr
 
 # Read CSV file
@@ -174,17 +174,15 @@ def main():
             connections[i1].append((i2, airway_index))
             connections[i2].append((i1, airway_index))
 
-    # Serialize waypoints
-    with open('waypoints.pickle', 'wb') as f:
-        pickle.dump(waypoints, f)
-
-    # Serialize airway base
-    with open('airways.pickle', 'wb') as f:
-        pickle.dump(airways, f)
-
-    # Serialize connections
-    with open('connections.pickle', 'wb') as f:
-        pickle.dump(connections, f)
+    # Serialize all data into a single database file
+    database = {
+        'waypoints': waypoints,
+        'airways': airways,
+        'connections': connections
+    }
+    with open('nasr.msgpack', 'wb') as f:
+        packed_data: bytes = msgpack.packb(database)  # type: ignore[assignment]
+        f.write(packed_data)
 
 if __name__ == '__main__':
     main()
