@@ -101,10 +101,13 @@ def main() -> None:
             for row in reader:
                 if len(row) > max(oil_press_idx, ground_speed_idx):
                     data_rows += 1
-                    oil_press = int(row[oil_press_idx])
-                    ground_speed = float(row[ground_speed_idx])
-                    oil_press_max = max(oil_press_max, oil_press)
-                    ground_speed_max = max(ground_speed_max, ground_speed)
+                    try:
+                        oil_press = int(row[oil_press_idx])
+                        ground_speed = float(row[ground_speed_idx])
+                        oil_press_max = max(oil_press_max, oil_press)
+                        ground_speed_max = max(ground_speed_max, ground_speed)
+                    except (ValueError, IndexError) as e:
+                        raise ValueError(f"Invalid data in log file {log}: {e}")
 
         if data_rows == 0:
             # If file has zero data, recommend deleting, for now just skip

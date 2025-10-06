@@ -27,7 +27,6 @@ Example usage:
     python3 garmin_login.py --dump-auth-json auth.json
 """
 
-import argparse
 import http.server
 from http import HTTPStatus
 import json
@@ -76,9 +75,12 @@ class GarminHandler(http.server.BaseHTTPRequestHandler):
         if path == "/login":
             length = int(self.headers.get("Content-Length", "0"))
             content = self.rfile.read(length)
-            data = json.loads(content)
-            service_url = data['serviceUrl']
-            service_ticket = data['serviceTicket']
+            try:
+                data = json.loads(content)
+                service_url = data['serviceUrl']
+                service_ticket = data['serviceTicket']
+            except (json.JSONDecodeError, KeyError) as e:
+                raise ValueError(f"Invalid OAuth callback data: {e}")
             print(f"Service URL: {service_url}")
             print(f"Service ticket: {service_ticket}")
             print("Received ticket. Requesting access token")
@@ -86,19 +88,22 @@ class GarminHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(HTTPStatus.NO_CONTENT)
             self.end_headers()
 
-            resp = requests.post(
-                OAUTH_TOKEN_URL,
-                data={
-                    'grant_type': 'service_ticket',
-                    'client_id': SSO_CLIENT_ID,
-                    'service_url': service_url,
-                    'service_ticket': service_ticket,
-                },
-                timeout=5,
-            )
-            resp.raise_for_status()
-            print("Received access token")
-            self.handle_credentials(resp.json())
+            try:
+                resp = requests.post(
+                    OAUTH_TOKEN_URL,
+                    data={
+                        'grant_type': 'service_ticket',
+                        'client_id': SSO_CLIENT_ID,
+                        'service_url': service_url,
+                        'service_ticket': service_ticket,
+                    },
+                    timeout=5,
+                )
+                resp.raise_for_status()
+                print("Received access token")
+                self.handle_credentials(resp.json())
+            except requests.RequestException as e:
+                raise IOError(f"Failed to obtain access token: {e}")
 
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")

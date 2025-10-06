@@ -37,12 +37,15 @@ class G3XLogFileData:
         self.close()
 
     def open(self) -> 'G3XLogFileData':
-        self.file = open(self.filename)
+        self.file = open(self.filename, encoding='utf-8')
         self.csv_reader = csv.reader(self.file)
 
         # Parse airframe information from first line
         airframe_infos = next(self.csv_reader)
-        self.airframe_info: Dict[str, str] = {key: val.strip('\"') for key, val in dict(x.split('=') for x in airframe_infos[1:]).items()}
+        try:
+            self.airframe_info: Dict[str, str] = {key: val.strip('\"') for key, val in dict(x.split('=') for x in airframe_infos[1:]).items()}
+        except ValueError as e:
+            raise ValueError(f"Invalid airframe metadata format in {self.filename}: {e}")
 
         # Read headers and stable keys
         self.full_headers: List[str] = next(self.csv_reader)

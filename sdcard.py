@@ -50,7 +50,9 @@ def windows_vsn(drive_letter: str) -> int:
         # GetVolumeInformation returns (label, serial, max_filename_len, flags, filesystem)
         volume_info = win32api.GetVolumeInformation(drive_letter)
         return volume_info[1]  # serial number is at index 1
-    except Exception as e:
+    except ImportError:
+        raise ImportError("pywin32 package required for Windows volume serial number reading")
+    except OSError as e:
         raise IOError(f"Error accessing drive {drive_letter}: {e}")
 
 def get_platform_device_example() -> str:
@@ -109,7 +111,8 @@ def detect_sd_card() -> str:
                     'path': mountpoint,
                     'size_gb': size_gb
                 })
-        except:
+        except (OSError, PermissionError):
+            # Skip partitions we can't access
             continue
 
     # Selection logic
