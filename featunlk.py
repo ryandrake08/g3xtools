@@ -24,6 +24,7 @@ Upstream credit: https://github.com/dimaryaz/jdmtool/blob/main/src/jdmtool/featu
 
 import argparse
 import pathlib
+from typing import List
 from enum import Enum
 from io import BytesIO
 
@@ -130,7 +131,7 @@ FILENAME_TO_FEATURE: dict[str, Feature] = {
 FEAT_UNLK_POLYNOMIAL_1 = 0x076dc419
 FEAT_UNLK_POLYNOMIAL_2 = 0x77073096
 
-def _create_lookup_table(polynomial: int, length: int) -> list[int]:
+def _create_lookup_table(polynomial: int, length: int) -> List[int]:
     lookup_table: list[int] = []
     for index in range(length):
         value = index << 24
@@ -156,7 +157,7 @@ def feat_unlk_checksum(data: bytes, value: int = 0xFFFFFFFF) -> int:
         value = _feat_unlk_lookup_table[index] ^ (value >> 8)
     return value
 
-def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path, region_path: str, vol_id: int, security_id: int, system_id: int, check: bool=False):
+def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path, region_path: str, vol_id: int, security_id: int, system_id: int, check: bool=False) -> None:
     # Look up feature from region filename
     feature = FILENAME_TO_FEATURE.get(region_path)
     if feature is None:

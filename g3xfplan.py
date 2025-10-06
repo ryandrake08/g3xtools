@@ -8,6 +8,7 @@ import urllib.parse
 import webbrowser
 import astar
 import rtree
+from typing import Tuple
 from fpl import (
     create_flight_plan_from_route_list, write_fpl,
     WAYPOINT_TYPE_AIRPORT, WAYPOINT_TYPE_USER, WAYPOINT_TYPE_NDB,
@@ -15,7 +16,7 @@ from fpl import (
 )
 from nasr import NASR_DATABASE_PATH
 
-def haversine(lat1, lon1, lat2, lon2):
+def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
     Calculate the great-circle distance between two points on the Earth's surface using the Haversine formula.
     This formula assumes a spherical earth, which is accurate enough to calculate a-star neighbors and costs.
@@ -42,7 +43,7 @@ def haversine(lat1, lon1, lat2, lon2):
     r = 6371000 # Radius of Earth in meters
     return d * r
 
-def bounding_box(lat1, lon1, distance):
+def bounding_box(lat1: float, lon1: float, distance: float) -> Tuple[float, float, float, float]:
     """
     Calculate the bounding box coordinates (northeast and southwest corners)
     given a central point and a distance.
@@ -286,7 +287,7 @@ class Router(astar.AStar):
         cost = self.costs['PREFER'] * self.costs['PREFER']
         return distance * cost
 
-def main():
+def main() -> None:
     """
     Main function to generate a flight plan from origin to destination, via an optional list of waypoints.
     """

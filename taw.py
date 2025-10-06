@@ -22,6 +22,7 @@ Upstream credit: https://github.com/dimaryaz/jdmtool/blob/main/src/jdmtool/taw.p
 
 import argparse
 import pathlib
+from typing import List, Tuple
 
 TAW_SEPARATOR = b'\x00\x02\x00\x00\x00Dd\x00\x1b\x00\x00\x00A\xc8\x00'
 TAW_MAGIC = b'KpGrd'
@@ -74,7 +75,7 @@ TAW_REGION_PATHS = {
     0x4F: "air_sport.gpi",
 }
 
-def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bool = False, skip_unknown_regions: bool = False, verbose: bool = False):
+def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bool = False, skip_unknown_regions: bool = False, verbose: bool = False) -> List[Tuple[str, str]]:
     debug = print if verbose else lambda *_: None
 
     with open(input_path, 'rb') as fd:

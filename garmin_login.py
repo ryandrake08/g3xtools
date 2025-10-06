@@ -37,12 +37,13 @@ import socketserver
 import urllib.parse
 import webbrowser
 from pathlib import Path
+from typing import Dict
 
 SSO_CLIENT_ID = "FLY_GARMIN_DESKTOP"
 OAUTH_TOKEN_URL = "https://services.garmin.com/api/oauth/token"
 
 class GarminHandler(http.server.BaseHTTPRequestHandler):
-    def handle_credentials(self, auth: dict[str, str]):
+    def handle_credentials(self, auth: Dict[str, str]) -> None:
         ...
 
     def do_GET(self) -> None:
@@ -102,13 +103,13 @@ class GarminHandler(http.server.BaseHTTPRequestHandler):
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
-def flygarmin_login() -> dict[str, str]:
+def flygarmin_login() -> Dict[str, str]:
     """Perform OAuth login flow and return json containing credentials and other data."""
-    data: dict[str, str] | None = None
+    data: Dict[str, str] = {}
 
     # Overridden from GarminHandler to set our local variable
     class Handler(GarminHandler):
-        def handle_credentials(self, auth):
+        def handle_credentials(self, auth: Dict[str, str]) -> None:
             nonlocal data
             data = auth
             print(f"Done retrieving access token data")

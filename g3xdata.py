@@ -48,7 +48,7 @@ CACHE_PATH = platformdirs.user_cache_path("g3xavdb", "g3xavdb", ensure_exists=Tr
 session = requests.Session()
 session.headers['User-Agent'] = None  # type: ignore
 
-def cache_json_data(cache_filename: str, fetch_function, force: bool = False):
+def cache_json_data(cache_filename: str, fetch_function, force: bool = False) -> dict:
     """Helper function to cache JSON data with consistent pattern.
 
     Args:

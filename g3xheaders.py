@@ -24,32 +24,33 @@ import csv
 import glob
 import os
 import sys
+from typing import Any, Dict, List
 
 class G3XLogFileData:
-    def __init__(self, filename):
+    def __init__(self, filename: str) -> None:
         self.filename = filename
 
-    def __enter__(self):
+    def __enter__(self) -> 'G3XLogFileData':
         return self.open()
 
-    def __exit__(self, *_):
+    def __exit__(self, *_: Any) -> None:
         self.close()
 
-    def open(self):
+    def open(self) -> 'G3XLogFileData':
         self.file = open(self.filename)
         self.csv_reader = csv.reader(self.file)
 
         # Parse airframe information from first line
         airframe_infos = next(self.csv_reader)
-        self.airframe_info = {key: val.strip('\"') for key, val in dict(x.split('=') for x in airframe_infos[1:]).items()}
+        self.airframe_info: Dict[str, str] = {key: val.strip('\"') for key, val in dict(x.split('=') for x in airframe_infos[1:]).items()}
 
         # Read headers and stable keys
-        self.full_headers = next(self.csv_reader)
-        self.short_headers = next(self.csv_reader)
+        self.full_headers: List[str] = next(self.csv_reader)
+        self.short_headers: List[str] = next(self.csv_reader)
 
         return self
 
-    def close(self):
+    def close(self) -> None:
         self.file.close()
 
 def compare_headers(prev_file: G3XLogFileData, curr_file: G3XLogFileData) -> bool:

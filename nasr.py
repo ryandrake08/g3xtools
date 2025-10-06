@@ -54,13 +54,14 @@ import urllib.error
 import zipfile
 import bs4
 import platformdirs
+from typing import Dict, List, Optional
 
 _NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
 _DEFAULT_FILENAME = 'downloaded_file'
 _CACHE_PATH = platformdirs.user_cache_path("g3xfplan", "g3xfplan", ensure_exists=True)
 NASR_DATABASE_PATH = _CACHE_PATH / 'nasr.msgpack'
 
-def sanitize_filename(filename, max_length=255):
+def sanitize_filename(filename: str, max_length: int = 255) -> str:
     """Sanitize a filename to prevent path traversal and other security issues."""
     if not filename:
         raise ValueError("Filename cannot be empty")
@@ -92,7 +93,7 @@ def sanitize_filename(filename, max_length=255):
 
     return filename
 
-def _article():
+def _article() -> bs4.element.Tag:
     # Get the main NASR page and find the article element
     url = _NASR_URL
     with urllib.request.urlopen(url) as response:
@@ -103,7 +104,7 @@ def _article():
         raise ValueError("NASR page article content not found")
     return article
 
-def list_archives():
+def list_archives() -> Dict[str, str]:
     """
     Extracts and returns a dictionary of archive links from a web page.
     The function searches for an 'Archives' section in the HTML content of an article,
@@ -135,7 +136,7 @@ def list_archives():
 
     return dataurl
 
-def current_or_preview(which):
+def current_or_preview(which: str) -> Dict[str, str]:
     """
     Extracts the nasr zip link from the selected section.
 
@@ -182,7 +183,7 @@ def current_or_preview(which):
 
     return {effective_date: fullzip_link}
 
-def download(url, filename=None):
+def download(url: str, filename: Optional[str] = None) -> str:
     """
     Downloads a file from the given URL and saves it to the specified filename.
     If the filename is not provided, the file will be saved with the basename of the URL.
@@ -320,7 +321,7 @@ class CsvZip():
             raise RuntimeError("CSV archive not opened")
         return self.csv_archive.open(name)
 
-def read_csv_file(csv_archive, file_name, columns, rowdata):
+def read_csv_file(csv_archive: 'CsvZip', file_name: str, columns: List[str], rowdata: List[List]) -> None:
     """
     Reads a CSV file from a given archive and extracts specified columns into a list.
 
