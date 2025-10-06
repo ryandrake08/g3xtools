@@ -696,7 +696,8 @@ def _parse_flight_plan(root: ET.Element, validate: bool) -> FlightPlan:
     if created_str:
         created = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
         # Validate timezone is UTC
-        if created.tzinfo is None or created.utcoffset().total_seconds() != 0:
+        utc_offset = created.utcoffset()
+        if created.tzinfo is None or utc_offset is None or utc_offset.total_seconds() != 0:
             raise ValueError(
                 f"Timestamp must be in UTC timezone, got: {created_str}"
             )
@@ -978,7 +979,8 @@ def _create_flight_plan_elem(flight_plan: FlightPlan, validate: bool) -> ET.Elem
     if flight_plan.created is not None:
         # Validate timezone is UTC when writing
         if validate:
-            if flight_plan.created.tzinfo is None or flight_plan.created.utcoffset().total_seconds() != 0:
+            utc_offset = flight_plan.created.utcoffset()
+            if flight_plan.created.tzinfo is None or utc_offset is None or utc_offset.total_seconds() != 0:
                 raise ValueError(
                     f"Timestamp must be in UTC timezone, got offset: {flight_plan.created.utcoffset()}"
                 )

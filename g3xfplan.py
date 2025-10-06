@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
 import argparse
-import math
 import itertools
+import math
 import msgpack
+import sys
 import urllib.parse
 import webbrowser
 import astar
@@ -434,7 +435,16 @@ def main() -> None:
 
     # Find any waypoint by waypoint_id or icao_id
     def find_waypoint(waypoint_id):
-        i = next((index for index, waypoint in enumerate(r.waypoints) if waypoint[0] == waypoint_id or (len(waypoint) > 5 and waypoint[5] == waypoint_id)), None)
+        # First try to find non-airport waypoints (favor VOR, NDB, INT, etc.)
+        i = next((index for index, waypoint in enumerate(r.waypoints)
+                  if (waypoint[0] == waypoint_id or (len(waypoint) > 5 and waypoint[5] == waypoint_id))
+                  and waypoint[1] not in ('A', 'B', 'C', 'G', 'H', 'U')), None)
+
+        # If no non-airport waypoint found, search again including airports
+        if i is None:
+            i = next((index for index, waypoint in enumerate(r.waypoints)
+                      if waypoint[0] == waypoint_id or (len(waypoint) > 5 and waypoint[5] == waypoint_id)), None)
+
         if i is None:
             parser.error(f'Waypoint "{waypoint_id}" not found')
         return i
@@ -545,13 +555,24 @@ def main() -> None:
     if args.output_fpl:
         # Map NASR waypoint types to FPL waypoint types
         waypoint_type_map = {
-            'A': WAYPOINT_TYPE_AIRPORT, 'B': WAYPOINT_TYPE_AIRPORT,
-            'C': WAYPOINT_TYPE_AIRPORT, 'G': WAYPOINT_TYPE_AIRPORT,
-            'H': WAYPOINT_TYPE_AIRPORT, 'U': WAYPOINT_TYPE_AIRPORT,
-            'NDB': WAYPOINT_TYPE_NDB, 'NDB/DME': WAYPOINT_TYPE_NDB,
-            'VOR': WAYPOINT_TYPE_VOR, 'VORTAC': WAYPOINT_TYPE_VOR,
-            'VOR/DME': WAYPOINT_TYPE_VOR, 'DME': WAYPOINT_TYPE_INT,
-            'VFR': WAYPOINT_TYPE_INT, 'USER': WAYPOINT_TYPE_USER,
+            'A': WAYPOINT_TYPE_AIRPORT,
+            'B': WAYPOINT_TYPE_AIRPORT, # unconfirmed
+            'C': WAYPOINT_TYPE_AIRPORT,
+            'G': WAYPOINT_TYPE_AIRPORT,
+            'H': WAYPOINT_TYPE_AIRPORT,
+            'U': WAYPOINT_TYPE_AIRPORT,
+            'DME': WAYPOINT_TYPE_VOR,
+            'NDB': WAYPOINT_TYPE_NDB,
+            'NDB/DME': WAYPOINT_TYPE_NDB,
+            'VOR': WAYPOINT_TYPE_VOR,
+            'VORTAC': WAYPOINT_TYPE_VOR,
+            'VOR/DME': WAYPOINT_TYPE_VOR,
+            'VFR': WAYPOINT_TYPE_INT,
+            'CN': WAYPOINT_TYPE_INT, # unconfirmed
+            'MR': WAYPOINT_TYPE_INT,
+            'RP': WAYPOINT_TYPE_INT,
+            'WP': WAYPOINT_TYPE_INT,
+            'USER': WAYPOINT_TYPE_USER,
         }
 
         # Build route list: (identifier, lat, lon, waypoint_type, country_code)
