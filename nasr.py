@@ -23,6 +23,7 @@ import re
 import time
 import urllib.request
 import urllib.parse
+import urllib.error
 import zipfile
 import bs4
 import platformdirs
@@ -69,7 +70,10 @@ def _article():
     with urllib.request.urlopen(url) as response:
         html = response.read().decode('utf-8')
     soup = bs4.BeautifulSoup(html, 'html.parser')
-    return soup.find('article', id='content')
+    article = soup.find('article', id='content')
+    if article is None:
+        raise ValueError("NASR page article content not found")
+    return article
 
 def list_archives():
     """
@@ -87,11 +91,19 @@ def list_archives():
     dataurl = {}
 
     # Extract the fullzip link from the Archives section
-    archives_section = _article().find('h2', string='Archives').find_next('ul')
+    article = _article()
+    archives_h2 = article.find('h2', string='Archives')
+    if archives_h2 is None:
+        raise ValueError("Archives section not found")
+    archives_section = archives_h2.find_next('ul')
+    if archives_section is None:
+        raise ValueError("Archives list not found")
+
     for li in archives_section.find_all('li'):
         text = li.contents[0].strip().lstrip('Subscription effective ').rstrip(' -')
         link = li.find('a')
-        dataurl[text] = link['href']
+        if link:
+            dataurl[text] = link['href']
 
     return dataurl
 
@@ -108,8 +120,21 @@ def current_or_preview(which):
     """
 
     # Extract the fullzip link from the selected section
-    for li in _article().find('h2', string=which).find_next('ul').find_all('li'):
+    article = _article()
+    section_h2 = article.find('h2', string=which)
+    if section_h2 is None:
+        raise ValueError(f"{which} section not found")
+    section_ul = section_h2.find_next('ul')
+    if section_ul is None:
+        raise ValueError(f"{which} list not found")
+
+    effective_date = None
+    fullzip_link = None
+
+    for li in section_ul.find_all('li'):
         link = li.find('a')
+        if link is None:
+            continue
         effective_date = link.text.lstrip('Subscription effective ')
 
         # Follow the link to get the fullzip and aptzip URLs
@@ -118,7 +143,14 @@ def current_or_preview(which):
         subpage_html = subpage_response.read().decode('utf-8')
         subpage_soup = bs4.BeautifulSoup(subpage_html, 'html.parser')
         subpage_article = subpage_soup.find('article', id='content')
-        fullzip_link = subpage_article.find('a', string='Download')['href']
+        if subpage_article is None:
+            continue
+        download_link = subpage_article.find('a', string='Download')
+        if download_link:
+            fullzip_link = download_link['href']
+
+    if effective_date is None or fullzip_link is None:
+        raise ValueError(f"Could not find download link in {which} section")
 
     return {effective_date: fullzip_link}
 
@@ -231,9 +263,10 @@ class CsvZip():
         This method is called when the 'with' statement is used. It closes the
         csv_archive and archive resources.
         """
-
-        self.csv_archive.close()
-        self.archive.close()
+        if self.csv_archive is not None:
+            self.csv_archive.close()
+        if self.archive is not None:
+            self.archive.close()
 
     def namelist(self):
         """
@@ -241,6 +274,8 @@ class CsvZip():
         Returns:
             list: A list of names contained in the CSV archive.
         """
+        if self.csv_archive is None:
+            raise RuntimeError("CSV archive not opened")
         return self.csv_archive.namelist()
 
     def open(self, name):
@@ -253,4 +288,6 @@ class CsvZip():
         Returns:
             file object: The opened file object from the CSV archive.
         """
+        if self.csv_archive is None:
+            raise RuntimeError("CSV archive not opened")
         return self.csv_archive.open(name)
