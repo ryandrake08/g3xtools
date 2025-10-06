@@ -8,3 +8,6 @@ __pycache__
 sdcard
 cache
 re
+*.db
+*.pstats
+*.msgpack

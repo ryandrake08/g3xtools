@@ -1,6 +1,6 @@
 # G3X Tools
 
-A Python toolset for processing and analyzing Garmin G3X aircraft systems, including data logs, aviation checklists, and navigation database updates.
+A Python toolset for processing and analyzing Garmin G3X aircraft systems, including data logs, aviation checklists, navigation database updates, and flight planning.
 
 **NOTE:**
 Navigation database functionality heavily based on the work done in https://github.com/dimaryaz/jdmtool
@@ -293,6 +293,112 @@ python3 sdcard.py D:
 # Output format: 8-character uppercase hexadecimal (e.g., A1B2C3D4)
 ```
 
+#### nasr.py - NASR Database Generator
+Downloads and processes FAA NASR (National Airspace System Resources) data to create optimized databases for flight planning.
+
+**Features:**
+- Downloads current or preview NASR data from FAA
+- Creates MessagePack database (`nasr.msgpack`) optimized for A* pathfinding
+- Processes waypoints, airways, and navigation data
+- Supports specific archive selection by name
+
+**Usage:**
+```bash
+# Download current NASR data and generate database
+python3 nasr.py --current
+
+# Download preview NASR data
+python3 nasr.py --preview
+
+# List available NASR archives
+python3 nasr.py --list
+
+# Download specific archive by name
+python3 nasr.py --name <name>
+
+# Process existing NASR zip file
+python3 nasr.py --filename <file.zip>
+```
+
+**Database Location:**
+- **macOS**: `~/Library/Caches/g3xfplan/nasr.msgpack`
+- **Linux**: `~/.cache/g3xfplan/nasr.msgpack`
+- **Windows**: `%LOCALAPPDATA%\g3xfplan\Cache\nasr.msgpack`
+
+#### nasr2sqlite.py - SQLite Database Tool (Optional)
+Creates a SQLite database from NASR data for visualization and GIS tools.
+
+**Features:**
+- Converts NASR data to SQLite format
+- Supports spatialite geometry extensions when installed
+- Useful for data exploration and visualization
+- Not required for flight planning
+
+**Usage:**
+```bash
+# Create SQLite database from current NASR data
+python3 nasr2sqlite.py --current [--filename <filename>] [--db <filename>]
+
+# Create from preview data
+python3 nasr2sqlite.py --preview [--filename <filename>] [--db <filename>]
+
+# Create from specific archive
+python3 nasr2sqlite.py --name <name> [--filename <filename>] [--db <filename>]
+
+# List available archives
+python3 nasr2sqlite.py --list
+
+# Process existing NASR file
+python3 nasr2sqlite.py --filename <filename> [--db <filename>]
+```
+
+#### plan.py - Flight Route Planner
+Generates flight plans using A* pathfinding with configurable routing preferences.
+
+**Features:**
+- VFR and IFR flight planning
+- Airway routing support (Victor, RNAV, Jet, Color, Atlantic, etc.)
+- Configurable waypoint preferences (airports, VOR, NDB, VFR waypoints, etc.)
+- Shortest-path direct routing
+- Multi-airport routing with waypoint sequencing
+- SkyVector integration for route visualization
+- Condensed airway output (entry/exit waypoints only)
+
+**Usage:**
+```bash
+# Generate VFR plan with default 80NM leg length
+python3 plan.py KHAF KUAO
+
+# Direct routing with multiple via points (shortest path)
+python3 plan.py --direct KLVK KAPC --via KVCB --via KHAF --via KCCR
+
+# IFR routing with airways
+python3 plan.py --airway KMOD KPSP
+
+# Custom max leg length
+python3 plan.py KSFO KLAX --max-leg-length 60
+
+# Output to SkyVector
+python3 plan.py KSFO KLAX --output-skyvector
+
+# Condensed airway output (entry/exit only)
+python3 plan.py --airway KMOD KPSP --output-minimal-airway
+```
+
+**Routing Preferences:**
+- **Waypoint Types**: Configure handling for airports, balloonports, seaplane bases, gliderports, heliports, ultralight fields, VFR waypoints, DME, NDB, VOR, VORTAC, VOR/DME
+- **Airway Types**: Configure handling for Victor, RNAV (T/Q), Jet, Color, Atlantic, Bahama, Pacific, Puerto Rico airways
+- **Preference Levels**: PREFER, INCLUDE (default), AVOID, REJECT
+
+Examples:
+```bash
+# Prefer VOR waypoints, reject heliports
+python3 plan.py KSFO KLAX --route-vor PREFER --route-heliport REJECT
+
+# Airway routing with preferences
+python3 plan.py --airway KMOD KPSP --route-airway-victor PREFER --route-airway-jet REJECT
+```
+
 ## Installation
 
 The virtual environment is not included in the repository. You must create it yourself:
@@ -334,10 +440,14 @@ pip install psutil
   - PyYAML (for g3xchecklist.py)
   - requests (for g3xdata.py)
   - platformdirs (for cross-platform cache directories)
+  - beautifulsoup4 (for nasr.py web scraping)
+  - astar (for plan.py pathfinding)
+  - rtree (for plan.py spatial indexing)
+  - msgpack (for nasr.py database serialization)
 - **Optional:**
   - **psutil** - Enables automatic SD card detection in g3xdata.py. Without psutil, you must manually specify the output path using `-o` or `G3X_SDCARD_PATH` environment variable.
   - **pywin32** - Required for volume serial number reading on Windows systems
-- Standard library modules: csv, struct, zlib, argparse, pathlib, datetime, json
+- Standard library modules: csv, struct, zlib, argparse, pathlib, datetime, json, xml, sqlite3
 
 ### Using Installed Commands
 
@@ -854,6 +964,7 @@ python3 g3xheaders.py /path/to/logs
 ```
 g3xtools/
 ├── README.md                 # This file
+├── pyproject.toml            # Project metadata and dependencies
 ├── g3xlog.py                 # Flight data log processor
 ├── g3xheaders.py             # Log structure analyzer
 ├── g3xchecklist.py           # Checklist converter
@@ -863,7 +974,11 @@ g3xtools/
 ├── garmin_login.py           # OAuth authentication module
 ├── garmin_api.py             # REST API client module
 ├── taw.py                    # TAW archive extractor
-└── sdcard.py                 # SD card detection and volume serial number reader
+├── sdcard.py                 # SD card detection and volume serial number reader
+├── nasr.py                   # NASR database generator
+├── nasr2sqlite.py            # SQLite database converter (optional)
+├── nasr_initialize.sql       # SQLite schema initialization
+└── plan.py                   # Flight route planner
 ```
 
 ## License
@@ -874,3 +989,72 @@ See LICENSE file.
 
 This software is unofficial and not affiliated with Garmin. Always verify function and content in actual devices before flight. Checklists created with these tools are not intended to replace official AFM procedures.
 Update cards created with these tools are unofficial, and to be used at the user's own risk.
+
+---
+
+## Appendix: Flight Planning Reference
+
+### Future Flight Planning Features
+
+- Distinguish between various (T, Q, TK) RNAV airways
+- DPs and STARs
+- Preferred Routes and Coded Departure Routes
+- Airspace-aware routing with airspace avoidance, including special use airspace
+- Terrain-aware routing with terrain avoidance
+- Obstacle-aware routing with obstacle avoidance
+- IFR altitude constraints: MEA, MOCA, and related restrictions
+
+### Waypoint Type Reference
+
+**Airport Types:**
+- **A**: Airport
+- **B**: Balloonport
+- **C**: Seaplane Base
+- **G**: Gliderport
+- **H**: Heliport
+- **U**: Ultralight
+
+**Navigation Fixes:**
+- **CN**: Computer Navigation Fix
+- **MR**: Military Reporting Point
+- **MW**: Military Waypoint
+- **NRS**: NRS Waypoint
+- **RADAR**: Radar
+- **RP**: Reporting Point
+- **VFR**: VFR Waypoint
+- **WP**: Waypoint
+
+**NAVAID Types:**
+- **CONSOLAN**: Low Frequency, Long-Distance NAVAID used principally for transoceanic navigation
+- **DME**: Distance Measuring Equipment only
+- **FAN MARKER**: EN ROUTE Marker Beacon for positive position identification along airways (includes low powered and Z MARKERS)
+- **MARINE NDB**: NON Directional Beacon used primarily for Marine (surface) navigation
+- **MARINE NDB/DME**: NON Directional Beacon with associated Distance Measuring Equipment for marine navigation
+- **NDB**: NON Directional Beacon
+- **NDB/DME**: Non Directional Beacon with associated Distance Measuring Equipment
+- **TACAN**: Tactical Air Navigation System providing Azimuth and Slant Range Distance
+- **UHF/NDB**: Ultra High Frequency/NON Directional Beacon
+- **VOR**: VHF OMNI-Directional Range providing Azimuth only
+- **VORTAC**: Combined VOR and TACAN providing VOR Azimuth, TACAN Azimuth and TACAN Distance (DME) at one site
+- **VOR/DME**: VHF OMNI-DIRECTIONAL Range with associated Distance Measuring equipment
+- **VOT**: FAA VOR Test Facility
+
+### Airway Reference
+
+**Airway Location Codes:**
+- **A**: Alaska
+- **C**: Contiguous U.S.
+- **H**: Hawaii
+
+**Airway Designation Codes:**
+- **A**: Amber colored airway
+- **AT**: Atlantic airway
+- **B**: Blue colored airway
+- **BF**: Bahama airway
+- **G**: Green colored airway
+- **J**: Jet airway
+- **PA**: Pacific airway
+- **PR**: Puerto Rico airway
+- **R**: Red colored airway
+- **RN**: RNAV airway (Tango and Quebec airways)
+- **V**: Victor airway
