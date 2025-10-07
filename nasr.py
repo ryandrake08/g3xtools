@@ -356,10 +356,11 @@ def main():
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Download NASR data and store it in data structures useful for flight planning.')
-    parser.add_argument('--current', action='store_true', help='Download the Current data.')
-    parser.add_argument('--preview', action='store_true', help='Download the Preview data.')
-    parser.add_argument('--name', help='Download archived data by name.')
-    parser.add_argument('--list', action='store_true', help='List of NASR data in the Archive section.')
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument('--current', action='store_true', help='Download the Current data.')
+    mode_group.add_argument('--preview', action='store_true', help='Download the Preview data.')
+    mode_group.add_argument('--name', help='Download archived data by name.')
+    mode_group.add_argument('--list', action='store_true', help='List of NASR data in the Archive section.')
     parser.add_argument('--filename', help='Specify the NASR data filename. Uses basename of URL if not provided.')
     args = parser.parse_args()
 

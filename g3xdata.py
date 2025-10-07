@@ -532,7 +532,19 @@ def main() -> None:
 
     # Determine VSN: command line > environment > read from device
     vsn_arg = args.vsn or os.getenv('G3X_SDCARD_SERIAL')
-    card_serial = int(vsn_arg, 16) if vsn_arg else read_vsn(sd_device_arg) if sd_device_arg else None
+    card_serial = None
+    if vsn_arg:
+        try:
+            card_serial = int(vsn_arg, 16)
+        except ValueError:
+            print(f"Error: Invalid volume serial number (must be hex): {vsn_arg}", file=sys.stderr)
+            sys.exit(1)
+    elif sd_device_arg:
+        try:
+            card_serial = read_vsn(sd_device_arg)
+        except (IOError, ValueError) as e:
+            print(f"Error reading volume serial number: {e}", file=sys.stderr)
+            sys.exit(1)
 
     # Get access token: command line > environment > auth cache > flygarmin login
     access_token = args.access_token or os.getenv('G3X_GARMIN_ACCESS_TOKEN') or get_access_token(args.force_login)

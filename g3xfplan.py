@@ -4,6 +4,7 @@ import argparse
 import itertools
 import math
 import msgpack
+import pathlib
 import sys
 import urllib.parse
 import webbrowser
@@ -352,6 +353,16 @@ def main() -> None:
     if not args.origin or not args.destination:
         parser.error('You must specify an origin and destination')
 
+    # Validate output FPL path
+    if args.output_fpl:
+        output_fpl_path = pathlib.Path(args.output_fpl).resolve()
+        if not output_fpl_path.parent.exists():
+            parser.error(f'Output directory does not exist: {output_fpl_path.parent}')
+
+    # Validate max leg length is positive
+    if args.max_leg_length <= 0:
+        parser.error(f'Maximum leg length must be positive, got: {args.max_leg_length}')
+
     # Create a mapping from waypoint type to route preference
     waypoint_preferences = {
         # Aerodromes can be configured individually
@@ -428,7 +439,20 @@ def main() -> None:
                 lon = float(parts[2].strip())
             except ValueError:
                 parser.error(f'Invalid coordinates in waypoint: {wp_spec}')
+
+            # Validate coordinate ranges
+            if not -90 <= lat <= 90:
+                parser.error(f'Latitude must be between -90 and 90, got {lat} in waypoint: {wp_spec}')
+            if not -180 <= lon <= 180:
+                parser.error(f'Longitude must be between -180 and 180, got {lon} in waypoint: {wp_spec}')
+
             user_waypoints.append((wp_id, lat, lon))
+
+    # Check that database file exists
+    if not pathlib.Path(NASR_DATABASE_PATH).exists():
+        print(f"Error: NASR database not found at {NASR_DATABASE_PATH}", file=sys.stderr)
+        print(f"Run 'python3 nasr.py --current' to download and build the database", file=sys.stderr)
+        sys.exit(1)
 
     # Initialize the router
     r = Router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length, user_waypoints)

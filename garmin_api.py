@@ -32,6 +32,7 @@ Example usage:
 
 import argparse
 import json
+import sys
 import requests
 
 API_PREFIX = "https://fly.garmin.com/fly-garmin/api"
@@ -110,20 +111,20 @@ def main() -> None:
         print(json.dumps(result, indent=2))
     elif args.test == 'series':
         if not args.series_id:
-            print("Error: --series-id required for series test")
-            return
+            print("Error: --series-id required for series test", file=sys.stderr)
+            sys.exit(1)
         result = flygarmin_list_series(args.series_id)
         print(json.dumps(result, indent=2))
     elif args.test == 'files':
         if not args.series_id or not args.issue_name:
-            print("Error: --series-id and --issue-name required for files test")
-            return
+            print("Error: --series-id and --issue-name required for files test", file=sys.stderr)
+            sys.exit(1)
         result = flygarmin_list_files(args.series_id, args.issue_name)
         print(json.dumps(result, indent=2))
     elif args.test == 'unlock':
         if not all([args.series_id, args.issue_name, args.device_id, args.card_serial]):
-            print("Error: --series-id, --issue-name, --device-id, and --card-serial required for unlock test")
-            return
+            print("Error: --series-id, --issue-name, --device-id, and --card-serial required for unlock test", file=sys.stderr)
+            sys.exit(1)
         result = flygarmin_unlock(access_token, args.series_id, args.issue_name, args.device_id, args.card_serial)
         print(json.dumps(result, indent=2))
     elif access_token:

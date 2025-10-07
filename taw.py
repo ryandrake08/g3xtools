@@ -22,6 +22,7 @@ Upstream credit: https://github.com/dimaryaz/jdmtool/blob/main/src/jdmtool/taw.p
 
 import argparse
 import pathlib
+import sys
 from typing import Generator, Optional, Tuple
 
 TAW_SEPARATOR = b'\x00\x02\x00\x00\x00Dd\x00\x1b\x00\x00\x00A\xc8\x00'
@@ -229,7 +230,25 @@ def main() -> None:
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose debug output')
     args = parser.parse_args()
 
-    list(extract_taw(args.input_file, args.output_path, info_only=args.info_only, verbose=args.verbose))
+    # Validate input file
+    if not args.input_file:
+        parser.error("input_file is required")
+
+    input_path = pathlib.Path(args.input_file).resolve()
+    if not input_path.exists():
+        print(f"Error: Input file does not exist: {input_path}", file=sys.stderr)
+        sys.exit(1)
+    if not input_path.is_file():
+        print(f"Error: Input path is not a file: {input_path}", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate output path
+    output_path = pathlib.Path(args.output_path).resolve()
+    if not output_path.parent.exists():
+        print(f"Error: Output directory parent does not exist: {output_path.parent}", file=sys.stderr)
+        sys.exit(1)
+
+    list(extract_taw(input_path, output_path, info_only=args.info_only, verbose=args.verbose))
 
 if __name__ == "__main__":
     main()
