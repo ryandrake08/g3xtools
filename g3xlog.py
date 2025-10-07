@@ -26,6 +26,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
+from typing import Tuple
 
 # Classification thresholds
 OIL_PRESSURE_THRESHOLD_PSI = 1  # Minimum oil pressure to indicate engine running
@@ -62,37 +63,48 @@ def main() -> None:
     # Process each log source
     for log in src_logs:
 
-        # Read first line in file (metadata)
-        with open(log, "r") as file:
-            first_line = file.readline()
-
-        # Comma separated
-        metadata_text = first_line.strip().split(",")
-
-        # Verify first item
-        if metadata_text[0] != "#airframe_info":
-            raise ValueError("Not a Garmin G3X log file")
-
-        # Convert the rest to dict
-        metadata = {}
-        for meta in metadata_text[1:]:
-            match = re.fullmatch(r'(.*)="(.*)"', meta)
-            if match:
-                key, value = match.groups()
-                metadata[key] = value
-
-        # Parse CSV with standard library using stable keys
+        # Single-pass file read: metadata, CSV structure, and data processing
         with open(log, 'r') as file:
-            # Skip metadata line (row 0)
-            file.readline()  # Skip row 0 (metadata)
-            file.readline()  # Skip row 1 (headers)
-            stable_keys = file.readline().strip().split(',')  # Row 2 (stable keys)
+            # Row 0: Read metadata line
+            first_line = file.readline()
+            metadata_text = first_line.strip().split(",")
 
-            # Find column indices using stable keys
-            oil_press_idx = stable_keys.index('E1 OilP')
-            ground_speed_idx = stable_keys.index('GndSpd')
+            # Verify first item
+            if not metadata_text or metadata_text[0] != "#airframe_info":
+                raise ValueError(f"Not a Garmin G3X log file: {log}")
 
-            # Read data rows and find max values
+            # Convert the rest to dict with validation
+            metadata = {}
+            required_keys = ['log_version', 'log_content_version', 'product', 'aircraft_ident', 'unit_software_part_number', 'software_version', 'system_id', 'unit', 'airframe_hours', 'engine_hours']
+            for meta in metadata_text[1:]:
+                match = re.fullmatch(r'(.*)="(.*)"', meta)
+                if match:
+                    groups: Tuple[str, str] = match.groups()  # type: ignore[assignment]
+                    key, value = groups
+                    metadata[key] = value
+
+            # Validate required metadata keys exist
+            missing_keys = [key for key in required_keys if key not in metadata]
+            if missing_keys:
+                raise ValueError(f"Missing required metadata in {log}: {', '.join(missing_keys)}")
+
+            # Row 1: Skip display headers
+            file.readline()
+
+            # Row 2: Read stable keys
+            stable_keys_line = file.readline().strip()
+            if not stable_keys_line:
+                raise ValueError(f"Missing stable keys row in {log}")
+            stable_keys = stable_keys_line.split(',')
+
+            # Validate required columns exist
+            try:
+                oil_press_idx = stable_keys.index('E1 OilP')
+                ground_speed_idx = stable_keys.index('GndSpd')
+            except ValueError as e:
+                raise ValueError(f"Missing required column in {log}: {e}")
+
+            # Read data rows and find max values using CSV reader
             reader = csv.reader(file)
             oil_press_max = 0
             ground_speed_max = 0
@@ -109,6 +121,7 @@ def main() -> None:
                     except (ValueError, IndexError) as e:
                         raise ValueError(f"Invalid data in log file {log}: {e}")
 
+        # Classify flight type based on collected data
         if data_rows == 0:
             # If file has zero data, recommend deleting, for now just skip
             flight_type = "empty"
