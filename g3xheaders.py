@@ -41,15 +41,22 @@ class G3XLogFileData:
         self.csv_reader = csv.reader(self.file)
 
         # Parse airframe information from first line
-        airframe_infos = next(self.csv_reader)
+        try:
+            airframe_infos = next(self.csv_reader)
+        except StopIteration:
+            raise ValueError(f"File {self.filename} is empty or has no CSV data")
+
         try:
             self.airframe_info: Dict[str, str] = {key: val.strip('\"') for key, val in dict(x.split('=') for x in airframe_infos[1:]).items()}
         except ValueError as e:
             raise ValueError(f"Invalid airframe metadata format in {self.filename}: {e}")
 
         # Read headers and stable keys
-        self.full_headers: List[str] = next(self.csv_reader)
-        self.short_headers: List[str] = next(self.csv_reader)
+        try:
+            self.full_headers: List[str] = next(self.csv_reader)
+            self.short_headers: List[str] = next(self.csv_reader)
+        except StopIteration:
+            raise ValueError(f"File {self.filename} missing required header rows (expected 3 rows: metadata, full headers, stable keys)")
 
         return self
 
@@ -76,16 +83,17 @@ def compare_headers(prev_file: G3XLogFileData, curr_file: G3XLogFileData) -> boo
         removed_headers = prev_header_set - curr_header_set
 
         # Find renamed headers (same stable key, different header name)
+        # Build reverse lookup: stable_key -> header for removed headers (O(n) instead of O(n²))
+        removed_stable_key_to_header = {prev_stable_keys.get(h): h for h in removed_headers if prev_stable_keys.get(h)}
+
         renamed_headers = []
         for new_header in list(new_headers):
             stable_key = curr_stable_keys.get(new_header)
-            if stable_key:
-                # Find old header with same stable key
-                old_header = next((h for h in removed_headers if prev_stable_keys.get(h) == stable_key), None)
-                if old_header:
-                    renamed_headers.append(f"{old_header} -> {new_header} ({stable_key})")
-                    new_headers.discard(new_header)
-                    removed_headers.discard(old_header)
+            if stable_key and stable_key in removed_stable_key_to_header:
+                old_header = removed_stable_key_to_header[stable_key]
+                renamed_headers.append(f"{old_header} -> {new_header} ({stable_key})")
+                new_headers.discard(new_header)
+                removed_headers.discard(old_header)
 
         # Only report changes if there are actual structural changes
         if new_headers or removed_headers or renamed_headers:
@@ -97,7 +105,7 @@ def compare_headers(prev_file: G3XLogFileData, curr_file: G3XLogFileData) -> boo
             if renamed_headers:
                 print(f"  Renamed: {', '.join(renamed_headers)}")
             if removed_headers:
-                removed_with_keys = [f"{h} ({prev_stable_keys.get(h, 'no key') if prev_stable_keys else 'no key'})" for h in removed_headers]
+                removed_with_keys = [f"{h} ({prev_stable_keys.get(h, 'no key')})" for h in removed_headers]
                 print(f"  Removed: {', '.join(removed_with_keys)}")
             return True
     return False
@@ -125,6 +133,15 @@ def main() -> None:
 
     # Search recursively for G3X log files (log_*.csv)
     src_logs = sorted(log_path.glob("**/log_*.csv"), key=lambda p: p.name)
+
+    # Check if any log files were found
+    if not src_logs:
+        print(f"No G3X log files (log_*.csv) found in {log_path}", file=sys.stderr)
+        sys.exit(1)
+
+    if len(src_logs) < 2:
+        print(f"Found only {len(src_logs)} log file. Need at least 2 files to compare.", file=sys.stderr)
+        sys.exit(1)
 
     # Process files and compare headers
     for prev_filename, curr_filename in zip(src_logs, src_logs[1:]):
