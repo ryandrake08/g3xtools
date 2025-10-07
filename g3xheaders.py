@@ -113,7 +113,15 @@ def main() -> None:
         print("Error: Logs path must be provided via G3X_LOG_PATH environment variable or command line argument", file=sys.stderr)
         sys.exit(1)
 
-    log_path = Path(log_path_str)
+    log_path = Path(log_path_str).resolve()
+
+    # Validate search path exists and is a directory
+    if not log_path.exists():
+        print(f"Error: Search path does not exist: {log_path}", file=sys.stderr)
+        sys.exit(1)
+    if not log_path.is_dir():
+        print(f"Error: Search path is not a directory: {log_path}", file=sys.stderr)
+        sys.exit(1)
 
     # Search recursively for G3X log files (log_*.csv)
     src_logs = sorted(log_path.glob("**/log_*.csv"), key=lambda p: p.name)

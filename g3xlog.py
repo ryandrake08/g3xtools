@@ -46,14 +46,22 @@ def main() -> None:
         print("Error: Search path must be provided via G3X_SEARCH_PATH environment variable or command line argument", file=sys.stderr)
         sys.exit(1)
 
-    mount_root = Path(mount_root_str)
+    mount_root = Path(mount_root_str).resolve()
+
+    # Validate search path exists and is a directory
+    if not mount_root.exists():
+        print(f"Error: Search path does not exist: {mount_root}", file=sys.stderr)
+        sys.exit(1)
+    if not mount_root.is_dir():
+        print(f"Error: Search path is not a directory: {mount_root}", file=sys.stderr)
+        sys.exit(1)
 
     # Search recursively for G3X log files (log_*.csv)
     src_logs = sorted(mount_root.glob("**/log_*.csv"))
 
     # Determine output path: command line > environment. If not specified, no files are output
     log_path_str = args.output or os.getenv('G3X_LOG_PATH')
-    log_path = Path(log_path_str) if log_path_str else None
+    log_path = Path(log_path_str).resolve() if log_path_str else None
 
     # Create destination subfolders
     if log_path:

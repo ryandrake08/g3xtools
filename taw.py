@@ -192,9 +192,17 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
                     debug()
                     print(f"{data_size:>10} {output_file}")
                 else:
-                    assert fd.tell() == data_start
+                    if fd.tell() != data_start:
+                        raise ValueError(f"File position mismatch: expected {data_start}, got {fd.tell()}")
                     block_size = 0x1000
-                    output_path = dest_path / output_file
+                    output_path = (dest_path / output_file).resolve()
+
+                    # Ensure resolved path is still within dest_path
+                    try:
+                        output_path.relative_to(dest_path.resolve())
+                    except ValueError:
+                        raise ValueError(f"Output path resolves outside destination directory: {output_file}")
+
                     output_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(output_path, 'wb') as fd_out:
                         for offset in range(0, data_size, block_size):

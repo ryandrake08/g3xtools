@@ -332,12 +332,26 @@ def get_cached_file_path_for_url(url: str) -> pathlib.Path:
     Returns:
         Path object pointing to the cached file location
         Directory structure: CACHE_PATH/hostname/url_path
+
+    Raises:
+        ValueError: If URL contains path traversal attempts
     """
     # Parse URL to create destination path from hostname + path
     parsed_url = urllib.parse.urlparse(url)
     hostname_path = pathlib.PurePosixPath(parsed_url.hostname or "avdb.garmin.com")
     url_path = pathlib.PurePosixPath(parsed_url.path.lstrip('/'))  # Remove leading slash
-    dest_path = CACHE_PATH / hostname_path / url_path
+
+    # Validate path doesn't contain traversal attempts
+    if '..' in url_path.parts:
+        raise ValueError(f"URL path contains directory traversal: {url}")
+
+    dest_path = (CACHE_PATH / hostname_path / url_path).resolve()
+
+    # Ensure resolved path is still within CACHE_PATH
+    try:
+        dest_path.relative_to(CACHE_PATH.resolve())
+    except ValueError:
+        raise ValueError(f"URL resolves outside cache directory: {url}")
 
     # Check if file already exists
     if dest_path.exists():
@@ -391,9 +405,25 @@ def copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) -
 
     Returns:
         Path to the copied file
+
+    Raises:
+        ValueError: If destination path contains directory traversal
     """
     cached_path = get_cached_file_path_for_url(file_info['url'])
-    output_file_path = output_path / pathlib.PurePosixPath(file_info['destination'])
+    destination = pathlib.PurePosixPath(file_info['destination'])
+
+    # Validate destination doesn't contain traversal attempts
+    if '..' in destination.parts:
+        raise ValueError(f"Destination path contains directory traversal: {file_info['destination']}")
+
+    output_file_path = (output_path / destination).resolve()
+
+    # Ensure resolved path is still within output_path
+    try:
+        output_file_path.relative_to(output_path.resolve())
+    except ValueError:
+        raise ValueError(f"Destination resolves outside output directory: {file_info['destination']}")
+
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Only if destination is missing or has different size size

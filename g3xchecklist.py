@@ -19,6 +19,7 @@ full compatibility with Garmin G3X displays.
 """
 
 import argparse
+import pathlib
 import struct
 import sys
 import zlib
@@ -109,7 +110,7 @@ def calculate_crc32(data: bytes, crc: int = 0) -> int:
     """Calculate CRC32 checksum for ACE file validation."""
     return zlib.crc32(data, crc) & 0xffffffff
 
-def read_ace_binary(file_path: str) -> AceFile:
+def read_ace_binary(file_path: pathlib.Path) -> AceFile:
     """Read and parse an ACE binary file."""
     with open(file_path, 'rb') as f:
         data = f.read()
@@ -237,7 +238,7 @@ def read_ace_binary(file_path: str) -> AceFile:
 
     return ace_file
 
-def write_ace_binary(ace_file: AceFile, file_path: str) -> None:
+def write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
     """Write an AceFile to binary ACE format."""
     # Build header
     header = bytearray(ACE_HEADER_SIGNATURE)
@@ -399,7 +400,7 @@ def yaml_dict_to_ace(yaml_dict: dict) -> AceFile:
 
     return ace_file
 
-def write_yaml_file(ace_file: AceFile, file_path: str) -> None:
+def write_yaml_file(ace_file: AceFile, file_path: pathlib.Path) -> None:
     """Write AceFile to YAML format."""
     yaml_dict = ace_to_yaml_dict(ace_file)
 
@@ -412,7 +413,7 @@ def write_yaml_file(ace_file: AceFile, file_path: str) -> None:
         yaml.dump(yaml_dict, f, default_flow_style=False, allow_unicode=True,
                  sort_keys=False, indent=2)
 
-def read_yaml_file(file_path: str) -> AceFile:
+def read_yaml_file(file_path: pathlib.Path) -> AceFile:
     """Read YAML file and convert to AceFile."""
     with open(file_path, 'r', encoding='utf-8') as f:
         yaml_dict = yaml.safe_load(f)
@@ -426,7 +427,7 @@ def read_yaml_file(file_path: str) -> AceFile:
 # CONVERSION FUNCTIONS
 # ================================================================
 
-def ace_to_yaml(ace_path: str, yaml_path: str) -> None:
+def ace_to_yaml(ace_path: pathlib.Path, yaml_path: pathlib.Path) -> None:
     """Convert ACE binary file to YAML format."""
     try:
         print(f"Reading ACE file: {ace_path}", file=sys.stderr)
@@ -446,7 +447,7 @@ def ace_to_yaml(ace_path: str, yaml_path: str) -> None:
         print(f"Error converting ACE to YAML: {e}", file=sys.stderr)
         sys.exit(1)
 
-def yaml_to_ace(yaml_path: str, ace_path: str) -> None:
+def yaml_to_ace(yaml_path: pathlib.Path, ace_path: pathlib.Path) -> None:
     """Convert YAML file to ACE binary format."""
     try:
         print(f"Reading YAML file: {yaml_path}", file=sys.stderr)
@@ -483,10 +484,25 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # Validate input file exists
+    input_file = pathlib.Path(args.extract or args.compile).resolve()
+    if not input_file.exists():
+        print(f"Error: Input file does not exist: {input_file}", file=sys.stderr)
+        sys.exit(1)
+    if not input_file.is_file():
+        print(f"Error: Input path is not a file: {input_file}", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate output path
+    output_file = pathlib.Path(args.output).resolve()
+    if not output_file.parent.exists():
+        print(f"Error: Output directory does not exist: {output_file.parent}", file=sys.stderr)
+        sys.exit(1)
+
     if args.extract:
-        ace_to_yaml(args.extract, args.output)
+        ace_to_yaml(input_file, output_file)
     elif args.compile:
-        yaml_to_ace(args.compile, args.output)
+        yaml_to_ace(input_file, output_file)
 
 if __name__ == "__main__":
     main()
