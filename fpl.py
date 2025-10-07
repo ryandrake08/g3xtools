@@ -178,7 +178,6 @@ COMMENT_PATTERN = re.compile(r'^([A-Z0-9 /]{1,25})?$')
 ROUTE_NAME_PATTERN = re.compile(r'^([A-Z0-9 /]{1,25})?$')
 
 # Security limits
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 COORDINATE_DECIMAL_PLACES = 6  # 6 decimal places
 
 
@@ -763,13 +762,6 @@ def read_fpl(file_path: Union[str, Path], validate: bool = True) -> FlightPlan:
         >>> print(f"Waypoints: {len(flight_plan.waypoint_table)}")
     """
     path = Path(file_path)
-
-    # Validate file size to prevent memory exhaustion
-    file_size = path.stat().st_size
-    if file_size > MAX_FILE_SIZE:
-        raise ValueError(
-            f"File too large: {file_size} bytes (max {MAX_FILE_SIZE} bytes)"
-        )
 
     # Configure XML parser to prevent XXE attacks
     parser = ET.XMLParser()
