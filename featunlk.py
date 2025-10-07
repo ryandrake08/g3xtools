@@ -71,10 +71,28 @@ FEAT_UNLK = 'feat_unlk.dat'
 GARMIN_SECURITY_ID = 1727
 
 def encode_volume_id(vol_id: int) -> int:
+    """
+    Encodes volume ID for feature unlock structure.
+
+    Args:
+        vol_id: 32-bit volume serial number
+
+    Returns:
+        Encoded volume ID
+    """
     return ~((vol_id << 31 & 0xFFFFFFFF) | (vol_id >> 1)) & 0xFFFFFFFF
 
 
 def truncate_system_id(system_id: int) -> int:
+    """
+    Truncates system ID to 32 bits with overflow handling.
+
+    Args:
+        system_id: 64-bit system serial number
+
+    Returns:
+        Truncated 32-bit system ID
+    """
     return (system_id & 0xFFFFFFFF) + (system_id >> 32)
 
 CONTENT1_LEN = 0x55   # 85
@@ -152,12 +170,40 @@ _feat_unlk_lookup_table = [
 ]
 
 def feat_unlk_checksum(data: bytes, value: int = 0xFFFFFFFF) -> int:
+    """
+    Computes Garmin feature unlock checksum.
+
+    Args:
+        data: Bytes to checksum
+        value: Initial checksum value
+
+    Returns:
+        32-bit checksum value
+    """
     for b in data:
         index = b ^ (value & 0xFF)
         value = _feat_unlk_lookup_table[index] ^ (value >> 8)
     return value
 
 def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path, region_path: str, vol_id: int, security_id: int, system_id: int, check: bool=False) -> None:
+    # Validate paths
+    if not dest_dir.exists():
+        raise ValueError(f"Destination directory does not exist: {dest_dir}")
+    if not dest_dir.is_dir():
+        raise ValueError(f"Destination path is not a directory: {dest_dir}")
+    if not output_file_path.exists():
+        raise ValueError(f"Output file does not exist: {output_file_path}")
+    if not output_file_path.is_file():
+        raise ValueError(f"Output path is not a file: {output_file_path}")
+
+    # Validate integer ranges
+    if not (0 <= vol_id <= 0xFFFFFFFF):
+        raise ValueError(f"Volume ID must be a 32-bit unsigned integer: {vol_id:#x}")
+    if not (0 <= system_id <= 0xFFFFFFFFFFFFFFFF):
+        raise ValueError(f"System ID must be a 64-bit unsigned integer: {system_id:#x}")
+    if security_id != GARMIN_SECURITY_ID:
+        raise ValueError(f"Security ID must be {GARMIN_SECURITY_ID}, got: {security_id}")
+
     # Look up feature from region filename
     feature = FILENAME_TO_FEATURE.get(region_path)
     if feature is None:
@@ -199,7 +245,8 @@ def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path
 
     preview_len = NAVIGATION_PREVIEW_END - NAVIGATION_PREVIEW_START
     if feature == Feature.NAVIGATION:
-        assert preview is not None and len(preview) == preview_len, preview
+        if preview is None or len(preview) != preview_len:
+            raise ValueError(f"Invalid preview data: expected {preview_len} bytes, got {len(preview) if preview else 0}")
         content1.write(preview)
     else:
         content1.write(b'\x00' * preview_len)
@@ -208,7 +255,8 @@ def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path
 
     chk1 = feat_unlk_checksum(bytes(content1.getbuffer()))
     content1.write(chk1.to_bytes(4, 'little'))
-    assert len(content1.getbuffer()) == CONTENT1_LEN, len(content1.getbuffer())
+    if len(content1.getbuffer()) != CONTENT1_LEN:
+        raise ValueError(f"Invalid content1 length: expected {CONTENT1_LEN} bytes, got {len(content1.getbuffer())}")
 
     content2 = BytesIO()
 
@@ -218,17 +266,16 @@ def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path
 
     chk2 = feat_unlk_checksum(bytes(content2.getbuffer()))
     content2.write(chk2.to_bytes(4, 'little'))
-    assert len(content2.getbuffer()) == CONTENT2_LEN, len(content2.getbuffer())
+    if len(content2.getbuffer()) != CONTENT2_LEN:
+        raise ValueError(f"Invalid content2 length: expected {CONTENT2_LEN} bytes, got {len(content2.getbuffer())}")
 
     chk3 = feat_unlk_checksum(content1.getvalue() + content2.getvalue())
 
     feat_unlk = dest_dir / FEAT_UNLK
 
-    # JDM makes the file read-only, so make it writable again (if it exists)
-    try:
+    # Make writable before opening (if file exists)
+    if feat_unlk.exists():
         feat_unlk.chmod(0o644)
-    except OSError:
-        pass
 
     # Open the file in read+write mode - but make sure it exists first.
     # Why is there no mode that accomplishes both of these in one call?
@@ -240,19 +287,16 @@ def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path
         out.write(content2.getbuffer())
         out.write(chk3.to_bytes(4, 'little'))
 
-    # Make it read-only just to be consistent with JDM.
-    try:
-        feat_unlk.chmod(0o444)
-    except OSError:
-        pass
+    # Make read-only to be consistent with JDM
+    feat_unlk.chmod(0o444)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Update feat_unlk.dat to enable a feature")
     parser.add_argument("-o", "--output", dest="dest_dir", type=pathlib.Path, required=True, help="Destination directory")
     parser.add_argument("-f", "--file", dest="data_file_path", type=pathlib.Path, required=True, help="Data file path")
     parser.add_argument("-r", "--region", dest="region_path", required=True, help="TAW region name")
-    parser.add_argument("-N", "--vsn", dest="vol_id", type=int, required=True, help="SD card volume serial number")
-    parser.add_argument("-S", "--system-serial", dest="system_id", type=int, required=True, help="System serial number")
+    parser.add_argument("-N", "--vsn", dest="vol_id", type=lambda x: int(x, 16), required=True, help="SD card volume serial number (hex)")
+    parser.add_argument("-S", "--system-serial", dest="system_id", type=lambda x: int(x, 16), required=True, help="System serial number (hex)")
     parser.add_argument("-c", "--check-crc", action="store_true", help="Perform CRC check during processing (slow)")
 
     args = parser.parse_args()
