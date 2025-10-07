@@ -65,7 +65,14 @@ ACE_TO_JUSTIFICATION = {v: k for k, v in JUSTIFICATION_TO_ACE.items()}
 
 @dataclass
 class ChecklistItem:
-    """Represents a single checklist item."""
+    """Represents a single checklist item.
+
+    Attributes:
+        type: Item type (challenge_response, plain_text, note, title, warning, caution, blank_line)
+        text: Main text content of the item
+        response: Response text (only for challenge_response type)
+        justification: Text alignment (left, center, indent1, indent2, indent3)
+    """
     type: str
     text: str = ""
     response: str = ""
@@ -73,19 +80,42 @@ class ChecklistItem:
 
 @dataclass
 class Checklist:
-    """Represents a checklist containing multiple items."""
+    """Represents a checklist containing multiple items.
+
+    Attributes:
+        name: Name of the checklist
+        items: List of checklist items
+    """
     name: str
     items: List[ChecklistItem] = field(default_factory=list)
 
 @dataclass
 class Group:
-    """Represents a group containing multiple checklists."""
+    """Represents a group containing multiple checklists.
+
+    Attributes:
+        name: Name of the group
+        checklists: List of checklists in this group
+    """
     name: str
     checklists: List[Checklist] = field(default_factory=list)
 
 @dataclass
 class AceFile:
-    """Represents the complete ACE file structure."""
+    """Represents the complete ACE file structure.
+
+    Attributes:
+        name: Checklist name
+        aircraft_make_model: Aircraft make and model information
+        aircraft_information: Additional aircraft information
+        manufacturer_identification: Manufacturer identification string
+        copyright_information: Copyright notice
+        file_format_rev: ACE file format revision number
+        unknown_field: Unknown field from ACE header (always 1)
+        default_group: Default group index
+        default_checklist: Default checklist index
+        groups: List of checklist groups
+    """
     # Metadata
     name: str = ""
     aircraft_make_model: str = ""
