@@ -14,6 +14,8 @@ import shutil
 # FAT32 filesystem constants
 SECTOR_SIZE = 512
 FAT32_VSN_OFFSET = 67  # FAT32 volume serial number offset
+FAT32_SIGNATURE_OFFSET = 82  # "FAT32   " string location
+FAT32_SIGNATURE = b'FAT32   '  # Expected filesystem type string
 
 # SD card detection thresholds (per Garmin specifications)
 SD_CARD_MIN_SIZE_GB = 7.5   # Minimum size to consider as SD card
@@ -26,12 +28,25 @@ def unix_vsn(device_path: str) -> int:
             buffer = fp.read(SECTOR_SIZE)
 
             if len(buffer) != SECTOR_SIZE:
-                raise ValueError(f"Could only read {len(buffer)} bytes, expected {SECTOR_SIZE}")
+                raise ValueError(f"Short read from device: read {len(buffer)} bytes, expected {SECTOR_SIZE}. Device may not be a valid block device or may be corrupted.")
+
+            # Validate FAT32 filesystem signature
+            signature = buffer[FAT32_SIGNATURE_OFFSET:FAT32_SIGNATURE_OFFSET + len(FAT32_SIGNATURE)]
+            if signature != FAT32_SIGNATURE:
+                raise ValueError(f"Device {device_path} does not appear to be FAT32. Found signature: {signature!r}, expected: {FAT32_SIGNATURE!r}")
 
             # Extract 4 bytes at FAT32_VSN_OFFSET and convert to integer (little-endian order)
             vsn_bytes = buffer[FAT32_VSN_OFFSET:FAT32_VSN_OFFSET + 4]
-            return int.from_bytes(vsn_bytes, byteorder='little')
+            vsn = int.from_bytes(vsn_bytes, byteorder='little')
 
+            # Validate VSN is in valid 32-bit unsigned range
+            if not 0 <= vsn <= 0xFFFFFFFF:
+                raise ValueError(f"Volume serial number out of range: {vsn:#x}")
+
+            return vsn
+
+    except PermissionError:
+        raise IOError(f"Permission denied accessing {device_path}. Try running with sudo/administrator privileges.")
     except IOError as e:
         raise IOError(f"Error opening device {device_path}: {e}")
 
@@ -49,7 +64,13 @@ def windows_vsn(drive_letter: str) -> int:
     try:
         # GetVolumeInformation returns (label, serial, max_filename_len, flags, filesystem)
         volume_info = win32api.GetVolumeInformation(drive_letter)
-        return volume_info[1]  # serial number is at index 1
+        vsn = volume_info[1]  # serial number is at index 1
+
+        # Validate VSN is in valid 32-bit unsigned range
+        if not 0 <= vsn <= 0xFFFFFFFF:
+            raise ValueError(f"Volume serial number out of range: {vsn:#x}")
+
+        return vsn
     except ImportError:
         raise ImportError("pywin32 package required for Windows volume serial number reading")
     except OSError as e:
