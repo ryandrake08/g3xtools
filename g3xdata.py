@@ -44,7 +44,7 @@ from featunlk import update_feature_unlock
 from taw import extract_taw
 from sdcard import read_vsn, detect_sd_card, get_platform_device_example
 
-CACHE_PATH = platformdirs.user_cache_path("g3xavdb", "g3xavdb", ensure_exists=True)
+CACHE_PATH = platformdirs.user_cache_path("g3xtools", "g3xtools", ensure_exists=True)
 
 session = requests.Session()
 session.headers['User-Agent'] = None  # type: ignore

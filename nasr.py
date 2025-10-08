@@ -58,7 +58,7 @@ from typing import Dict, List, Optional
 
 _NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
 _DEFAULT_FILENAME = 'downloaded_file'
-_CACHE_PATH = platformdirs.user_cache_path("g3xfplan", "g3xfplan", ensure_exists=True)
+_CACHE_PATH = platformdirs.user_cache_path("g3xtools", "g3xtools", ensure_exists=True)
 NASR_DATABASE_PATH = _CACHE_PATH / 'nasr.msgpack'
 
 def sanitize_filename(filename: str, max_length: int = 255) -> str:

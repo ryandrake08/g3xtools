@@ -1043,6 +1043,14 @@ Update cards created with these tools are unofficial, and to be used at the user
 
 ## Appendix: Future Plans
 
+### Project-wide TODOs
+
+1. Test suite (pytest)
+2. Progress indicators (tqdm)
+3. Concurrent downloads
+4. Retry logic (urllib3.Retry)
+5. Logging framework, rather than passing "verbose" around to functions
+
 ### Future Flight Planning Features
 
 - Distinguish between various (T, Q, TK) RNAV airways
@@ -1052,3 +1060,7 @@ Update cards created with these tools are unofficial, and to be used at the user
 - Terrain-aware routing with terrain avoidance
 - Obstacle-aware routing with obstacle avoidance
 - IFR altitude constraints: MEA, MOCA, and related restrictions
+- Figure out FPL file format: Country Codes for non-user waypoints, written by G3X are unknown/proprietary (US: "K2", Canada: "CY")
+- G3X coordinates for airports, navaids and waypoints are slightly off from NASR and have precision differences (<100m)
+- FPL export: Should we add the ability to set flight plan index?
+- FPL export: User waypoint comments?
