@@ -140,7 +140,7 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
 
             avionics=parts[0].decode()
             coverage=parts[1].decode()
-            type=parts[2].decode()
+            taw_type=parts[2].decode()
 
             if info_only:
                 debug()
@@ -150,7 +150,7 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
                 print(f"Cycle: {cycle}")
                 print(f"Avionics: {avionics!r}")
                 print(f"Coverage: {coverage!r}")
-                print(f"Type: {type.upper()!r}")
+                print(f"Type: {taw_type.upper()!r}")
                 print()
         except ValueError as ex:
             print(ex)
@@ -248,7 +248,9 @@ def main() -> None:
         print(f"Error: Output directory parent does not exist: {output_path.parent}", file=sys.stderr)
         sys.exit(1)
 
-    list(extract_taw(input_path, output_path, info_only=args.info_only, verbose=args.verbose))
+    # Consume generator to trigger extraction (don't need to store results)
+    for _ in extract_taw(input_path, output_path, info_only=args.info_only, verbose=args.verbose):
+        pass
 
 if __name__ == "__main__":
     main()

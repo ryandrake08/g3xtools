@@ -185,7 +185,7 @@ def feat_unlk_checksum(data: bytes, value: int = 0xFFFFFFFF) -> int:
         value = _feat_unlk_lookup_table[index] ^ (value >> 8)
     return value
 
-def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path, region_path: str, vol_id: int, security_id: int, system_id: int, check: bool=False) -> None:
+def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path, region_path: str, vol_id: int, system_id: int, check: bool=False) -> None:
     # Validate paths
     if not dest_dir.exists():
         raise ValueError(f"Destination directory does not exist: {dest_dir}")
@@ -201,8 +201,6 @@ def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path
         raise ValueError(f"Volume ID must be a 32-bit unsigned integer: {vol_id:#x}")
     if not (0 <= system_id <= 0xFFFFFFFFFFFFFFFF):
         raise ValueError(f"System ID must be a 64-bit unsigned integer: {system_id:#x}")
-    if security_id != GARMIN_SECURITY_ID:
-        raise ValueError(f"Security ID must be {GARMIN_SECURITY_ID}, got: {security_id}")
 
     # Look up feature from region filename
     feature = FILENAME_TO_FEATURE.get(region_path)
@@ -232,7 +230,7 @@ def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path
     content1 = BytesIO()
 
     content1.write(MAGIC1.to_bytes(2, 'little'))
-    content1.write(((security_id - SEC_ID_OFFSET + 0x10000) & 0XFFFF).to_bytes(2, 'little'))
+    content1.write(((GARMIN_SECURITY_ID - SEC_ID_OFFSET + 0x10000) & 0XFFFF).to_bytes(2, 'little'))
     content1.write(MAGIC2.to_bytes(4, 'little'))
     content1.write((1 << feature.bit).to_bytes(4, 'little'))
     content1.write((0).to_bytes(4, 'little'))
@@ -306,7 +304,6 @@ def main() -> None:
         args.data_file_path,
         args.region_path,
         args.vol_id,
-        GARMIN_SECURITY_ID,
         args.system_id,
         args.check_crc
     )

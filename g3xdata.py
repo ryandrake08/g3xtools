@@ -40,7 +40,7 @@ from typing import Any
 
 from garmin_login import flygarmin_login
 from garmin_api import flygarmin_list_aircraft, flygarmin_list_files, flygarmin_unlock, flygarmin_list_series
-from featunlk import update_feature_unlock, GARMIN_SECURITY_ID
+from featunlk import update_feature_unlock
 from taw import extract_taw
 from sdcard import read_vsn, detect_sd_card, get_platform_device_example
 
@@ -644,7 +644,7 @@ def main() -> None:
             # Activate all features
             for taw_region_path, output_file_path in features:
                 vprint(f"Unlocking feature {taw_region_path}")
-                update_feature_unlock(output_path, output_file_path, taw_region_path, card_serial, GARMIN_SECURITY_ID, system_serial, args.check_crc)
+                update_feature_unlock(output_path, output_file_path, taw_region_path, card_serial, system_serial, args.check_crc)
 
             vprint(f"Finished creating SD card")
 
