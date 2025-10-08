@@ -38,6 +38,11 @@ import webbrowser
 from pathlib import Path
 from typing import Any, Dict
 
+# Public API
+__all__ = [
+    'flygarmin_login',
+]
+
 SSO_CLIENT_ID = "FLY_GARMIN_DESKTOP"
 OAUTH_TOKEN_URL = "https://services.garmin.com/api/oauth/token"
 

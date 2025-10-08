@@ -56,10 +56,45 @@ import bs4
 import platformdirs
 from typing import Dict, List, Optional
 
+# Public API
+__all__ = [
+    'load_nasr_database',
+]
+
 _NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
 _DEFAULT_FILENAME = 'downloaded_file'
 _CACHE_PATH = platformdirs.user_cache_path("g3xtools", "g3xtools", ensure_exists=True)
-NASR_DATABASE_PATH = _CACHE_PATH / 'nasr.msgpack'
+_NASR_DATABASE_PATH = _CACHE_PATH / 'nasr.msgpack'
+
+def load_nasr_database() -> Dict[str, Any]:
+    """
+    Load the NASR database from cache.
+
+    Returns:
+        Dictionary with keys 'waypoints', 'airways', and 'connections'
+
+    Raises:
+        FileNotFoundError: If the database file doesn't exist
+        RuntimeError: If the database cannot be loaded
+
+    Example:
+        >>> database = load_nasr_database()
+        >>> waypoints = database['waypoints']
+        >>> airways = database['airways']
+        >>> connections = database['connections']
+    """
+    if not _NASR_DATABASE_PATH.exists():
+        raise FileNotFoundError(
+            f"NASR database not found at {_NASR_DATABASE_PATH}\n"
+            f"Run 'python3 nasr.py --current' to download and build the database"
+        )
+
+    try:
+        with open(_NASR_DATABASE_PATH, 'rb') as f:
+            database = msgpack.unpackb(f.read(), strict_map_key=False)
+        return database
+    except Exception as e:
+        raise RuntimeError(f"Failed to load NASR database: {e}")
 
 def sanitize_filename(filename: str, max_length: int = 255) -> str:
     """Sanitize a filename to prevent path traversal and other security issues."""
@@ -457,7 +492,7 @@ def main():
         'airways': airways,
         'connections': connections
     }
-    with open(NASR_DATABASE_PATH, 'wb') as f:
+    with open(_NASR_DATABASE_PATH, 'wb') as f:
         packed_data: bytes = msgpack.packb(database)  # type: ignore[assignment]
         f.write(packed_data)
 

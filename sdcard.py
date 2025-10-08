@@ -11,6 +11,13 @@ Usage: python3 sdcard.py /dev/diskN
 import sys
 import shutil
 
+# Public API
+__all__ = [
+    'read_vsn',
+    'detect_sd_card',
+    'get_platform_device_example',
+]
+
 # FAT32 filesystem constants
 SECTOR_SIZE = 512
 FAT32_VSN_OFFSET = 67  # FAT32 volume serial number offset

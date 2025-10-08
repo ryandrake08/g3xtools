@@ -25,6 +25,11 @@ import pathlib
 import sys
 from typing import Generator, Optional, Tuple
 
+# Public API
+__all__ = [
+    'extract_taw',
+]
+
 TAW_SEPARATOR = b'\x00\x02\x00\x00\x00Dd\x00\x1b\x00\x00\x00A\xc8\x00'
 TAW_MAGIC = b'KpGrd'
 

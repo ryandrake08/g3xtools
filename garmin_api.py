@@ -35,6 +35,14 @@ import json
 import sys
 import requests
 
+# Public API
+__all__ = [
+    'flygarmin_list_aircraft',
+    'flygarmin_list_series',
+    'flygarmin_list_files',
+    'flygarmin_unlock',
+]
+
 API_PREFIX = "https://fly.garmin.com/fly-garmin/api"
 API_TIMEOUT = 30  # seconds
 

@@ -116,7 +116,6 @@ import re
 # Public API
 __all__ = [
     # Constants
-    'FPL_NAMESPACE',
     'WAYPOINT_TYPE_USER',
     'WAYPOINT_TYPE_AIRPORT',
     'WAYPOINT_TYPE_NDB',
@@ -152,8 +151,8 @@ __all__ = [
     'validate_waypoint_type',
 ]
 
-# Constants
-FPL_NAMESPACE = "http://www8.garmin.com/xmlschemas/FlightPlan/v1"
+# Constants (private - implementation details)
+_FPL_NAMESPACE = "http://www8.garmin.com/xmlschemas/FlightPlan/v1"
 
 # Waypoint type constants
 WAYPOINT_TYPE_USER = "USER WAYPOINT"
@@ -460,7 +459,7 @@ def _ns(tag: str) -> str:
     Returns:
         The tag name with namespace
     """
-    return f"{{{FPL_NAMESPACE}}}{tag}"
+    return f"{{{_FPL_NAMESPACE}}}{tag}"
 
 
 def _find_text_optional(elem: ET.Element, tag: str, default: Optional[str] = None) -> str | None:
@@ -959,7 +958,7 @@ def _create_flight_plan_elem(flight_plan: FlightPlan, validate: bool) -> ET.Elem
             )
 
     elem = ET.Element("flight-plan")
-    elem.set("xmlns", FPL_NAMESPACE)
+    elem.set("xmlns", _FPL_NAMESPACE)
 
     _add_optional_text(elem, "file-description", flight_plan.file_description)
 

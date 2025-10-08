@@ -38,11 +38,11 @@ import sys
 import urllib.parse
 from typing import Any
 
-from garmin_login import flygarmin_login
-from garmin_api import flygarmin_list_aircraft, flygarmin_list_files, flygarmin_unlock, flygarmin_list_series
-from featunlk import update_feature_unlock
-from taw import extract_taw
-from sdcard import read_vsn, detect_sd_card, get_platform_device_example
+import garmin_login
+import garmin_api
+import featunlk
+import taw
+import sdcard
 
 CACHE_PATH = platformdirs.user_cache_path("g3xtools", "g3xtools", ensure_exists=True)
 
@@ -83,7 +83,7 @@ def get_access_token(force: bool = False) -> str:
     Returns:
         Valid OAuth access token string for API authentication
     """
-    auth_data = cache_json_data("garmin_auth.json", flygarmin_login, force)
+    auth_data = cache_json_data("garmin_auth.json", garmin_login.flygarmin_login, force)
     return auth_data['access_token']
 
 def get_aircraft_data(access_token: str, force: bool = False) -> list:
@@ -119,7 +119,7 @@ def get_aircraft_data(access_token: str, force: bool = False) -> list:
             # If we can't read the cache, proceed normally
             pass
 
-    return cache_json_data("aircraft.json", lambda: flygarmin_list_aircraft(access_token), force)
+    return cache_json_data("aircraft.json", lambda: garmin_api.flygarmin_list_aircraft(access_token), force)
 
 def get_dataset_files(series_id: int, issue_name: str, force: bool = False) -> dict:
     """Obtain dataset file information with caching support.
@@ -133,7 +133,7 @@ def get_dataset_files(series_id: int, issue_name: str, force: bool = False) -> d
         Dictionary containing file URLs, sizes, and destination paths for the dataset
     """
     cache_filename = f"dataset-{series_id}-{issue_name}.json"
-    return cache_json_data(cache_filename, lambda: flygarmin_list_files(series_id, issue_name), force)
+    return cache_json_data(cache_filename, lambda: garmin_api.flygarmin_list_files(series_id, issue_name), force)
 
 def get_unlock_data(access_token: str, series_id: int, issue_name: str, device_id: int, card_serial: int, force: bool = False) -> dict:
     """Obtain unlock code data with caching support.
@@ -150,7 +150,7 @@ def get_unlock_data(access_token: str, series_id: int, issue_name: str, device_i
         Dictionary containing unlock codes and activation data for the specified parameters
     """
     cache_filename = f"unlock-{series_id}-{issue_name}-{device_id}-{card_serial:08X}.json"
-    return cache_json_data(cache_filename, lambda: flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
+    return cache_json_data(cache_filename, lambda: garmin_api.flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
 
 def get_default_device_system_serial(aircraft_data: list) -> str:
     """Get display serial of first device from aircraft data.
@@ -212,7 +212,7 @@ def list_series_details(series_id: int) -> None:
         series_id: The series ID to get details for
     """
     # Get series data from API
-    series_data = flygarmin_list_series(series_id)
+    series_data = garmin_api.flygarmin_list_series(series_id)
 
     # Print series header information
     print(f"Series ID: {series_data['id']}")
@@ -496,7 +496,7 @@ def main() -> None:
     # Update SDCard
     parser.add_argument('-s', '--system-serial', help='Specify avionics system serial number for SD card programming. If not specified, use G3X_SYSTEM_SERIAL environment variable or the first device in the first aircraft')
     parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path). If not specified, use G3X_SDCARD_PATH environment variable or try to detect a SD card mount point')
-    parser.add_argument('-d', '--sd-device', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. If not specified, use G3X_SDCARD_DEVICE environment variable. Example: {get_platform_device_example()}")
+    parser.add_argument('-d', '--sd-device', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. If not specified, use G3X_SDCARD_DEVICE environment variable. Example: {sdcard.get_platform_device_example()}")
     parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges. If not specified, use G3X_SDCARD_SERIAL environment variable or read from device")
     parser.add_argument('-c', '--check-crc', action='store_true', help='Perform CRC check on each data file during feat_unlk.dat generation (slow)')
 
@@ -524,7 +524,7 @@ def main() -> None:
     vprint = print if args.verbose else lambda *_: None
 
     # Determine output path: command line > environment > SD card detection
-    output_arg = args.output or os.getenv('G3X_SDCARD_PATH') or detect_sd_card()
+    output_arg = args.output or os.getenv('G3X_SDCARD_PATH') or sdcard.detect_sd_card()
     output_path = pathlib.Path(output_arg) if output_arg else None
 
     # Determine SD device: command line > environment > none
@@ -541,7 +541,7 @@ def main() -> None:
             sys.exit(1)
     elif sd_device_arg:
         try:
-            card_serial = read_vsn(sd_device_arg)
+            card_serial = sdcard.read_vsn(sd_device_arg)
         except (IOError, ValueError) as e:
             print(f"Error reading volume serial number: {e}", file=sys.stderr)
             sys.exit(1)
@@ -608,7 +608,7 @@ def main() -> None:
                 cached_path = get_cached_file_path_for_url(file_info['url'])
 
                 # Extract each file to the root sdcard
-                for taw_region_path, output_file_path in extract_taw(cached_path, output_path, skip_unknown_regions=True):
+                for taw_region_path, output_file_path in taw.extract_taw(cached_path, output_path, skip_unknown_regions=True):
                     vprint(f"Extracted {cached_path} taw region {taw_region_path} to {output_file_path}")
                     if taw_region_path:
                         features.append((taw_region_path, output_file_path))
@@ -631,7 +631,7 @@ def main() -> None:
                     continue
 
                 # Extract each file to the root sdcard
-                for taw_region_path, output_file_path in extract_taw(taw_path, output_path, skip_unknown_regions=True):
+                for taw_region_path, output_file_path in taw.extract_taw(taw_path, output_path, skip_unknown_regions=True):
                     vprint(f"Extracted {taw_file_path} taw region {taw_region_path} to {output_file_path}")
                     if taw_region_path:
                         features.append((taw_region_path, output_file_path))
@@ -644,7 +644,7 @@ def main() -> None:
             # Activate all features
             for taw_region_path, output_file_path in features:
                 vprint(f"Unlocking feature {taw_region_path}")
-                update_feature_unlock(output_path, output_file_path, taw_region_path, card_serial, system_serial, args.check_crc)
+                featunlk.update_feature_unlock(output_path, output_file_path, taw_region_path, card_serial, system_serial, args.check_crc)
 
             vprint(f"Finished creating SD card")
 

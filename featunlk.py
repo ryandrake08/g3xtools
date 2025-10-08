@@ -67,6 +67,11 @@ OTHER DB:
       |------|
 """
 
+# Public API
+__all__ = [
+    'update_feature_unlock',
+]
+
 FEAT_UNLK = 'feat_unlk.dat'
 GARMIN_SECURITY_ID = 1727
 

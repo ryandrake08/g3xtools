@@ -3,7 +3,6 @@
 import argparse
 import itertools
 import math
-import msgpack
 import pathlib
 import sys
 import urllib.parse
@@ -11,12 +10,9 @@ import webbrowser
 import astar
 import rtree
 from typing import Tuple
-from fpl import (
-    create_flight_plan_from_route_list, write_fpl,
-    WAYPOINT_TYPE_AIRPORT, WAYPOINT_TYPE_USER, WAYPOINT_TYPE_NDB,
-    WAYPOINT_TYPE_VOR, WAYPOINT_TYPE_INT
-)
-from nasr import NASR_DATABASE_PATH
+
+import fpl
+import nasr
 
 # Geographic constants
 EARTH_RADIUS_METERS = 6371000  # Mean radius of Earth in meters
@@ -130,12 +126,11 @@ class Router(astar.AStar):
             user_waypoints (list): Optional list of user waypoints to add. Each entry is (id, lat, lon).
         """
 
-        # Deserialize database
-        with open(NASR_DATABASE_PATH, 'rb') as f:
-            database = msgpack.unpackb(f.read(), strict_map_key=False)
-            self.waypoints = database['waypoints']
-            self.airways = database['airways']
-            self.connections = database['connections']
+        # Load database
+        database = nasr.load_nasr_database()
+        self.waypoints = database['waypoints']
+        self.airways = database['airways']
+        self.connections = database['connections']
 
         # Add user waypoints to the waypoints list
         # User waypoint structure: [id, type, lat, lon, country] - country is empty string for user waypoints
@@ -448,14 +443,15 @@ def main() -> None:
 
             user_waypoints.append((wp_id, lat, lon))
 
-    # Check that database file exists
-    if not pathlib.Path(NASR_DATABASE_PATH).exists():
-        print(f"Error: NASR database not found at {NASR_DATABASE_PATH}", file=sys.stderr)
-        print(f"Run 'python3 nasr.py --current' to download and build the database", file=sys.stderr)
+    # Initialize the router (will raise FileNotFoundError if database doesn't exist)
+    try:
+        r = Router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length, user_waypoints)
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
-
-    # Initialize the router
-    r = Router(waypoint_preferences, airway_preferences if args.airway else None, max_leg_length, user_waypoints)
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Find any waypoint by waypoint_id or icao_id
     def find_waypoint(waypoint_id):
@@ -579,24 +575,24 @@ def main() -> None:
     if args.output_fpl:
         # Map NASR waypoint types to FPL waypoint types
         waypoint_type_map = {
-            'A': WAYPOINT_TYPE_AIRPORT,
-            'B': WAYPOINT_TYPE_AIRPORT, # unconfirmed
-            'C': WAYPOINT_TYPE_AIRPORT,
-            'G': WAYPOINT_TYPE_AIRPORT,
-            'H': WAYPOINT_TYPE_AIRPORT,
-            'U': WAYPOINT_TYPE_AIRPORT,
-            'DME': WAYPOINT_TYPE_VOR,
-            'NDB': WAYPOINT_TYPE_NDB,
-            'NDB/DME': WAYPOINT_TYPE_NDB,
-            'VOR': WAYPOINT_TYPE_VOR,
-            'VORTAC': WAYPOINT_TYPE_VOR,
-            'VOR/DME': WAYPOINT_TYPE_VOR,
-            'VFR': WAYPOINT_TYPE_INT,
-            'CN': WAYPOINT_TYPE_INT, # unconfirmed
-            'MR': WAYPOINT_TYPE_INT,
-            'RP': WAYPOINT_TYPE_INT,
-            'WP': WAYPOINT_TYPE_INT,
-            'USER': WAYPOINT_TYPE_USER,
+            'A': fpl.WAYPOINT_TYPE_AIRPORT,
+            'B': fpl.WAYPOINT_TYPE_AIRPORT, # unconfirmed
+            'C': fpl.WAYPOINT_TYPE_AIRPORT,
+            'G': fpl.WAYPOINT_TYPE_AIRPORT,
+            'H': fpl.WAYPOINT_TYPE_AIRPORT,
+            'U': fpl.WAYPOINT_TYPE_AIRPORT,
+            'DME': fpl.WAYPOINT_TYPE_VOR,
+            'NDB': fpl.WAYPOINT_TYPE_NDB,
+            'NDB/DME': fpl.WAYPOINT_TYPE_NDB,
+            'VOR': fpl.WAYPOINT_TYPE_VOR,
+            'VORTAC': fpl.WAYPOINT_TYPE_VOR,
+            'VOR/DME': fpl.WAYPOINT_TYPE_VOR,
+            'VFR': fpl.WAYPOINT_TYPE_INT,
+            'CN': fpl.WAYPOINT_TYPE_INT, # unconfirmed
+            'MR': fpl.WAYPOINT_TYPE_INT,
+            'RP': fpl.WAYPOINT_TYPE_INT,
+            'WP': fpl.WAYPOINT_TYPE_INT,
+            'USER': fpl.WAYPOINT_TYPE_USER,
         }
 
         # Map NASR country codes to FPL country codes
@@ -612,7 +608,7 @@ def main() -> None:
             wp = r.waypoints[idx]
             # wp structure: [id, type, lat, lon, country, icao_id]
             waypoint_id = wp[5] if len(wp) > 5 and wp[5] else wp[0]
-            fpl_type = waypoint_type_map.get(wp[1], WAYPOINT_TYPE_USER)
+            fpl_type = waypoint_type_map.get(wp[1], fpl.WAYPOINT_TYPE_USER)
             country = country_code_map.get(wp[4], '')
             route_data.append((waypoint_id, wp[2], wp[3], fpl_type, country))
 
@@ -620,8 +616,8 @@ def main() -> None:
         route_name = f"{airport_name(origin_id)}/{airport_name(destination_id)}"
 
         # Create and write flight plan
-        flight_plan = create_flight_plan_from_route_list(route_data, route_name)
-        write_fpl(flight_plan, args.output_fpl)
+        flight_plan = fpl.create_flight_plan_from_route_list(route_data, route_name)
+        fpl.write_fpl(flight_plan, args.output_fpl)
         print(f"Flight plan written to {args.output_fpl}")
 
 if __name__ == '__main__':

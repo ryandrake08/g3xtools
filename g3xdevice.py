@@ -58,9 +58,6 @@ import sys
 
 # Public API
 __all__ = [
-    # Constants
-    'DEVICE_NAMESPACE',
-    'DEVICE_EXT_NAMESPACE',
     # Dataclasses
     'Model',
     'Version',
@@ -74,9 +71,9 @@ __all__ = [
     'read_device',
 ]
 
-# Constants
-DEVICE_NAMESPACE = "http://www.garmin.com/xmlschemas/GarminDevice/v2"
-DEVICE_EXT_NAMESPACE = "http://www.garmin.com/xmlschemas/GarminDeviceExtensions/v1"
+# Constants (private - implementation details)
+_DEVICE_NAMESPACE = "http://www.garmin.com/xmlschemas/GarminDevice/v2"
+_DEVICE_EXT_NAMESPACE = "http://www.garmin.com/xmlschemas/GarminDeviceExtensions/v1"
 
 # Dataclasses
 @dataclass
@@ -376,7 +373,7 @@ def _parse_device(root: ET.Element) -> Device:
         Device dataclass instance
     """
     # Handle namespace
-    ns = f"{{{DEVICE_NAMESPACE}}}"
+    ns = f"{{{_DEVICE_NAMESPACE}}}"
 
     # Parse Model (required)
     model_elem = root.find(f"{ns}Model")
