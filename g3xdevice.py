@@ -539,11 +539,7 @@ def main() -> None:
 
                     # Show format
                     spec_id = file_spec.specification.identifier
-                    if spec_id.startswith("http"):
-                        # URL - show just the last part
-                        spec_short = spec_id.split('/')[-1]
-                    else:
-                        spec_short = spec_id
+                    spec_short = spec_id.split('/')[-1] if spec_id.startswith("http") else spec_id
 
                     print(f"    {direction:15s} {file_path_str:40s} [{spec_short}]")
 
