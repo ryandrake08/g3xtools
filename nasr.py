@@ -161,7 +161,13 @@ def list_archives() -> dict[str, str]:
         raise ValueError("Archives list not found")
 
     for li in archives_section.find_all('li'):
-        text = li.contents[0].strip().lstrip('Subscription effective ').rstrip(' -')
+        text = li.contents[0].strip()
+        # Remove prefix if present
+        if text.startswith('Subscription effective '):
+            text = text[len('Subscription effective '):]
+        # Remove suffix if present
+        if text.endswith(' -'):
+            text = text[:-len(' -')]
         link = li.find('a')
         if link:
             dataurl[text] = link['href']
@@ -196,7 +202,9 @@ def current_or_preview(which: str) -> dict[str, str]:
         link = li.find('a')
         if link is None:
             continue
-        effective_date = link.text.lstrip('Subscription effective ')
+        effective_date = link.text
+        if effective_date.startswith('Subscription effective '):
+            effective_date = effective_date[len('Subscription effective '):]
 
         # Follow the link to get the fullzip and aptzip URLs
         subpage_url = urllib.parse.urljoin(_NASR_URL, link['href'])
