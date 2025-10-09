@@ -43,7 +43,6 @@ import argparse
 import collections
 import csv
 import io
-import itertools
 import msgpack
 import os
 import re
@@ -482,7 +481,7 @@ def main():
     # Go through each list pairwise and build a dictionary of airway connections: waypoint_index to (neighbor waypoint_index, airway_index)
     connections = collections.defaultdict(list)
     for airway_index, waypoint_indices in airway_lists:
-        for i1, i2 in itertools.pairwise(waypoint_indices):
+        for i1, i2 in zip(waypoint_indices, waypoint_indices[1:]):
             connections[i1].append((i2, airway_index))
             connections[i2].append((i1, airway_index))
 

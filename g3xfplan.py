@@ -494,7 +494,7 @@ def main() -> None:
     candidate_routes = [[origin_id] + list(perm) + [destination_id] for perm in itertools.permutations(via_ids)]
 
     # For each candidate route, calculate the total distance
-    routes_and_distances = [(route, sum(r.actual_distance_between(start, end) for start, end in itertools.pairwise(route))) for route in candidate_routes]
+    routes_and_distances = [(route, sum(r.actual_distance_between(start, end) for start, end in zip(route, route[1:]))) for route in candidate_routes]
 
     # Pick the shortest direct route
     route, _ = min(routes_and_distances, key=lambda x: x[1])
@@ -502,7 +502,7 @@ def main() -> None:
     # Generate a point-to-point route
     if not args.direct:
         # Find the route between each pair of waypoints
-        for start, end in itertools.pairwise(route):
+        for start, end in zip(route, route[1:]):
             subroute = r.astar(start, end)
             # Insert the subroute into the main route
             if subroute:
@@ -518,7 +518,7 @@ def main() -> None:
         # also counting how often each airway is present in the overall route
         airway_counts = {}
         airway_segments = []
-        for wp1, wp2 in itertools.pairwise(route):
+        for wp1, wp2 in zip(route, route[1:]):
             # Find all airway segments between the current waypoint and the previous waypoint
             airways_in_segment = set()
             for neighbor, airway in r.connections.get(wp1, []):
