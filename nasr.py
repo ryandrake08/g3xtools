@@ -94,7 +94,7 @@ def load_nasr_database() -> dict[str, Any]:
             database = msgpack.unpackb(f.read(), strict_map_key=False)
         return database
     except Exception as e:
-        raise RuntimeError(f"Failed to load NASR database: {e}")
+        raise RuntimeError(f"Failed to load NASR database: {e}") from e
 
 def sanitize_filename(filename: str, max_length: int = 255) -> str:
     """Sanitize a filename to prevent path traversal and other security issues."""

@@ -351,8 +351,8 @@ def get_cached_file_path_for_url(url: str) -> pathlib.Path:
     # Ensure resolved path is still within CACHE_PATH
     try:
         dest_path.relative_to(CACHE_PATH.resolve())
-    except ValueError:
-        raise ValueError(f"URL resolves outside cache directory: {url}")
+    except ValueError as e:
+        raise ValueError(f"URL resolves outside cache directory: {url}") from e
 
     # Check if file already exists
     if dest_path.exists():
@@ -422,8 +422,8 @@ def copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) -
     # Ensure resolved path is still within output_path
     try:
         output_file_path.relative_to(output_path.resolve())
-    except ValueError:
-        raise ValueError(f"Destination resolves outside output directory: {file_info['destination']}")
+    except ValueError as e:
+        raise ValueError(f"Destination resolves outside output directory: {file_info['destination']}") from e
 
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
 

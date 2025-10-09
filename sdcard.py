@@ -52,10 +52,10 @@ def unix_vsn(device_path: str) -> int:
 
             return vsn
 
-    except PermissionError:
-        raise OSError(f"Permission denied accessing {device_path}. Try running with sudo/administrator privileges.")
+    except PermissionError as e:
+        raise OSError(f"Permission denied accessing {device_path}. Try running with sudo/administrator privileges.") from e
     except OSError as e:
-        raise OSError(f"Error opening device {device_path}: {e}")
+        raise OSError(f"Error opening device {device_path}: {e}") from e
 
 def windows_vsn(drive_letter: str) -> int:
     """Extract volume serial number from Windows drive and return as integer."""
@@ -78,10 +78,10 @@ def windows_vsn(drive_letter: str) -> int:
             raise ValueError(f"Volume serial number out of range: {vsn:#x}")
 
         return vsn
-    except ImportError:
-        raise ImportError("pywin32 package required for Windows volume serial number reading")
+    except ImportError as e:
+        raise ImportError("pywin32 package required for Windows volume serial number reading") from e
     except OSError as e:
-        raise OSError(f"Error accessing drive {drive_letter}: {e}")
+        raise OSError(f"Error accessing drive {drive_letter}: {e}") from e
 
 def get_platform_device_example() -> str:
     """Get platform-specific device path example"""

@@ -207,8 +207,8 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
                     # Ensure resolved path is still within dest_path
                     try:
                         output_path.relative_to(dest_path.resolve())
-                    except ValueError:
-                        raise ValueError(f"Output path resolves outside destination directory: {output_file}")
+                    except ValueError as e:
+                        raise ValueError(f"Output path resolves outside destination directory: {output_file}") from e
 
                     output_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(output_path, 'wb') as fd_out:

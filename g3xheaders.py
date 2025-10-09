@@ -38,26 +38,26 @@ class G3XLogFileData:
         self.close()
 
     def open(self) -> 'G3XLogFileData':
-        self.file = open(self.filename, encoding='utf-8')
+        self.file = open(self.filename, encoding='utf-8')  # noqa: SIM115
         self.csv_reader = csv.reader(self.file)
 
         # Parse airframe information from first line
         try:
             airframe_infos = next(self.csv_reader)
-        except StopIteration:
-            raise ValueError(f"File {self.filename} is empty or has no CSV data")
+        except StopIteration as e:
+            raise ValueError(f"File {self.filename} is empty or has no CSV data") from e
 
         try:
             self.airframe_info: dict[str, str] = {key: val.strip('\"') for key, val in dict(x.split('=') for x in airframe_infos[1:]).items()}
         except ValueError as e:
-            raise ValueError(f"Invalid airframe metadata format in {self.filename}: {e}")
+            raise ValueError(f"Invalid airframe metadata format in {self.filename}: {e}") from e
 
         # Read headers and stable keys
         try:
             self.full_headers: list[str] = next(self.csv_reader)
             self.short_headers: list[str] = next(self.csv_reader)
-        except StopIteration:
-            raise ValueError(f"File {self.filename} missing required header rows (expected 3 rows: metadata, full headers, stable keys)")
+        except StopIteration as e:
+            raise ValueError(f"File {self.filename} missing required header rows (expected 3 rows: metadata, full headers, stable keys)") from e
 
         return self
 

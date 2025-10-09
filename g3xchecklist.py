@@ -174,7 +174,7 @@ def read_ace_binary(file_path: pathlib.Path) -> AceFile:
     try:
         content_str = content.decode('iso-8859-1')
     except UnicodeDecodeError as e:
-        raise ValueError(f"Failed to decode content as ISO-8859-1: {e}")
+        raise ValueError(f"Failed to decode content as ISO-8859-1: {e}") from e
 
     lines = content_str.split('\r\n')
 
@@ -320,7 +320,7 @@ def write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
     try:
         content = content_str.encode('iso-8859-1')
     except UnicodeEncodeError as e:
-        raise ValueError(f"Content contains characters not supported by ISO-8859-1: {e}")
+        raise ValueError(f"Content contains characters not supported by ISO-8859-1: {e}") from e
 
     # Calculate CRC
     header_bytes = bytes(header)

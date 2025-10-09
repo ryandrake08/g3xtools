@@ -86,7 +86,7 @@ class GarminHandler(http.server.BaseHTTPRequestHandler):
                 service_url = data['serviceUrl']
                 service_ticket = data['serviceTicket']
             except (json.JSONDecodeError, KeyError) as e:
-                raise ValueError(f"Invalid OAuth callback data: {e}")
+                raise ValueError(f"Invalid OAuth callback data: {e}") from e
             print(f"Service URL: {service_url}")
             print(f"Service ticket: {service_ticket}")
             print("Received ticket. Requesting access token")
@@ -109,7 +109,7 @@ class GarminHandler(http.server.BaseHTTPRequestHandler):
                 print("Received access token")
                 self.handle_credentials(resp.json())
             except requests.RequestException as e:
-                raise OSError(f"Failed to obtain access token: {e}")
+                raise OSError(f"Failed to obtain access token: {e}") from e
 
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")

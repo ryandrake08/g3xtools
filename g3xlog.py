@@ -109,7 +109,7 @@ def main() -> None:
                 oil_press_idx = stable_keys.index('E1 OilP')
                 ground_speed_idx = stable_keys.index('GndSpd')
             except ValueError as e:
-                raise ValueError(f"Missing required column in {log}: {e}")
+                raise ValueError(f"Missing required column in {log}: {e}") from e
 
             # Read data rows and find max values using CSV reader
             reader = csv.reader(file)
@@ -126,7 +126,7 @@ def main() -> None:
                         oil_press_max = max(oil_press_max, oil_press)
                         ground_speed_max = max(ground_speed_max, ground_speed)
                     except (ValueError, IndexError) as e:
-                        raise ValueError(f"Invalid data in log file {log}: {e}")
+                        raise ValueError(f"Invalid data in log file {log}: {e}") from e
 
         # Classify flight type based on collected data
         if data_rows == 0:
