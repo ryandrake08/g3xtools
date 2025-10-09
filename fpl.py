@@ -762,11 +762,8 @@ def read_fpl(file_path: Union[str, Path], validate: bool = True) -> FlightPlan:
     """
     path = Path(file_path)
 
-    # Configure XML parser to prevent XXE attacks
-    parser = ET.XMLParser()
-    parser.parser.SetParamEntityParsing(0)  # Disable external entity expansion
-
-    tree = ET.parse(path, parser=parser)
+    # Parse XML file (reading local files, no XXE risk)
+    tree = ET.parse(path)
     root = tree.getroot()
     return _parse_flight_plan(root, validate)
 

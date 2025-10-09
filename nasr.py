@@ -54,7 +54,7 @@ import urllib.error
 import zipfile
 import bs4
 import platformdirs
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 # Public API
 __all__ = [
