@@ -26,7 +26,6 @@ import re
 import shutil
 import sys
 from pathlib import Path
-from typing import Tuple
 
 # Classification thresholds
 OIL_PRESSURE_THRESHOLD_PSI = 1  # Minimum oil pressure to indicate engine running
@@ -72,7 +71,7 @@ def main() -> None:
     for log in src_logs:
 
         # Single-pass file read: metadata, CSV structure, and data processing
-        with open(log, 'r') as file:
+        with open(log) as file:
             # Row 0: Read metadata line
             first_line = file.readline()
             metadata_text = first_line.strip().split(",")
@@ -87,7 +86,7 @@ def main() -> None:
             for meta in metadata_text[1:]:
                 match = re.fullmatch(r'(.*)="(.*)"', meta)
                 if match:
-                    groups: Tuple[str, str] = match.groups()  # type: ignore[assignment]
+                    groups: tuple[str, str] = match.groups()  # type: ignore[assignment]
                     key, value = groups
                     metadata[key] = value
 

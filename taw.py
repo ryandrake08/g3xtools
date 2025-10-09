@@ -23,7 +23,8 @@ Upstream credit: https://github.com/dimaryaz/jdmtool/blob/main/src/jdmtool/taw.p
 import argparse
 import pathlib
 import sys
-from typing import Generator, Optional, Tuple
+from collections.abc import Generator
+from typing import Optional
 
 # Public API
 __all__ = [
@@ -81,7 +82,7 @@ TAW_REGION_PATHS = {
     0x4F: "air_sport.gpi",
 }
 
-def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bool = False, skip_unknown_regions: bool = False, verbose: bool = False) -> Generator[Tuple[Optional[str], pathlib.Path], None, None]:
+def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bool = False, skip_unknown_regions: bool = False, verbose: bool = False) -> Generator[tuple[Optional[str], pathlib.Path], None, None]:
     debug = print if verbose else lambda *_: None
 
     with open(input_path, 'rb') as fd:

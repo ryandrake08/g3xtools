@@ -43,17 +43,18 @@ import argparse
 import collections
 import csv
 import io
-import msgpack
 import os
 import re
 import time
-import urllib.request
-import urllib.parse
 import urllib.error
+import urllib.parse
+import urllib.request
 import zipfile
+from typing import Any, Optional
+
 import bs4
+import msgpack
 import platformdirs
-from typing import Any, Dict, List, Optional
 
 # Public API
 __all__ = [
@@ -65,7 +66,7 @@ _DEFAULT_FILENAME = 'downloaded_file'
 _CACHE_PATH = platformdirs.user_cache_path("g3xtools", "g3xtools", ensure_exists=True)
 _NASR_DATABASE_PATH = _CACHE_PATH / 'nasr.msgpack'
 
-def load_nasr_database() -> Dict[str, Any]:
+def load_nasr_database() -> dict[str, Any]:
     """
     Load the NASR database from cache.
 
@@ -120,10 +121,7 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     # Ensure filename has reasonable length
     if len(filename) > max_length:
         name, ext = os.path.splitext(filename)
-        if ext:
-            filename = name[:max_length-len(ext)] + ext
-        else:
-            filename = filename[:max_length]
+        filename = name[:max_length - len(ext)] + ext if ext else filename[:max_length]
 
     return filename
 
@@ -138,7 +136,7 @@ def _article() -> bs4.element.Tag:
         raise ValueError("NASR page article content not found")
     return article
 
-def list_archives() -> Dict[str, str]:
+def list_archives() -> dict[str, str]:
     """
     Extracts and returns a dictionary of archive links from a web page.
     The function searches for an 'Archives' section in the HTML content of an article,
@@ -170,7 +168,7 @@ def list_archives() -> Dict[str, str]:
 
     return dataurl
 
-def current_or_preview(which: str) -> Dict[str, str]:
+def current_or_preview(which: str) -> dict[str, str]:
     """
     Extracts the nasr zip link from the selected section.
 
@@ -269,7 +267,7 @@ def download(url: str, filename: Optional[str] = None) -> str:
 
     return str(filepath)
 
-class CsvZip():
+class CsvZip:
     """
     A context manager class to handle the nested CSV ZIP file contained in the main ZIP archive.
 
@@ -355,7 +353,7 @@ class CsvZip():
             raise RuntimeError("CSV archive not opened")
         return self.csv_archive.open(name)
 
-def read_csv_file(csv_archive: 'CsvZip', file_name: str, columns: List[str], rowdata: List[List]) -> None:
+def read_csv_file(csv_archive: 'CsvZip', file_name: str, columns: list[str], rowdata: list[list]) -> None:
     """
     Reads a CSV file from a given archive and extracts specified columns into a list.
 

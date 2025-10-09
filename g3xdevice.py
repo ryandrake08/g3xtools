@@ -49,12 +49,12 @@ Usage:
     python3 g3xdevice.py GarminDevice.xml --verbose    # Show all details
 """
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, List, Optional, Union
-import xml.etree.ElementTree as ET
 import argparse
 import sys
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Optional, Union
 
 # Public API
 __all__ = [
@@ -178,7 +178,7 @@ class DataType:
         files: List of file specifications for this data type
     """
     name: str
-    files: List[FileSpec]
+    files: list[FileSpec]
 
 
 @dataclass
@@ -195,8 +195,8 @@ class Device:
     """
     model: Model
     device_id: str
-    data_types: List[DataType]
-    update_files: List[UpdateFile]
+    data_types: list[DataType]
+    update_files: list[UpdateFile]
     extensions: Optional[Any] = None
 
 

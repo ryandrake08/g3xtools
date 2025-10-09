@@ -106,12 +106,12 @@ Data Model:
     └── extensions: Any (optional)
 """
 
+import re
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Union
-import xml.etree.ElementTree as ET
-import re
 
 # Public API
 __all__ = [

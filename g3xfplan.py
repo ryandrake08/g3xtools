@@ -7,9 +7,9 @@ import pathlib
 import sys
 import urllib.parse
 import webbrowser
+
 import astar
 import rtree
-from typing import Tuple
 
 import fpl
 import nasr
@@ -46,7 +46,7 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     # Convert from angular distance to meters
     return d * EARTH_RADIUS_METERS
 
-def bounding_box(lat1: float, lon1: float, distance: float) -> Tuple[float, float, float, float]:
+def bounding_box(lat1: float, lon1: float, distance: float) -> tuple[float, float, float, float]:
     """
     Calculate the bounding box coordinates (northeast and southwest corners)
     given a central point and a distance.

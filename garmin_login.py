@@ -28,15 +28,16 @@ Example usage:
 """
 
 import http.server
-from http import HTTPStatus
 import json
-import requests
 import shutil
 import socketserver
 import urllib.parse
 import webbrowser
+from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
+
+import requests
 
 # Public API
 __all__ = [
@@ -47,7 +48,7 @@ SSO_CLIENT_ID = "FLY_GARMIN_DESKTOP"
 OAUTH_TOKEN_URL = "https://services.garmin.com/api/oauth/token"
 
 class GarminHandler(http.server.BaseHTTPRequestHandler):
-    def handle_credentials(self, auth: Dict[str, str]) -> None:
+    def handle_credentials(self, auth: dict[str, str]) -> None:
         ...
 
     def do_GET(self) -> None:
@@ -108,21 +109,21 @@ class GarminHandler(http.server.BaseHTTPRequestHandler):
                 print("Received access token")
                 self.handle_credentials(resp.json())
             except requests.RequestException as e:
-                raise IOError(f"Failed to obtain access token: {e}")
+                raise OSError(f"Failed to obtain access token: {e}")
 
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
-def flygarmin_login() -> Dict[str, Any]:
+def flygarmin_login() -> dict[str, Any]:
     """Perform OAuth login flow and return json containing credentials and other data."""
-    data: Dict[str, Any] = {}
+    data: dict[str, Any] = {}
 
     # Overridden from GarminHandler to set our local variable
     class Handler(GarminHandler):
-        def handle_credentials(self, auth: Dict[str, Any]) -> None:
+        def handle_credentials(self, auth: dict[str, Any]) -> None:
             nonlocal data
             data = auth
-            print(f"Done retrieving access token data")
+            print("Done retrieving access token data")
 
     # Host a web server on localhost to perform oauth login
     with socketserver.TCPServer(("localhost", 0), Handler) as httpd:

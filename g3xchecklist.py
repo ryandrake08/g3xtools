@@ -24,7 +24,6 @@ import struct
 import sys
 import zlib
 from dataclasses import dataclass, field
-from typing import List, Optional, Union
 
 try:
     import yaml
@@ -87,7 +86,7 @@ class Checklist:
         items: List of checklist items
     """
     name: str
-    items: List[ChecklistItem] = field(default_factory=list)
+    items: list[ChecklistItem] = field(default_factory=list)
 
 @dataclass
 class Group:
@@ -98,7 +97,7 @@ class Group:
         checklists: List of checklists in this group
     """
     name: str
-    checklists: List[Checklist] = field(default_factory=list)
+    checklists: list[Checklist] = field(default_factory=list)
 
 @dataclass
 class AceFile:
@@ -130,7 +129,7 @@ class AceFile:
     default_checklist: int = 0
 
     # Content
-    groups: List[Group] = field(default_factory=list)
+    groups: list[Group] = field(default_factory=list)
 
 # ================================================================
 # ACE BINARY FORMAT FUNCTIONS
@@ -445,7 +444,7 @@ def write_yaml_file(ace_file: AceFile, file_path: pathlib.Path) -> None:
 
 def read_yaml_file(file_path: pathlib.Path) -> AceFile:
     """Read YAML file and convert to AceFile."""
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding='utf-8') as f:
         yaml_dict = yaml.safe_load(f)
 
     if not isinstance(yaml_dict, dict):
@@ -468,7 +467,7 @@ def ace_to_yaml(ace_path: pathlib.Path, yaml_path: pathlib.Path) -> None:
 
         # Print summary to stderr
         total_items = sum(len(checklist.items) for group in ace_file.groups for checklist in group.checklists)
-        print(f"Converted successfully:", file=sys.stderr)
+        print("Converted successfully:", file=sys.stderr)
         print(f"  Groups: {len(ace_file.groups)}", file=sys.stderr)
         print(f"  Checklists: {sum(len(group.checklists) for group in ace_file.groups)}", file=sys.stderr)
         print(f"  Items: {total_items}", file=sys.stderr)
@@ -488,7 +487,7 @@ def yaml_to_ace(yaml_path: pathlib.Path, ace_path: pathlib.Path) -> None:
 
         # Print summary to stderr
         total_items = sum(len(checklist.items) for group in ace_file.groups for checklist in group.checklists)
-        print(f"Converted successfully:", file=sys.stderr)
+        print("Converted successfully:", file=sys.stderr)
         print(f"  Groups: {len(ace_file.groups)}", file=sys.stderr)
         print(f"  Checklists: {sum(len(group.checklists) for group in ace_file.groups)}", file=sys.stderr)
         print(f"  Items: {total_items}", file=sys.stderr)

@@ -31,18 +31,19 @@ import datetime
 import json
 import os
 import pathlib
-import platformdirs
-import requests
 import shutil
 import sys
 import urllib.parse
 from typing import Any
 
-import garmin_login
-import garmin_api
+import platformdirs
+import requests
+
 import featunlk
-import taw
+import garmin_api
+import garmin_login
 import sdcard
+import taw
 
 CACHE_PATH = platformdirs.user_cache_path("g3xtools", "g3xtools", ensure_exists=True)
 
@@ -542,7 +543,7 @@ def main() -> None:
     elif sd_device_arg:
         try:
             card_serial = sdcard.read_vsn(sd_device_arg)
-        except (IOError, ValueError) as e:
+        except (OSError, ValueError) as e:
             print(f"Error reading volume serial number: {e}", file=sys.stderr)
             sys.exit(1)
 
@@ -618,7 +619,7 @@ def main() -> None:
                 output_file_path = copy_file(file_info, output_path, args.force_file_copy)
                 vprint(f"Copied {file_info['url']} to {output_file_path}")
 
-            vprint(f"Finished adding series")
+            vprint("Finished adding series")
 
         # Process manually specified TAW files
         if args.include_taw:
@@ -646,7 +647,7 @@ def main() -> None:
                 vprint(f"Unlocking feature {taw_region_path}")
                 featunlk.update_feature_unlock(output_path, output_file_path, taw_region_path, card_serial, system_serial, args.check_crc)
 
-            vprint(f"Finished creating SD card")
+            vprint("Finished creating SD card")
 
 if __name__ == "__main__":
     main()

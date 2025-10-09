@@ -24,7 +24,8 @@ import csv
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Union
+
 
 class G3XLogFileData:
     def __init__(self, filename: Union[str, Path]) -> None:
@@ -47,14 +48,14 @@ class G3XLogFileData:
             raise ValueError(f"File {self.filename} is empty or has no CSV data")
 
         try:
-            self.airframe_info: Dict[str, str] = {key: val.strip('\"') for key, val in dict(x.split('=') for x in airframe_infos[1:]).items()}
+            self.airframe_info: dict[str, str] = {key: val.strip('\"') for key, val in dict(x.split('=') for x in airframe_infos[1:]).items()}
         except ValueError as e:
             raise ValueError(f"Invalid airframe metadata format in {self.filename}: {e}")
 
         # Read headers and stable keys
         try:
-            self.full_headers: List[str] = next(self.csv_reader)
-            self.short_headers: List[str] = next(self.csv_reader)
+            self.full_headers: list[str] = next(self.csv_reader)
+            self.short_headers: list[str] = next(self.csv_reader)
         except StopIteration:
             raise ValueError(f"File {self.filename} missing required header rows (expected 3 rows: metadata, full headers, stable keys)")
 

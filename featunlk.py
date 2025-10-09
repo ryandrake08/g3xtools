@@ -24,7 +24,6 @@ Upstream credit: https://github.com/dimaryaz/jdmtool/blob/main/src/jdmtool/featu
 
 import argparse
 import pathlib
-from typing import List
 from enum import Enum
 from io import BytesIO
 
@@ -154,7 +153,7 @@ FILENAME_TO_FEATURE: dict[str, Feature] = {
 FEAT_UNLK_POLYNOMIAL_1 = 0x076dc419
 FEAT_UNLK_POLYNOMIAL_2 = 0x77073096
 
-def _create_lookup_table(polynomial: int, length: int) -> List[int]:
+def _create_lookup_table(polynomial: int, length: int) -> list[int]:
     lookup_table: list[int] = []
     for index in range(length):
         value = index << 24

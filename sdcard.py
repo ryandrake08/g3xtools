@@ -8,8 +8,8 @@ Assumes FAT32 format and reads VSN from offset 67.
 Usage: python3 sdcard.py /dev/diskN
 """
 
-import sys
 import shutil
+import sys
 
 # Public API
 __all__ = [
@@ -53,13 +53,13 @@ def unix_vsn(device_path: str) -> int:
             return vsn
 
     except PermissionError:
-        raise IOError(f"Permission denied accessing {device_path}. Try running with sudo/administrator privileges.")
-    except IOError as e:
-        raise IOError(f"Error opening device {device_path}: {e}")
+        raise OSError(f"Permission denied accessing {device_path}. Try running with sudo/administrator privileges.")
+    except OSError as e:
+        raise OSError(f"Error opening device {device_path}: {e}")
 
 def windows_vsn(drive_letter: str) -> int:
     """Extract volume serial number from Windows drive and return as integer."""
-    import win32api # pyright: ignore[reportMissingModuleSource]
+    import win32api  # pyright: ignore[reportMissingModuleSource]
 
     # Normalize drive letter format (ensure it ends with :\)
     if not drive_letter.endswith(':\\'):
@@ -81,7 +81,7 @@ def windows_vsn(drive_letter: str) -> int:
     except ImportError:
         raise ImportError("pywin32 package required for Windows volume serial number reading")
     except OSError as e:
-        raise IOError(f"Error accessing drive {drive_letter}: {e}")
+        raise OSError(f"Error accessing drive {drive_letter}: {e}")
 
 def get_platform_device_example() -> str:
     """Get platform-specific device path example"""
@@ -183,7 +183,7 @@ def main() -> None:
     try:
         result = read_vsn(sys.argv[1])
         print(f"{result:08X}")
-    except (IOError, ValueError) as e:
+    except (OSError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
