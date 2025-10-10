@@ -44,11 +44,11 @@ __all__ = [
     'flygarmin_unlock',
 ]
 
-API_PREFIX = "https://fly.garmin.com/fly-garmin/api"
-API_TIMEOUT = 30  # seconds
+_API_PREFIX = "https://fly.garmin.com/fly-garmin/api"
+_API_TIMEOUT = 30  # seconds
 
-session = requests.Session()
-del session.headers['User-Agent']  # Garmin API accepts requests without User-Agent
+_session = requests.Session()
+del _session.headers['User-Agent']  # Garmin API accepts requests without User-Agent
 
 def flygarmin_list_aircraft(access_token: str) -> list:
     """
@@ -65,8 +65,8 @@ def flygarmin_list_aircraft(access_token: str) -> list:
         ValueError: If response is not JSON
     """
     print(f"[flygarmin] Listing all aircraft for access token {access_token}")
-    resp = session.get(
-        f"{API_PREFIX}/aircraft/",
+    resp = _session.get(
+        f"{_API_PREFIX}/aircraft/",
         params={
             "withAvdbs": "true",
             "withJeppImported": "true",
@@ -75,7 +75,7 @@ def flygarmin_list_aircraft(access_token: str) -> list:
         headers={
             "Authorization": f"Bearer {access_token}",
         },
-        timeout=API_TIMEOUT,
+        timeout=_API_TIMEOUT,
     )
     resp.raise_for_status()
     if 'application/json' not in resp.headers.get('Content-Type', ''):
@@ -98,9 +98,9 @@ def flygarmin_list_series(series_id: int) -> dict:
         ValueError: If response is not JSON
     """
     print(f"[flygarmin] Listing information for series {series_id}")
-    resp = session.get(
-        f"{API_PREFIX}/avdb-series/{series_id}/",
-        timeout=API_TIMEOUT,
+    resp = _session.get(
+        f"{_API_PREFIX}/avdb-series/{series_id}/",
+        timeout=_API_TIMEOUT,
     )
     resp.raise_for_status()
     if 'application/json' not in resp.headers.get('Content-Type', ''):
@@ -124,9 +124,9 @@ def flygarmin_list_files(series_id: int, issue_name: str) -> dict:
         ValueError: If response is not JSON
     """
     print(f"[flygarmin] Listing files for series {series_id}, issue {issue_name}")
-    resp = session.get(
-        f"{API_PREFIX}/avdb-series/{series_id}/{issue_name}/files/",
-        timeout=API_TIMEOUT,
+    resp = _session.get(
+        f"{_API_PREFIX}/avdb-series/{series_id}/{issue_name}/files/",
+        timeout=_API_TIMEOUT,
     )
     resp.raise_for_status()
     if 'application/json' not in resp.headers.get('Content-Type', ''):
@@ -153,8 +153,8 @@ def flygarmin_unlock(access_token: str, series_id: int, issue_name: str, device_
         ValueError: If response is not JSON
     """
     print(f"[flygarmin] Getting unlock code for series {series_id}, issue {issue_name} for installtaion on device {device_id}, sdcard {card_serial:08X}, using access token {access_token}")
-    resp = session.get(
-        f"{API_PREFIX}/avdb-series/{series_id}/{issue_name}/unlock/",
+    resp = _session.get(
+        f"{_API_PREFIX}/avdb-series/{series_id}/{issue_name}/unlock/",
         params={
             "deviceIDs": device_id,
             "cardSerial": card_serial,
@@ -162,7 +162,7 @@ def flygarmin_unlock(access_token: str, series_id: int, issue_name: str, device_
         headers={
             "Authorization": f"Bearer {access_token}",
         },
-        timeout=API_TIMEOUT,
+        timeout=_API_TIMEOUT,
     )
     resp.raise_for_status()
     if 'application/json' not in resp.headers.get('Content-Type', ''):

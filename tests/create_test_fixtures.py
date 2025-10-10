@@ -195,11 +195,11 @@ def create_ace_fixtures(fixtures_dir: Path):
     group.checklists.append(checklist)
     minimal.groups.append(group)
 
-    ace.write_ace_binary(minimal, fixtures_dir / "minimal.ace")
+    ace._write_ace_binary(minimal, fixtures_dir / "minimal.ace")
     print("  Created minimal.ace")
 
     # 2. invalid_crc.ace - Corrupted CRC
-    ace.write_ace_binary(minimal, fixtures_dir / "invalid_crc.ace")
+    ace._write_ace_binary(minimal, fixtures_dir / "invalid_crc.ace")
     with open(fixtures_dir / "invalid_crc.ace", "r+b") as f:
         f.seek(-4, 2)
         f.write(b"\x00\x00\x00\x00")

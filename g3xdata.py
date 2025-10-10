@@ -47,10 +47,10 @@ import taw
 
 _CACHE_PATH = platformdirs.user_cache_path("g3xtools", "g3xtools", ensure_exists=True)
 
-session = requests.Session()
-session.headers['User-Agent'] = None  # type: ignore
+_session = requests.Session()
+_session.headers['User-Agent'] = None  # type: ignore
 
-def cache_json_data(cache_filename: str, fetch_function, force: bool = False) -> Any:
+def _cache_json_data(cache_filename: str, fetch_function, force: bool = False) -> Any:
     """Helper function to cache JSON data with consistent pattern.
 
     Args:
@@ -75,7 +75,7 @@ def cache_json_data(cache_filename: str, fetch_function, force: bool = False) ->
             json.dump(data, fd, indent=2)
         return data
 
-def get_access_token(force: bool = False) -> str:
+def _get_access_token(force: bool = False) -> str:
     """Obtain OAuth access token with caching support.
 
     Args:
@@ -84,11 +84,11 @@ def get_access_token(force: bool = False) -> str:
     Returns:
         Valid OAuth access token string for API authentication
     """
-    auth_data = cache_json_data("garmin_auth.json", garmin_login.flygarmin_login, force)
+    auth_data = _cache_json_data("garmin_auth.json", garmin_login.flygarmin_login, force)
     access_token: str = auth_data['access_token']
     return access_token
 
-def get_aircraft_data(access_token: str, force: bool = False) -> list:
+def _get_aircraft_data(access_token: str, force: bool = False) -> list:
     """Obtain aircraft data with caching support.
 
     Args:
@@ -121,10 +121,10 @@ def get_aircraft_data(access_token: str, force: bool = False) -> list:
             # If we can't read the cache, proceed normally
             pass
 
-    result: list = cache_json_data("aircraft.json", lambda: garmin_api.flygarmin_list_aircraft(access_token), force)
+    result: list = _cache_json_data("aircraft.json", lambda: garmin_api.flygarmin_list_aircraft(access_token), force)
     return result
 
-def get_dataset_files(series_id: int, issue_name: str, force: bool = False) -> dict:
+def _get_dataset_files(series_id: int, issue_name: str, force: bool = False) -> dict:
     """Obtain dataset file information with caching support.
 
     Args:
@@ -136,10 +136,10 @@ def get_dataset_files(series_id: int, issue_name: str, force: bool = False) -> d
         Dictionary containing file URLs, sizes, and destination paths for the dataset
     """
     cache_filename = f"dataset-{series_id}-{issue_name}.json"
-    result: dict = cache_json_data(cache_filename, lambda: garmin_api.flygarmin_list_files(series_id, issue_name), force)
+    result: dict = _cache_json_data(cache_filename, lambda: garmin_api.flygarmin_list_files(series_id, issue_name), force)
     return result
 
-def get_unlock_data(access_token: str, series_id: int, issue_name: str, device_id: int, card_serial: int, force: bool = False) -> dict:
+def _get_unlock_data(access_token: str, series_id: int, issue_name: str, device_id: int, card_serial: int, force: bool = False) -> dict:
     """Obtain unlock code data with caching support.
 
     Args:
@@ -154,10 +154,10 @@ def get_unlock_data(access_token: str, series_id: int, issue_name: str, device_i
         Dictionary containing unlock codes and activation data for the specified parameters
     """
     cache_filename = f"unlock-{series_id}-{issue_name}-{device_id}-{card_serial:08X}.json"
-    result: dict = cache_json_data(cache_filename, lambda: garmin_api.flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
+    result: dict = _cache_json_data(cache_filename, lambda: garmin_api.flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
     return result
 
-def get_default_device_system_serial(aircraft_data: list) -> str:
+def _get_default_device_system_serial(aircraft_data: list) -> str:
     """Get display serial of first device from aircraft data.
 
     Args:
@@ -175,7 +175,7 @@ def get_default_device_system_serial(aircraft_data: list) -> str:
             return serial
     raise ValueError("No devices found in aircraft data")
 
-def get_device(aircraft_data: list, display_serial: str) -> dict:
+def _get_device(aircraft_data: list, display_serial: str) -> dict:
     """Get device structure from aircraft data by display serial.
 
     Args:
@@ -195,7 +195,7 @@ def get_device(aircraft_data: list, display_serial: str) -> dict:
                 return result
     raise ValueError(f"Display serial {display_serial} not found in aircraft data")
 
-def get_device_info(aircraft_data: list, display_serial: str) -> tuple[int, int]:
+def _get_device_info(aircraft_data: list, display_serial: str) -> tuple[int, int]:
     """Get device ID and system serial from aircraft data.
 
     Args:
@@ -208,11 +208,11 @@ def get_device_info(aircraft_data: list, display_serial: str) -> tuple[int, int]
     Raises:
         ValueError: If display serial is not found or no devices exist
     """
-    device = get_device(aircraft_data, display_serial)
+    device = _get_device(aircraft_data, display_serial)
     return device['id'], device['serial']
 
 
-def list_series_details(series_id: int) -> None:
+def _list_series_details(series_id: int) -> None:
     """List detailed information about a specific series and exit.
 
     Args:
@@ -265,7 +265,7 @@ def list_series_details(series_id: int) -> None:
 
     sys.exit(0)
 
-def list_device_details(aircraft_data: list, display_serial: str) -> None:
+def _list_device_details(aircraft_data: list, display_serial: str) -> None:
     """List detailed information about a specific device and its installable charts, then exit.
 
     Args:
@@ -273,7 +273,7 @@ def list_device_details(aircraft_data: list, display_serial: str) -> None:
         display_serial: Display serial number to lookup
     """
     # Get device using helper function
-    device = get_device(aircraft_data, display_serial)
+    device = _get_device(aircraft_data, display_serial)
 
     # Print device header information
     print(f"Serial: {device['displaySerial']}")
@@ -319,7 +319,7 @@ def list_device_details(aircraft_data: list, display_serial: str) -> None:
 
     sys.exit(0)
 
-def list_aircraft_devices(aircraft_data: list) -> None:
+def _list_aircraft_devices(aircraft_data: list) -> None:
     """List all aircraft and their devices in a human-readable format, then exit.
 
     Args:
@@ -330,7 +330,7 @@ def list_aircraft_devices(aircraft_data: list) -> None:
             print(f"{device['displaySerial']} ({device['name']}) {device['aircraftID']}")
     sys.exit(0)
 
-def get_cached_file_path_for_url(url: str) -> pathlib.Path:
+def _get_cached_file_path_for_url(url: str) -> pathlib.Path:
     """Generate cache file path for a given URL with proper directory structure.
 
     Args:
@@ -368,7 +368,7 @@ def get_cached_file_path_for_url(url: str) -> pathlib.Path:
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     return dest_path
 
-def download_file(url: str, expected_size: int, force: bool = False) -> pathlib.Path:
+def _download_file(url: str, expected_size: int, force: bool = False) -> pathlib.Path:
     """Download a file from the given URL with caching and size verification.
 
     Args:
@@ -383,11 +383,11 @@ def download_file(url: str, expected_size: int, force: bool = False) -> pathlib.
         requests.HTTPError: If the HTTP request fails
         OSError: If file operations fail (permissions, disk space, etc.)
     """
-    dest_path = get_cached_file_path_for_url(url)
+    dest_path = _get_cached_file_path_for_url(url)
 
     # Skip downloading if file already exists and force is False
     if not dest_path.exists() or force:
-        resp = session.get(url, stream=True)
+        resp = _session.get(url, stream=True)
         resp.raise_for_status()
 
         # Download the file
@@ -402,7 +402,7 @@ def download_file(url: str, expected_size: int, force: bool = False) -> pathlib.
 
     return dest_path
 
-def copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) -> pathlib.Path:
+def _copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) -> pathlib.Path:
     """Copy a file from cache to the output directory, preserving destination path.
 
     Args:
@@ -416,7 +416,7 @@ def copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) -
     Raises:
         ValueError: If destination path contains directory traversal
     """
-    cached_path = get_cached_file_path_for_url(file_info['url'])
+    cached_path = _get_cached_file_path_for_url(file_info['url'])
     destination = pathlib.PurePosixPath(file_info['destination'])
 
     # Validate destination doesn't contain traversal attempts
@@ -439,7 +439,7 @@ def copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) -
 
     return output_file_path
 
-def installable_databases(aircraft_data: list, device_id: int, force_latest: bool = False) -> list[tuple[int, str]]:
+def _installable_databases(aircraft_data: list, device_id: int, force_latest: bool = False) -> list[tuple[int, str]]:
     """Get all installable series/issue combinations for a specific device.
 
     Args:
@@ -525,7 +525,7 @@ def main() -> None:
     args = parser.parse_args()
 
     # List series details and exit
-    args.series_info and list_series_details(args.series_info) # type: ignore
+    args.series_info and _list_series_details(args.series_info) # type: ignore
 
     # Verbose printing
     vprint = print if args.verbose else lambda *_: None
@@ -554,25 +554,25 @@ def main() -> None:
             sys.exit(1)
 
     # Get access token: command line > environment > auth cache > flygarmin login
-    access_token = args.access_token or os.getenv('G3X_GARMIN_ACCESS_TOKEN') or get_access_token(args.force_login)
+    access_token = args.access_token or os.getenv('G3X_GARMIN_ACCESS_TOKEN') or _get_access_token(args.force_login)
 
     # Get aircraft data either from aircraft_json or from flygarmin
-    aircraft_data = get_aircraft_data(access_token, args.force_refresh_aircraft)
+    aircraft_data = _get_aircraft_data(access_token, args.force_refresh_aircraft)
 
     # List the aircraft and devices and exit
-    args.list_devices and list_aircraft_devices(aircraft_data) # type: ignore
+    args.list_devices and _list_aircraft_devices(aircraft_data) # type: ignore
 
     # List device details and exit
-    args.device_info and list_device_details(aircraft_data, args.device_info) # type: ignore
+    args.device_info and _list_device_details(aircraft_data, args.device_info) # type: ignore
 
     # Determine system serial: command line > environment > default device
-    system_serial_arg = args.system_serial or os.getenv('G3X_SYSTEM_SERIAL') or get_default_device_system_serial(aircraft_data)
+    system_serial_arg = args.system_serial or os.getenv('G3X_SYSTEM_SERIAL') or _get_default_device_system_serial(aircraft_data)
 
     # Get device ID and system serial in one call
-    device_id, system_serial = get_device_info(aircraft_data, system_serial_arg)
+    device_id, system_serial = _get_device_info(aircraft_data, system_serial_arg)
 
     # List the installable databases
-    databases = installable_databases(aircraft_data, device_id, args.force_use_latest_issues)
+    databases = _installable_databases(aircraft_data, device_id, args.force_use_latest_issues)
 
     # Add manually specified series/issue pairs
     if args.include_series:
@@ -584,12 +584,12 @@ def main() -> None:
 
     for series_id, issue_name in databases:
         # Get the dataset descriptor for this series/issue
-        files_data = get_dataset_files(series_id, issue_name, args.force_refresh_datasets)
+        files_data = _get_dataset_files(series_id, issue_name, args.force_refresh_datasets)
 
         # Download all files (main and auxiliary)
         for file_info in files_data.get('mainFiles', []) + files_data.get('auxiliaryFiles', []):
             vprint(f"Obtaining {file_info['url']}")
-            download_file(file_info['url'], file_info['fileSize'], args.force_file_download)
+            _download_file(file_info['url'], file_info['fileSize'], args.force_file_download)
 
     # File copy / extraction
 
@@ -602,7 +602,7 @@ def main() -> None:
             vprint(f"Adding to SD card series {series_id}, issue {issue_name}")
 
             # Get the dataset descriptor for this series/issue
-            files_data = get_dataset_files(series_id, issue_name)
+            files_data = _get_dataset_files(series_id, issue_name)
 
             # Verfiy the main file is a TAW
             if files_data['issueType'] != "TAW":
@@ -612,7 +612,7 @@ def main() -> None:
             # Extract main files
             for file_info in files_data.get('mainFiles', []):
                 # Get destination path
-                cached_path = get_cached_file_path_for_url(file_info['url'])
+                cached_path = _get_cached_file_path_for_url(file_info['url'])
 
                 # Extract each file to the root sdcard
                 for taw_region_path, output_file_path in taw.extract_taw(cached_path, output_path, skip_unknown_regions=True):
@@ -622,7 +622,7 @@ def main() -> None:
 
             # Copy auxiliary files
             for file_info in files_data.get('auxiliaryFiles', []):
-                output_file_path = copy_file(file_info, output_path, args.force_file_copy)
+                output_file_path = _copy_file(file_info, output_path, args.force_file_copy)
                 vprint(f"Copied {file_info['url']} to {output_file_path}")
 
             vprint("Finished adding series")

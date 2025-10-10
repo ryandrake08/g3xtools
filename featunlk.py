@@ -71,10 +71,10 @@ __all__ = [
     'update_feature_unlock',
 ]
 
-FEAT_UNLK = 'feat_unlk.dat'
-GARMIN_SECURITY_ID = 1727
+_FEAT_UNLK = 'feat_unlk.dat'
+_GARMIN_SECURITY_ID = 1727
 
-def encode_volume_id(vol_id: int) -> int:
+def _encode_volume_id(vol_id: int) -> int:
     """
     Encodes volume ID for feature unlock structure.
 
@@ -87,7 +87,7 @@ def encode_volume_id(vol_id: int) -> int:
     return ~((vol_id << 31 & 0xFFFFFFFF) | (vol_id >> 1)) & 0xFFFFFFFF
 
 
-def truncate_system_id(system_id: int) -> int:
+def _truncate_system_id(system_id: int) -> int:
     """
     Truncates system ID to 32 bits with overflow handling.
 
@@ -99,21 +99,21 @@ def truncate_system_id(system_id: int) -> int:
     """
     return (system_id & 0xFFFFFFFF) + (system_id >> 32)
 
-CONTENT1_LEN = 0x55   # 85
-CONTENT2_LEN = 0x338  # 824
+_CONTENT1_LEN = 0x55   # 85
+_CONTENT2_LEN = 0x338  # 824
 
-SEC_ID_OFFSET = 191
+_SEC_ID_OFFSET = 191
 
-MAGIC1 = 0x1
-MAGIC2 = 0x7648329A  # Hard-coded in GrmNavdata.dll
-MAGIC3 = 0x6501
+_MAGIC1 = 0x1
+_MAGIC2 = 0x7648329A  # Hard-coded in GrmNavdata.dll
+_MAGIC3 = 0x6501
 
-NAVIGATION_PREVIEW_START = 129
-NAVIGATION_PREVIEW_END = 146
+_NAVIGATION_PREVIEW_START = 129
+_NAVIGATION_PREVIEW_END = 146
 
-CHUNK_SIZE = 0x8000
+_CHUNK_SIZE = 0x8000
 
-class Feature(Enum):
+class _Feature(Enum):
     NAVIGATION = 0, 0, ['ldr_sys/avtn_db.bin', 'avtn_db.bin', '.System/AVTN/avtn_db.bin']
     CONFIG_ENABLE = 913, 2, []  # type: ignore[var-annotated]
     TERRAIN = 1826, 3, ['terrain_9as.tdb', 'trn.dat', '.System/AVTN/terrain.tdb', 'terrain.tdb']
@@ -144,14 +144,14 @@ class Feature(Enum):
         self.bit = bit
         self.filenames = filenames
 
-FILENAME_TO_FEATURE: dict[str, Feature] = {
+_FILENAME_TO_FEATURE: dict[str, _Feature] = {
     filename: feature
-    for feature in Feature
+    for feature in _Feature
     for filename in feature.filenames
 }
 
-FEAT_UNLK_POLYNOMIAL_1 = 0x076dc419
-FEAT_UNLK_POLYNOMIAL_2 = 0x77073096
+_FEAT_UNLK_POLYNOMIAL_1 = 0x076dc419
+_FEAT_UNLK_POLYNOMIAL_2 = 0x77073096
 
 def _create_lookup_table(polynomial: int, length: int) -> list[int]:
     lookup_table: list[int] = []
@@ -167,13 +167,13 @@ def _create_lookup_table(polynomial: int, length: int) -> list[int]:
 
     return lookup_table
 
-_feat_unlk_lookup_table = [
+__feat_unlk_lookup_table = [
     x ^ y
-    for x in _create_lookup_table(FEAT_UNLK_POLYNOMIAL_1, 64)
-    for y in _create_lookup_table(FEAT_UNLK_POLYNOMIAL_2, 4)
+    for x in _create_lookup_table(_FEAT_UNLK_POLYNOMIAL_1, 64)
+    for y in _create_lookup_table(_FEAT_UNLK_POLYNOMIAL_2, 4)
 ]
 
-def feat_unlk_checksum(data: bytes, value: int = 0xFFFFFFFF) -> int:
+def _feat_unlk_checksum(data: bytes, value: int = 0xFFFFFFFF) -> int:
     """
     Computes Garmin feature unlock checksum.
 
@@ -186,7 +186,7 @@ def feat_unlk_checksum(data: bytes, value: int = 0xFFFFFFFF) -> int:
     """
     for b in data:
         index = b ^ (value & 0xFF)
-        value = _feat_unlk_lookup_table[index] ^ (value >> 8)
+        value = __feat_unlk_lookup_table[index] ^ (value >> 8)
     return value
 
 def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path, region_path: str, vol_id: int, system_id: int, check: bool=False) -> None:
@@ -207,23 +207,23 @@ def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path
         raise ValueError(f"System ID must be a 64-bit unsigned integer: {system_id:#x}")
 
     # Look up feature from region filename
-    feature = FILENAME_TO_FEATURE.get(region_path)
+    feature = _FILENAME_TO_FEATURE.get(region_path)
     if feature is None:
         return
 
     preview = None
     with open(output_file_path, 'rb') as data:
-        last_block = block = data.read(CHUNK_SIZE)
+        last_block = block = data.read(_CHUNK_SIZE)
 
-        if feature == Feature.NAVIGATION:
-            preview = block[NAVIGATION_PREVIEW_START:NAVIGATION_PREVIEW_END]
+        if feature == _Feature.NAVIGATION:
+            preview = block[_NAVIGATION_PREVIEW_START:_NAVIGATION_PREVIEW_END]
 
         chk = 0xFFFFFFFF
         while block:
             last_block = block
             if check:
-                chk = feat_unlk_checksum(block, chk)
-            block = data.read(CHUNK_SIZE)
+                chk = _feat_unlk_checksum(block, chk)
+            block = data.read(_CHUNK_SIZE)
 
     if check and chk != 0:
         raise ValueError(f"{output_file_path} failed the checksum")
@@ -233,47 +233,47 @@ def update_feature_unlock(dest_dir: pathlib.Path, output_file_path: pathlib.Path
     # Build feat_unlk structure
     content1 = BytesIO()
 
-    content1.write(MAGIC1.to_bytes(2, 'little'))
-    content1.write(((GARMIN_SECURITY_ID - SEC_ID_OFFSET + 0x10000) & 0XFFFF).to_bytes(2, 'little'))
-    content1.write(MAGIC2.to_bytes(4, 'little'))
+    content1.write(_MAGIC1.to_bytes(2, 'little'))
+    content1.write(((_GARMIN_SECURITY_ID - _SEC_ID_OFFSET + 0x10000) & 0XFFFF).to_bytes(2, 'little'))
+    content1.write(_MAGIC2.to_bytes(4, 'little'))
     content1.write((1 << feature.bit).to_bytes(4, 'little'))
     content1.write((0).to_bytes(4, 'little'))
-    content1.write(encode_volume_id(vol_id).to_bytes(4, 'little'))
+    content1.write(_encode_volume_id(vol_id).to_bytes(4, 'little'))
 
-    if feature == Feature.NAVIGATION:
-        content1.write(MAGIC3.to_bytes(2, 'little'))
+    if feature == _Feature.NAVIGATION:
+        content1.write(_MAGIC3.to_bytes(2, 'little'))
 
     content1.write(checksum.to_bytes(4, 'little'))
 
-    preview_len = NAVIGATION_PREVIEW_END - NAVIGATION_PREVIEW_START
-    if feature == Feature.NAVIGATION:
+    preview_len = _NAVIGATION_PREVIEW_END - _NAVIGATION_PREVIEW_START
+    if feature == _Feature.NAVIGATION:
         if preview is None or len(preview) != preview_len:
             raise ValueError(f"Invalid preview data: expected {preview_len} bytes, got {len(preview) if preview else 0}")
         content1.write(preview)
     else:
         content1.write(b'\x00' * preview_len)
 
-    content1.write(b'\x00' * (CONTENT1_LEN - len(content1.getbuffer()) - 4))
+    content1.write(b'\x00' * (_CONTENT1_LEN - len(content1.getbuffer()) - 4))
 
-    chk1 = feat_unlk_checksum(bytes(content1.getbuffer()))
+    chk1 = _feat_unlk_checksum(bytes(content1.getbuffer()))
     content1.write(chk1.to_bytes(4, 'little'))
-    if len(content1.getbuffer()) != CONTENT1_LEN:
-        raise ValueError(f"Invalid content1 length: expected {CONTENT1_LEN} bytes, got {len(content1.getbuffer())}")
+    if len(content1.getbuffer()) != _CONTENT1_LEN:
+        raise ValueError(f"Invalid content1 length: expected {_CONTENT1_LEN} bytes, got {len(content1.getbuffer())}")
 
     content2 = BytesIO()
 
     content2.write((0).to_bytes(4, 'little'))
-    content2.write(truncate_system_id(system_id).to_bytes(4, 'little'))
-    content2.write(b'\x00' * (CONTENT2_LEN - len(content2.getbuffer()) - 4))
+    content2.write(_truncate_system_id(system_id).to_bytes(4, 'little'))
+    content2.write(b'\x00' * (_CONTENT2_LEN - len(content2.getbuffer()) - 4))
 
-    chk2 = feat_unlk_checksum(bytes(content2.getbuffer()))
+    chk2 = _feat_unlk_checksum(bytes(content2.getbuffer()))
     content2.write(chk2.to_bytes(4, 'little'))
-    if len(content2.getbuffer()) != CONTENT2_LEN:
-        raise ValueError(f"Invalid content2 length: expected {CONTENT2_LEN} bytes, got {len(content2.getbuffer())}")
+    if len(content2.getbuffer()) != _CONTENT2_LEN:
+        raise ValueError(f"Invalid content2 length: expected {_CONTENT2_LEN} bytes, got {len(content2.getbuffer())}")
 
-    chk3 = feat_unlk_checksum(content1.getvalue() + content2.getvalue())
+    chk3 = _feat_unlk_checksum(content1.getvalue() + content2.getvalue())
 
-    feat_unlk = dest_dir / FEAT_UNLK
+    feat_unlk = dest_dir / _FEAT_UNLK
 
     # Make writable before opening (if file exists)
     if feat_unlk.exists():

@@ -19,19 +19,19 @@ def test_checksum_algorithm():
     """Verify feat_unlk checksum against known values."""
     # Test with known data
     test_data = b"Test data for checksum"
-    checksum = featunlk.feat_unlk_checksum(test_data)
+    checksum = featunlk._feat_unlk_checksum(test_data)
 
     # Checksum should be 32-bit unsigned integer
     assert isinstance(checksum, int)
     assert 0 <= checksum <= 0xFFFFFFFF
 
     # Same data should produce same checksum
-    checksum2 = featunlk.feat_unlk_checksum(test_data)
+    checksum2 = featunlk._feat_unlk_checksum(test_data)
     assert checksum == checksum2
 
     # Different data should produce different checksum (highly likely)
     different_data = b"Different test data"
-    checksum3 = featunlk.feat_unlk_checksum(different_data)
+    checksum3 = featunlk._feat_unlk_checksum(different_data)
     assert checksum != checksum3
 
 
@@ -39,7 +39,7 @@ def test_volume_id_encoding():
     """Volume ID encoding should match Garmin spec."""
     # Test known volume IDs
     vol_id = 0x12345678
-    encoded = featunlk.encode_volume_id(vol_id)
+    encoded = featunlk._encode_volume_id(vol_id)
 
     # Encoded should be 32-bit unsigned integer
     assert isinstance(encoded, int)
@@ -48,7 +48,7 @@ def test_volume_id_encoding():
     # Encoding should be reversible in principle (though we don't have decode function)
     # At minimum, different inputs should produce different outputs
     vol_id2 = 0x87654321
-    encoded2 = featunlk.encode_volume_id(vol_id2)
+    encoded2 = featunlk._encode_volume_id(vol_id2)
     assert encoded != encoded2
 
 
@@ -56,7 +56,7 @@ def test_system_id_truncation():
     """System ID should be truncated to 32 bits correctly."""
     # Test with 64-bit system ID
     system_id = 0x123456789ABCDEF0
-    truncated = featunlk.truncate_system_id(system_id)
+    truncated = featunlk._truncate_system_id(system_id)
 
     # Result should be 32-bit
     assert isinstance(truncated, int)
@@ -72,7 +72,7 @@ def test_system_id_truncation():
 def test_feature_enum_structure():
     """Feature enum should have expected structure."""
     # Test a few known features
-    nav_feature = featunlk.Feature.NAVIGATION
+    nav_feature = featunlk._Feature.NAVIGATION
     assert hasattr(nav_feature, "offset")
     assert hasattr(nav_feature, "bit")
     assert hasattr(nav_feature, "filenames")
@@ -87,12 +87,12 @@ def test_feature_enum_structure():
 def test_filename_to_feature_mapping():
     """FILENAME_TO_FEATURE should map known files to features."""
     # Test known navigation database filename
-    assert "avtn_db.bin" in featunlk.FILENAME_TO_FEATURE
-    assert featunlk.FILENAME_TO_FEATURE["avtn_db.bin"] == featunlk.Feature.NAVIGATION
+    assert "avtn_db.bin" in featunlk._FILENAME_TO_FEATURE
+    assert featunlk._FILENAME_TO_FEATURE["avtn_db.bin"] == featunlk._Feature.NAVIGATION
 
     # Test terrain filename
-    if "terrain.tdb" in featunlk.FILENAME_TO_FEATURE:
-        assert featunlk.FILENAME_TO_FEATURE["terrain.tdb"] == featunlk.Feature.TERRAIN
+    if "terrain.tdb" in featunlk._FILENAME_TO_FEATURE:
+        assert featunlk._FILENAME_TO_FEATURE["terrain.tdb"] == featunlk._Feature.TERRAIN
 
 
 def test_update_feature_unlock_validation(tmp_path):

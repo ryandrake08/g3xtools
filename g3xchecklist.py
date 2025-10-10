@@ -5,12 +5,24 @@ Garmin G3X Checklist Converter
 Converts Garmin G3X aviation checklist files (.ace) to and from human-readable
 YAML format for easier editing and version control.
 
-Usage:
+This module provides both a command-line interface and a programmatic API for
+working with Garmin G3X checklist files.
+
+Command-line usage:
     # Extract ACE binary to YAML
     python3 g3xchecklist.py -x checklist.ace -o checklist.yaml
 
     # Compile YAML to ACE binary
     python3 g3xchecklist.py -c checklist.yaml -o checklist.ace
+
+Programmatic usage:
+    from g3xchecklist import ace_to_yaml, yaml_to_ace
+
+    # Convert ACE to YAML
+    ace_to_yaml('checklist.ace', 'checklist.yaml')
+
+    # Convert YAML to ACE
+    yaml_to_ace('checklist.yaml', 'checklist.ace')
 
 The YAML format provides a hierarchical structure with groups containing
 checklists, which contain items of various types (challenges, responses,
@@ -24,7 +36,7 @@ import struct
 import sys
 import zlib
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Union
 
 try:
     import yaml
@@ -32,13 +44,19 @@ except ImportError:
     print("Error: PyYAML is required. Install with: pip install pyyaml", file=sys.stderr)
     sys.exit(1)
 
+# Public API
+__all__ = [
+    'ace_to_yaml',
+    'yaml_to_ace',
+]
+
 # Constants
-ACE_HEADER_SIGNATURE = b'\xf0\xf0\xf0\xf0'
-ACE_HEADER_SIZE = 10
-ACE_FOOTER_SIZE = 4
+_ACE_HEADER_SIGNATURE = b'\xf0\xf0\xf0\xf0'
+_ACE_HEADER_SIZE = 10
+_ACE_FOOTER_SIZE = 4
 
 # Item type mappings
-ITEM_TYPE_TO_ACE = {
+_ITEM_TYPE_TO_ACE = {
     'challenge_response': 'r',
     'challenge': 'c',
     'plain_text': 'p',
@@ -49,10 +67,10 @@ ITEM_TYPE_TO_ACE = {
     'blank_line': '',
 }
 
-ACE_TO_ITEM_TYPE = {v: k for k, v in ITEM_TYPE_TO_ACE.items()}
+_ACE_TO_ITEM_TYPE = {v: k for k, v in _ITEM_TYPE_TO_ACE.items()}
 
 # Justification mappings
-JUSTIFICATION_TO_ACE = {
+_JUSTIFICATION_TO_ACE = {
     'left': '0',
     'indent_1': '1',
     'indent_2': '2',
@@ -61,7 +79,7 @@ JUSTIFICATION_TO_ACE = {
     'center': 'c',
 }
 
-ACE_TO_JUSTIFICATION = {v: k for k, v in JUSTIFICATION_TO_ACE.items()}
+_ACE_TO_JUSTIFICATION = {v: k for k, v in _JUSTIFICATION_TO_ACE.items()}
 
 @dataclass
 class ChecklistItem:
@@ -136,25 +154,25 @@ class AceFile:
 # ACE BINARY FORMAT FUNCTIONS
 # ================================================================
 
-def calculate_crc32(data: bytes, crc: int = 0) -> int:
+def _calculate_crc32(data: bytes, crc: int = 0) -> int:
     """Calculate CRC32 checksum for ACE file validation."""
     return zlib.crc32(data, crc) & 0xffffffff
 
-def read_ace_binary(file_path: pathlib.Path) -> AceFile:
+def _read_ace_binary(file_path: pathlib.Path) -> AceFile:
     """Read and parse an ACE binary file."""
     with open(file_path, 'rb') as f:
         data = f.read()
 
-    if len(data) < ACE_HEADER_SIZE + ACE_FOOTER_SIZE:
+    if len(data) < _ACE_HEADER_SIZE + _ACE_FOOTER_SIZE:
         raise ValueError("File too small to be a valid ACE file")
 
     # Parse header
-    header = data[:ACE_HEADER_SIZE]
-    content = data[ACE_HEADER_SIZE:-ACE_FOOTER_SIZE]
-    footer = data[-ACE_FOOTER_SIZE:]
+    header = data[:_ACE_HEADER_SIZE]
+    content = data[_ACE_HEADER_SIZE:-_ACE_FOOTER_SIZE]
+    footer = data[-_ACE_FOOTER_SIZE:]
 
     # Validate signature
-    if header[:4] != ACE_HEADER_SIGNATURE:
+    if header[:4] != _ACE_HEADER_SIGNATURE:
         raise ValueError("Invalid ACE file signature")
 
     # Extract header fields
@@ -165,8 +183,8 @@ def read_ace_binary(file_path: pathlib.Path) -> AceFile:
 
     # Validate CRC
     expected_crc = struct.unpack('<I', footer)[0]
-    header_crc = calculate_crc32(header)
-    calculated_crc = ~calculate_crc32(content, header_crc) & 0xffffffff
+    header_crc = _calculate_crc32(header)
+    calculated_crc = ~_calculate_crc32(content, header_crc) & 0xffffffff
 
     if expected_crc != calculated_crc:
         print(f"WARNING: CRC mismatch. Expected {expected_crc:08x}, got {calculated_crc:08x}")
@@ -249,7 +267,7 @@ def read_ace_binary(file_path: pathlib.Path) -> AceFile:
                 type='challenge_response',
                 text=challenge,
                 response=response,
-                justification=ACE_TO_JUSTIFICATION.get(just, 'left')
+                justification=_ACE_TO_JUSTIFICATION.get(just, 'left')
             )
             current_checklist.items.append(item)
 
@@ -260,18 +278,18 @@ def read_ace_binary(file_path: pathlib.Path) -> AceFile:
             text = line[2:]
 
             item = ChecklistItem(
-                type=ACE_TO_ITEM_TYPE.get(item_type, 'plain_text'),
+                type=_ACE_TO_ITEM_TYPE.get(item_type, 'plain_text'),
                 text=text,
-                justification=ACE_TO_JUSTIFICATION.get(just, 'left')
+                justification=_ACE_TO_JUSTIFICATION.get(just, 'left')
             )
             current_checklist.items.append(item)
 
     return ace_file
 
-def write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
+def _write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
     """Write an AceFile to binary ACE format."""
     # Build header
-    header = bytearray(ACE_HEADER_SIGNATURE)
+    header = bytearray(_ACE_HEADER_SIGNATURE)
     header.append(ace_file.file_format_rev)
     header.append(ace_file.unknown_field)
     header.append(ace_file.default_group)
@@ -298,15 +316,15 @@ def write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
                 if item.type == 'blank_line':
                     lines.append("")
                 elif item.type == 'challenge_response':
-                    just = JUSTIFICATION_TO_ACE.get(item.justification, '0')
+                    just = _JUSTIFICATION_TO_ACE.get(item.justification, '0')
                     if item.response:
                         lines.append(f"r{just}{item.text}~{item.response}")
                     else:
                         # Convert to challenge if no response
                         lines.append(f"c{just}{item.text}")
                 else:
-                    ace_type = ITEM_TYPE_TO_ACE.get(item.type, 'p')
-                    just = JUSTIFICATION_TO_ACE.get(item.justification, '0')
+                    ace_type = _ITEM_TYPE_TO_ACE.get(item.type, 'p')
+                    just = _JUSTIFICATION_TO_ACE.get(item.justification, '0')
                     lines.append(f"{ace_type}{just}{item.text}")
 
             lines.append(")")
@@ -325,8 +343,8 @@ def write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
 
     # Calculate CRC
     header_bytes = bytes(header)
-    header_crc = calculate_crc32(header_bytes)
-    crc = ~calculate_crc32(content, header_crc) & 0xffffffff
+    header_crc = _calculate_crc32(header_bytes)
+    crc = ~_calculate_crc32(content, header_crc) & 0xffffffff
     footer = struct.pack('<I', crc)
 
     # Write file
@@ -339,7 +357,7 @@ def write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
 # YAML FORMAT FUNCTIONS
 # ================================================================
 
-def ace_to_yaml_dict(ace_file: AceFile) -> dict:
+def _ace_to_yaml_dict(ace_file: AceFile) -> dict:
     """Convert AceFile to YAML-compatible dictionary."""
     # Build groups list
     groups_list: list[dict[str, Any]] = []
@@ -393,7 +411,7 @@ def ace_to_yaml_dict(ace_file: AceFile) -> dict:
 
     return yaml_dict
 
-def yaml_dict_to_ace(yaml_dict: dict) -> AceFile:
+def _yaml_dict_to_ace(yaml_dict: dict) -> AceFile:
     """Convert YAML dictionary to AceFile."""
     metadata = yaml_dict.get('metadata', {})
     defaults = yaml_dict.get('defaults', {})
@@ -435,9 +453,9 @@ def yaml_dict_to_ace(yaml_dict: dict) -> AceFile:
 
     return ace_file
 
-def write_yaml_file(ace_file: AceFile, file_path: pathlib.Path) -> None:
+def _write_yaml_file(ace_file: AceFile, file_path: pathlib.Path) -> None:
     """Write AceFile to YAML format."""
-    yaml_dict = ace_to_yaml_dict(ace_file)
+    yaml_dict = _ace_to_yaml_dict(ace_file)
 
     with open(file_path, 'w', encoding='utf-8') as f:
         # Add header comment
@@ -448,7 +466,7 @@ def write_yaml_file(ace_file: AceFile, file_path: pathlib.Path) -> None:
         yaml.dump(yaml_dict, f, default_flow_style=False, allow_unicode=True,
                  sort_keys=False, indent=2)
 
-def read_yaml_file(file_path: pathlib.Path) -> AceFile:
+def _read_yaml_file(file_path: pathlib.Path) -> AceFile:
     """Read YAML file and convert to AceFile."""
     with open(file_path, encoding='utf-8') as f:
         yaml_dict = yaml.safe_load(f)
@@ -456,20 +474,37 @@ def read_yaml_file(file_path: pathlib.Path) -> AceFile:
     if not isinstance(yaml_dict, dict):
         raise ValueError("YAML file must contain a dictionary at the root level")
 
-    return yaml_dict_to_ace(yaml_dict)
+    return _yaml_dict_to_ace(yaml_dict)
 
 # ================================================================
-# CONVERSION FUNCTIONS
+# PUBLIC API - CONVERSION FUNCTIONS
 # ================================================================
 
-def ace_to_yaml(ace_path: pathlib.Path, yaml_path: pathlib.Path) -> None:
-    """Convert ACE binary file to YAML format."""
+def ace_to_yaml(ace_path: Union[pathlib.Path, str], yaml_path: Union[pathlib.Path, str]) -> None:
+    """
+    Convert ACE binary file to YAML format.
+
+    Args:
+        ace_path: Path to input ACE binary file
+        yaml_path: Path to output YAML file
+
+    Raises:
+        ValueError: If ACE file is invalid or cannot be parsed
+        FileNotFoundError: If input file does not exist
+        OSError: If file operations fail
+
+    Example:
+        >>> ace_to_yaml('checklist.ace', 'checklist.yaml')
+    """
+    ace_path = pathlib.Path(ace_path)
+    yaml_path = pathlib.Path(yaml_path)
+
     try:
         print(f"Reading ACE file: {ace_path}", file=sys.stderr)
-        ace_file = read_ace_binary(ace_path)
+        ace_file = _read_ace_binary(ace_path)
 
         print(f"Writing YAML file: {yaml_path}", file=sys.stderr)
-        write_yaml_file(ace_file, yaml_path)
+        _write_yaml_file(ace_file, yaml_path)
 
         # Print summary to stderr
         total_items = sum(len(checklist.items) for group in ace_file.groups for checklist in group.checklists)
@@ -480,16 +515,33 @@ def ace_to_yaml(ace_path: pathlib.Path, yaml_path: pathlib.Path) -> None:
 
     except Exception as e:
         print(f"Error converting ACE to YAML: {e}", file=sys.stderr)
-        sys.exit(1)
+        raise
 
-def yaml_to_ace(yaml_path: pathlib.Path, ace_path: pathlib.Path) -> None:
-    """Convert YAML file to ACE binary format."""
+def yaml_to_ace(yaml_path: Union[pathlib.Path, str], ace_path: Union[pathlib.Path, str]) -> None:
+    """
+    Convert YAML file to ACE binary format.
+
+    Args:
+        yaml_path: Path to input YAML file
+        ace_path: Path to output ACE binary file
+
+    Raises:
+        ValueError: If YAML file is invalid or contains unsupported characters
+        FileNotFoundError: If input file does not exist
+        OSError: If file operations fail
+
+    Example:
+        >>> yaml_to_ace('checklist.yaml', 'checklist.ace')
+    """
+    yaml_path = pathlib.Path(yaml_path)
+    ace_path = pathlib.Path(ace_path)
+
     try:
         print(f"Reading YAML file: {yaml_path}", file=sys.stderr)
-        ace_file = read_yaml_file(yaml_path)
+        ace_file = _read_yaml_file(yaml_path)
 
         print(f"Writing ACE file: {ace_path}", file=sys.stderr)
-        write_ace_binary(ace_file, ace_path)
+        _write_ace_binary(ace_file, ace_path)
 
         # Print summary to stderr
         total_items = sum(len(checklist.items) for group in ace_file.groups for checklist in group.checklists)
@@ -500,7 +552,7 @@ def yaml_to_ace(yaml_path: pathlib.Path, ace_path: pathlib.Path) -> None:
 
     except Exception as e:
         print(f"Error converting YAML to ACE: {e}", file=sys.stderr)
-        sys.exit(1)
+        raise
 
 def main() -> None:
     """Main entry point."""
@@ -535,9 +587,15 @@ def main() -> None:
         sys.exit(1)
 
     if args.extract:
-        ace_to_yaml(input_file, output_file)
+        try:
+            ace_to_yaml(input_file, output_file)
+        except Exception:
+            sys.exit(1)
     elif args.compile:
-        yaml_to_ace(input_file, output_file)
+        try:
+            yaml_to_ace(input_file, output_file)
+        except Exception:
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()

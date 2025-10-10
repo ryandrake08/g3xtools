@@ -54,9 +54,9 @@ def test_unlock_with_mock(mock_garmin_api):
 def test_api_timeout_configured():
     """Verify API timeout is configured."""
     # Check that API_TIMEOUT constant exists and is reasonable
-    assert hasattr(garmin_api, "API_TIMEOUT")
-    assert garmin_api.API_TIMEOUT > 0
-    assert garmin_api.API_TIMEOUT <= 60  # Should be ≤ 60 seconds
+    assert hasattr(garmin_api, "_API_TIMEOUT")
+    assert garmin_api._API_TIMEOUT > 0
+    assert garmin_api._API_TIMEOUT <= 60  # Should be ≤ 60 seconds
 
 
 def test_api_error_handling(requests_mock):

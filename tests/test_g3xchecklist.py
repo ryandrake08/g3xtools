@@ -18,7 +18,7 @@ import g3xchecklist as ace
 def test_read_minimal_ace(fixtures_dir):
     """Read a minimal valid ACE file."""
     ace_path = fixtures_dir / "minimal.ace"
-    checklist = ace.read_ace_binary(ace_path)
+    checklist = ace._read_ace_binary(ace_path)
 
     assert checklist.name == "Test Checklist"
     assert checklist.aircraft_make_model == "Test Aircraft"
@@ -35,7 +35,7 @@ def test_ace_crc_validation(fixtures_dir, capsys):
     bad_ace_path = fixtures_dir / "invalid_crc.ace"
 
     # Current behavior: prints warning but doesn't raise exception
-    checklist = ace.read_ace_binary(bad_ace_path)
+    checklist = ace._read_ace_binary(bad_ace_path)
     captured = capsys.readouterr()
     assert "CRC mismatch" in captured.out
     assert checklist.name == "Test Checklist"
@@ -46,7 +46,7 @@ def test_truncated_ace_file(fixtures_dir):
     truncated_path = fixtures_dir / "truncated.ace"
 
     with pytest.raises(ValueError, match="File too small"):
-        ace.read_ace_binary(truncated_path)
+        ace._read_ace_binary(truncated_path)
 
 
 def test_ace_to_yaml_conversion(tmp_path, fixtures_dir):
@@ -55,13 +55,13 @@ def test_ace_to_yaml_conversion(tmp_path, fixtures_dir):
     yaml_path = tmp_path / "output.yaml"
 
     # Read ACE
-    checklist = ace.read_ace_binary(ace_path)
+    checklist = ace._read_ace_binary(ace_path)
 
     # Write YAML
-    ace.write_yaml_file(checklist, yaml_path)
+    ace._write_yaml_file(checklist, yaml_path)
 
     # Read YAML back
-    checklist_from_yaml = ace.read_yaml_file(yaml_path)
+    checklist_from_yaml = ace._read_yaml_file(yaml_path)
 
     # Verify structure preserved
     assert checklist_from_yaml.name == checklist.name
@@ -75,13 +75,13 @@ def test_yaml_to_ace_conversion(tmp_path, fixtures_dir):
     ace_path = tmp_path / "output.ace"
 
     # Read YAML
-    checklist = ace.read_yaml_file(yaml_path)
+    checklist = ace._read_yaml_file(yaml_path)
 
     # Write ACE
-    ace.write_ace_binary(checklist, ace_path)
+    ace._write_ace_binary(checklist, ace_path)
 
     # Read ACE back
-    checklist_from_ace = ace.read_ace_binary(ace_path)
+    checklist_from_ace = ace._read_ace_binary(ace_path)
 
     # Verify structure preserved
     assert checklist_from_ace.name == checklist.name
@@ -96,19 +96,19 @@ def test_ace_round_trip(tmp_path, fixtures_dir):
     final_ace = tmp_path / "final.ace"
 
     # Read original ACE
-    checklist1 = ace.read_ace_binary(original_ace)
+    checklist1 = ace._read_ace_binary(original_ace)
 
     # Convert to YAML
-    ace.write_yaml_file(checklist1, yaml_path)
+    ace._write_yaml_file(checklist1, yaml_path)
 
     # Read YAML
-    checklist2 = ace.read_yaml_file(yaml_path)
+    checklist2 = ace._read_yaml_file(yaml_path)
 
     # Convert back to ACE
-    ace.write_ace_binary(checklist2, final_ace)
+    ace._write_ace_binary(checklist2, final_ace)
 
     # Read final ACE
-    checklist3 = ace.read_ace_binary(final_ace)
+    checklist3 = ace._read_ace_binary(final_ace)
 
     # Compare structures (binary may differ due to encoding but structure should match)
     assert checklist3.name == checklist1.name
@@ -134,19 +134,19 @@ def test_yaml_round_trip(tmp_path, fixtures_dir):
     final_yaml = tmp_path / "final.yaml"
 
     # Read original YAML
-    checklist1 = ace.read_yaml_file(original_yaml)
+    checklist1 = ace._read_yaml_file(original_yaml)
 
     # Convert to ACE
-    ace.write_ace_binary(checklist1, ace_path)
+    ace._write_ace_binary(checklist1, ace_path)
 
     # Read ACE
-    checklist2 = ace.read_ace_binary(ace_path)
+    checklist2 = ace._read_ace_binary(ace_path)
 
     # Convert back to YAML
-    ace.write_yaml_file(checklist2, final_yaml)
+    ace._write_yaml_file(checklist2, final_yaml)
 
     # Read final YAML
-    checklist3 = ace.read_yaml_file(final_yaml)
+    checklist3 = ace._read_yaml_file(final_yaml)
 
     # Compare
     assert checklist3.name == checklist1.name
@@ -175,8 +175,8 @@ def test_all_item_types(tmp_path):
 
     # Write and read back
     ace_path = tmp_path / "all_types.ace"
-    ace.write_ace_binary(checklist, ace_path)
-    roundtrip = ace.read_ace_binary(ace_path)
+    ace._write_ace_binary(checklist, ace_path)
+    roundtrip = ace._read_ace_binary(ace_path)
 
     # Verify all items present with correct types
     rt_items = roundtrip.groups[0].checklists[0].items
@@ -208,8 +208,8 @@ def test_justification_preservation(tmp_path):
 
     # Write and read back
     ace_path = tmp_path / "justification.ace"
-    ace.write_ace_binary(checklist, ace_path)
-    roundtrip = ace.read_ace_binary(ace_path)
+    ace._write_ace_binary(checklist, ace_path)
+    roundtrip = ace._read_ace_binary(ace_path)
 
     # Verify justification preserved
     rt_items = roundtrip.groups[0].checklists[0].items
@@ -222,7 +222,7 @@ def test_invalid_yaml_checklist(fixtures_dir):
     invalid_yaml = fixtures_dir / "invalid.yaml"
 
     # Current behavior: doesn't validate, uses defaults for missing fields
-    checklist = ace.read_yaml_file(invalid_yaml)
+    checklist = ace._read_yaml_file(invalid_yaml)
 
     # Verify it loaded something (even with invalid data)
     assert checklist.name == "Invalid Checklist"
