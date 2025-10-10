@@ -31,10 +31,10 @@ __all__ = [
     'extract_taw',
 ]
 
-TAW_SEPARATOR = b'\x00\x02\x00\x00\x00Dd\x00\x1b\x00\x00\x00A\xc8\x00'
-TAW_MAGIC = b'KpGrd'
+_TAW_SEPARATOR = b'\x00\x02\x00\x00\x00Dd\x00\x1b\x00\x00\x00A\xc8\x00'
+_TAW_MAGIC = b'KpGrd'
 
-TAW_DATABASE_TYPES = {
+_TAW_DATABASE_TYPES = {
     0x0091: "GPSMAP 196",
     0x00BF: "Gx000",
     0x0104: "GPSMAP 296",
@@ -53,7 +53,7 @@ TAW_DATABASE_TYPES = {
     0x07DC: "GTXi",
 }
 
-TAW_REGION_PATHS = {
+_TAW_REGION_PATHS = {
     0x01: "ldr_sys/avtn_db.bin",
     0x02: "ldr_sys/nav_db2.bin",
     0x03: "bmap.bin",
@@ -93,8 +93,8 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
         if magic not in (b'pWa.d', b'wAt.d'):
             raise ValueError(f"Unexpected bytes: {magic}")
 
-        sep = fd.read(len(TAW_SEPARATOR))
-        if sep != TAW_SEPARATOR:
+        sep = fd.read(len(_TAW_SEPARATOR))
+        if sep != _TAW_SEPARATOR:
             raise ValueError(f"Unexpected separator bytes: {sep}")
 
         sqa1 = [s.decode() for s in fd.read(25).split(b'\x00')]
@@ -113,12 +113,12 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
         if section_type != b'R':
             raise ValueError(f"Unexpected section type: {section_type}")
 
-        magic = fd.read(len(TAW_MAGIC))
-        if magic != TAW_MAGIC:
+        magic = fd.read(len(_TAW_MAGIC))
+        if magic != _TAW_MAGIC:
             raise ValueError(f"Got unexpected magic bytes: {magic}")
 
-        sep = fd.read(len(TAW_SEPARATOR))
-        if sep != TAW_SEPARATOR:
+        sep = fd.read(len(_TAW_SEPARATOR))
+        if sep != _TAW_SEPARATOR:
             raise ValueError(f"Unexpected separator bytes: {sep}")
 
         sqa2 = [s.decode() for s in fd.read(25).split(b'\x00')]
@@ -150,7 +150,7 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
 
             if info_only:
                 debug()
-                database_type_name = TAW_DATABASE_TYPES.get(database_type, "Unknown")
+                database_type_name = _TAW_DATABASE_TYPES.get(database_type, "Unknown")
                 print(f"Database type: {database_type:x} ({database_type_name})")
                 print(f"Year: {year}")
                 print(f"Cycle: {cycle}")
@@ -181,7 +181,7 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
             debug(f"Section start: {sect_start:x}")
             debug(f"Section size: {sect_size:x}")
 
-            region_path = TAW_REGION_PATHS.get(region)
+            region_path = _TAW_REGION_PATHS.get(region)
             debug(f"Region: {region:02x} ({region_path or 'unknown'})")
             debug(f"Unknown: {unknown}")
             debug(f"Database start: {data_start}")

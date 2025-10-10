@@ -985,7 +985,52 @@ For now, see featunlk.py for this information.
 - `G3X_GARMIN_ACCESS_TOKEN`: Default Garmin flygarmin access token for authentication (g3xdata.py)
 
 ### Testing
-Basic functionality tests:
+
+The project includes a test suite using pytest.
+
+#### Running Tests
+
+```bash
+# Activate virtual environment first
+source env/bin/activate
+
+# Run all tests
+pytest
+
+# Run with coverage report
+pytest --cov
+
+# Run specific module tests
+pytest tests/test_fpl.py
+pytest tests/test_g3xdata.py
+
+# Run with verbose output
+pytest -v
+
+# Stop on first failure
+pytest -x
+```
+
+#### Code Quality
+
+The project uses **ruff** for linting/formatting and **mypy** for type checking:
+
+```bash
+# Install quality tools
+pip install "ruff>=0.1.0" "mypy>=1.0"
+
+# Run all checks
+./tests/lint.sh
+
+# Auto-fix issues
+ruff check --fix .
+ruff format .
+```
+
+#### Manual Testing
+
+Basic functionality can be tested without the test suite:
+
 ```bash
 # Test authentication and API access
 python3 garmin_login.py                             # Test authentication

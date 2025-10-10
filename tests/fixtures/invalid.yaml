@@ -1,0 +1,10 @@
+metadata:
+  name: Invalid Checklist
+  aircraft_information: Invalid
+defaults:
+  group: not_a_number
+  checklist: 0
+groups:
+- this_is_wrong: Missing name field
+  checklists:
+  - items: []

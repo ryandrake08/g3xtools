@@ -22,14 +22,14 @@ and reports structural differences with software version information.
 import argparse
 import csv
 import os
+import pathlib
 import sys
-from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 
 class G3XLogFileData:
-    def __init__(self, filename: Union[str, Path]) -> None:
-        self.filename = str(filename)
+    def __init__(self, filename: pathlib.Path) -> None:
+        self.filename = filename
 
     def __enter__(self) -> 'G3XLogFileData':
         return self.open()
@@ -64,7 +64,7 @@ class G3XLogFileData:
     def close(self) -> None:
         self.file.close()
 
-def compare_headers(prev_file: G3XLogFileData, curr_file: G3XLogFileData) -> bool:
+def _compare_headers(prev_file: G3XLogFileData, curr_file: G3XLogFileData) -> bool:
     """Compare headers between two G3X files and report changes"""
     prev_headers = prev_file.full_headers
     prev_stable_keys = dict(zip(prev_file.full_headers, prev_file.short_headers))
@@ -98,7 +98,7 @@ def compare_headers(prev_file: G3XLogFileData, curr_file: G3XLogFileData) -> boo
 
         # Only report changes if there are actual structural changes
         if new_headers or removed_headers or renamed_headers:
-            print(f"{Path(curr_file.filename).name}: File structure changed: {prev_software_version} -> {curr_software_version}")
+            print(f"{curr_file.filename}: File structure changed: {prev_software_version} -> {curr_software_version}")
 
             if new_headers:
                 new_with_keys = [f"{h} ({curr_stable_keys.get(h, 'no key')})" for h in new_headers]
@@ -122,7 +122,7 @@ def main() -> None:
         print("Error: Logs path must be provided via G3X_LOG_PATH environment variable or command line argument", file=sys.stderr)
         sys.exit(1)
 
-    log_path = Path(log_path_str).resolve()
+    log_path = pathlib.Path(log_path_str).resolve()
 
     # Validate search path exists and is a directory
     if not log_path.exists():
@@ -147,7 +147,7 @@ def main() -> None:
     # Process files and compare headers
     for prev_filename, curr_filename in zip(src_logs, src_logs[1:]):
         with G3XLogFileData(prev_filename) as prev_file, G3XLogFileData(curr_filename) as curr_file:
-            compare_headers(prev_file, curr_file)
+            _compare_headers(prev_file, curr_file)
 
 if __name__ == "__main__":
     """ This is executed when run from the command line """

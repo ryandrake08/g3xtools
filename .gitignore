@@ -4,10 +4,11 @@ venv
 __pycache__
 *.pyc
 *.pyo
-
-sdcard
-cache
-re
-*.db
+tests/.coverage
+tests/.coverage.*
+tests/.coverage_html
+.pytest_cache
+.mypy_cache
+.ruff_cache
 *.pstats
-*.msgpack
+.cache

@@ -26,9 +26,29 @@ sdcard = [
 windows = [
     "pywin32>=304; sys_platform == 'win32'",
 ]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "requests-mock>=1.10",
+    "pytest-mock>=3.10",
+    "types-requests>=2.32.4",
+    "types-PyYAML>=6.0.12",
+]
+lint = [
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+    "vermin>=1.5",
+]
 dev = [
     "psutil>=5.9.0",
     "pywin32>=304; sys_platform == 'win32'",
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "requests-mock>=1.10",
+    "pytest-mock>=3.10",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+    "vermin>=1.5",
 ]
 
 [project.scripts]
@@ -52,3 +72,62 @@ build-backend = "setuptools.build_backend"
 
 [tool.setuptools]
 py-modules = ["g3xlog", "g3xheaders", "g3xchecklist", "g3xdata", "garmin_login", "garmin_api", "taw", "featunlk", "sdcard", "fpl", "nasr", "g3xfplan"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.html]
+directory = "tests/.coverage_html"
+
+[tool.coverage.run]
+data_file = "tests/.coverage"
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.format]
+quote-style = "preserve"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "N",   # pep8-naming
+    "UP",  # pyupgrade (modernize syntax)
+    "B",   # flake8-bugbear (likely bugs)
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false

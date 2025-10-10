@@ -50,7 +50,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import bs4
 import msgpack
@@ -497,9 +497,10 @@ def main():
         'airways': airways,
         'connections': connections
     }
-    with open(_NASR_DATABASE_PATH, 'wb') as f:
-        packed_data: bytes = msgpack.packb(database)  # type: ignore[assignment]
-        f.write(packed_data)
+    packed_data: Union[bytes, None] = msgpack.packb(database)
+    if packed_data:
+        with open(_NASR_DATABASE_PATH, 'wb') as f:
+            f.write(packed_data)
 
 if __name__ == '__main__':
     main()

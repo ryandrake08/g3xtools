@@ -1,0 +1,25 @@
+metadata:
+  name: Test Checklist
+  aircraft_make_model: Test Aircraft
+  aircraft_information: N12345TEST
+  manufacturer_identification: Test Manufacturer
+  copyright_information: Copyright 2024
+  file_format_rev: 0
+  unknown_field: 1
+defaults:
+  group: 0
+  checklist: 0
+groups:
+- name: Pre-Flight
+  checklists:
+  - name: Exterior Inspection
+    items:
+    - type: challenge_response
+      text: Fuel Quantity
+      response: SUFFICIENT
+      justification: left
+    - type: warning
+      text: PROPELLER AREA CLEAR
+      justification: center
+    - type: blank_line
+      justification: left

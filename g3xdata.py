@@ -45,7 +45,7 @@ import garmin_login
 import sdcard
 import taw
 
-CACHE_PATH = platformdirs.user_cache_path("g3xtools", "g3xtools", ensure_exists=True)
+_CACHE_PATH = platformdirs.user_cache_path("g3xtools", "g3xtools", ensure_exists=True)
 
 session = requests.Session()
 session.headers['User-Agent'] = None  # type: ignore
@@ -61,7 +61,7 @@ def cache_json_data(cache_filename: str, fetch_function, force: bool = False) ->
     Returns:
         Cached or freshly fetched data
     """
-    cache_path = CACHE_PATH / cache_filename
+    cache_path = _CACHE_PATH / cache_filename
 
     if force:
         cache_path.unlink(missing_ok=True)
@@ -99,7 +99,7 @@ def get_aircraft_data(access_token: str, force: bool = False) -> list:
     """
     # Check if any device has a past nextExpectedAvdbAvailability date
     if not force:
-        cache_path = CACHE_PATH / "aircraft.json"
+        cache_path = _CACHE_PATH / "aircraft.json"
         try:
             with open(cache_path, encoding="utf-8") as fd:
                 cached_data = json.load(fd)
@@ -332,7 +332,7 @@ def get_cached_file_path_for_url(url: str) -> pathlib.Path:
 
     Returns:
         Path object pointing to the cached file location
-        Directory structure: CACHE_PATH/hostname/url_path
+        Directory structure: _CACHE_PATH/hostname/url_path
 
     Raises:
         ValueError: If URL contains path traversal attempts
@@ -346,11 +346,11 @@ def get_cached_file_path_for_url(url: str) -> pathlib.Path:
     if '..' in url_path.parts:
         raise ValueError(f"URL path contains directory traversal: {url}")
 
-    dest_path = (CACHE_PATH / hostname_path / url_path).resolve()
+    dest_path = (_CACHE_PATH / hostname_path / url_path).resolve()
 
-    # Ensure resolved path is still within CACHE_PATH
+    # Ensure resolved path is still within _CACHE_PATH
     try:
-        dest_path.relative_to(CACHE_PATH.resolve())
+        dest_path.relative_to(_CACHE_PATH.resolve())
     except ValueError as e:
         raise ValueError(f"URL resolves outside cache directory: {url}") from e
 

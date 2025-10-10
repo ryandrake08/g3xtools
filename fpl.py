@@ -106,11 +106,11 @@ Data Model:
     └── extensions: Any (optional)
 """
 
+import pathlib
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Optional, Union
 
 # Public API
@@ -462,7 +462,7 @@ def _ns(tag: str) -> str:
     return f"{{{_FPL_NAMESPACE}}}{tag}"
 
 
-def _find_text_optional(elem: ET.Element, tag: str, default: Optional[str] = None) -> str | None:
+def _find_text_optional(elem: ET.Element, tag: str, default: Optional[str] = None) -> Union[str, None]:
     """
     Find text content of child element with namespace handling (optional field).
 
@@ -739,7 +739,7 @@ def _parse_flight_plan(root: ET.Element, validate: bool) -> FlightPlan:
     )
 
 
-def read_fpl(file_path: Union[str, Path], validate: bool = True) -> FlightPlan:
+def read_fpl(file_path: pathlib.Path, validate: bool = True) -> FlightPlan:
     """
     Read a Garmin FPL file and return a FlightPlan dataclass.
 
@@ -760,10 +760,8 @@ def read_fpl(file_path: Union[str, Path], validate: bool = True) -> FlightPlan:
         >>> print(f"Route: {flight_plan.route.route_name}")
         >>> print(f"Waypoints: {len(flight_plan.waypoint_table)}")
     """
-    path = Path(file_path)
-
     # Parse XML file (reading local files, no XXE risk)
-    tree = ET.parse(path)
+    tree = ET.parse(file_path)
     root = tree.getroot()
     return _parse_flight_plan(root, validate)
 
@@ -992,7 +990,7 @@ def _create_flight_plan_elem(flight_plan: FlightPlan, validate: bool) -> ET.Elem
 
 def write_fpl(
     flight_plan: FlightPlan,
-    file_path: str | Path,
+    file_path: pathlib.Path,
     validate: bool = True,
     pretty: bool = True
 ) -> None:
@@ -1013,8 +1011,6 @@ def write_fpl(
         >>> flight_plan = create_flight_plan([...], route)
         >>> write_fpl(flight_plan, "output.fpl")
     """
-    path = Path(file_path)
-
     # Create the XML tree
     root = _create_flight_plan_elem(flight_plan, validate)
     tree = ET.ElementTree(root)
@@ -1025,7 +1021,7 @@ def write_fpl(
 
     # Write to file with XML declaration
     tree.write(
-        path,
+        file_path,
         encoding="utf-8",
         xml_declaration=True,
         short_empty_elements=False,
@@ -1225,7 +1221,7 @@ def get_waypoint(
     identifier: str,
     waypoint_type: str,
     country_code: str
-) -> Waypoint | None:
+) -> Union[Waypoint, None]:
     """
     Find a waypoint in the flight plan by its key.
 

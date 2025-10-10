@@ -44,10 +44,10 @@ __all__ = [
     'flygarmin_login',
 ]
 
-SSO_CLIENT_ID = "FLY_GARMIN_DESKTOP"
-OAUTH_TOKEN_URL = "https://services.garmin.com/api/oauth/token"
+_SSO_CLIENT_ID = "FLY_GARMIN_DESKTOP"
+_OAUTH_TOKEN_URL = "https://services.garmin.com/api/oauth/token"
 
-class GarminHandler(http.server.BaseHTTPRequestHandler):
+class _GarminHandler(http.server.BaseHTTPRequestHandler):
     def handle_credentials(self, auth: dict[str, str]) -> None:
         ...
 
@@ -96,10 +96,10 @@ class GarminHandler(http.server.BaseHTTPRequestHandler):
 
             try:
                 resp = requests.post(
-                    OAUTH_TOKEN_URL,
+                    _OAUTH_TOKEN_URL,
                     data={
                         'grant_type': 'service_ticket',
-                        'client_id': SSO_CLIENT_ID,
+                        'client_id': _SSO_CLIENT_ID,
                         'service_url': service_url,
                         'service_ticket': service_ticket,
                     },
@@ -118,8 +118,8 @@ def flygarmin_login() -> dict[str, Any]:
     """Perform OAuth login flow and return json containing credentials and other data."""
     data: dict[str, Any] = {}
 
-    # Overridden from GarminHandler to set our local variable
-    class Handler(GarminHandler):
+    # Overridden from _GarminHandler to set our local variable
+    class Handler(_GarminHandler):
         def handle_credentials(self, auth: dict[str, Any]) -> None:
             nonlocal data
             data = auth

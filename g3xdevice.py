@@ -50,11 +50,11 @@ Usage:
 """
 
 import argparse
+import pathlib
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 # Public API
 __all__ = [
@@ -410,7 +410,7 @@ def _parse_device(root: ET.Element) -> Device:
     )
 
 
-def read_device(file_path: Union[str, Path]) -> Device:
+def read_device(file_path: pathlib.Path) -> Device:
     """
     Read a GarminDevice.xml file and return a Device dataclass.
 
@@ -430,9 +430,7 @@ def read_device(file_path: Union[str, Path]) -> Device:
         >>> print(f"Device: {device.model.description}")
         >>> print(f"Part Number: {device.model.part_number}")
     """
-    path = Path(file_path)
-
-    tree = ET.parse(path)
+    tree = ET.parse(file_path)
     root = tree.getroot()
     return _parse_device(root)
 
@@ -447,7 +445,7 @@ def main() -> None:
     args = parser.parse_args()
 
     # Check that file exists
-    file_path = Path(args.file)
+    file_path = pathlib.Path(args.file)
     if not file_path.exists():
         print(f"Error: File not found: {file_path}", file=sys.stderr)
         sys.exit(1)

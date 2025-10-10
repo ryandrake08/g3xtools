@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='utf-8'?>
+<flight-plan xmlns="http://www8.garmin.com/xmlschemas/FlightPlan/v1">
+  <waypoint-table>
+    <waypoint>
+      <identifier>KAAA</identifier>
+      <type>AIRPORT</type>
+      <country-code>US</country-code>
+      <lat>40.000000</lat>
+      <lon>-120.000000</lon>
+      <comment>SYNTHETIC AIRPORT A</comment>
+    </waypoint>
+  </waypoint-table>
+  <route>
+    <route-name>INVALID TEST</route-name>
+    <flight-plan-index>3</flight-plan-index>
+    <route-point>
+      <waypoint-identifier>KAAA</waypoint-identifier>
+      <waypoint-type>AIRPORT</waypoint-type>
+      <waypoint-country-code>US</waypoint-country-code>
+    </route-point>
+    <route-point>
+      <waypoint-identifier>NONEXISTENT</waypoint-identifier>
+      <waypoint-type>AIRPORT</waypoint-type>
+      <waypoint-country-code>US</waypoint-country-code>
+    </route-point>
+  </route>
+</flight-plan>
