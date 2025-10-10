@@ -24,7 +24,7 @@ import argparse
 import pathlib
 import sys
 from collections.abc import Generator
-from typing import Optional
+from typing import Optional, Union
 
 # Public API
 __all__ = [
@@ -91,11 +91,11 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
 
         magic = fd.read(5)
         if magic not in (b'pWa.d', b'wAt.d'):
-            raise ValueError(f"Unexpected bytes: {magic}")
+            raise ValueError(f"Unexpected bytes: {magic!r}")
 
         sep = fd.read(len(_TAW_SEPARATOR))
         if sep != _TAW_SEPARATOR:
-            raise ValueError(f"Unexpected separator bytes: {sep}")
+            raise ValueError(f"Unexpected separator bytes: {sep!r}")
 
         sqa1 = [s.decode() for s in fd.read(25).split(b'\x00')]
 
@@ -103,7 +103,7 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
 
         section_type = fd.read(1)
         if section_type != b'F':
-            raise ValueError(f"Unexpected section type: {section_type}")
+            raise ValueError(f"Unexpected section type: {section_type!r}")
 
         metadata = fd.read(metadata_len)
 
@@ -111,15 +111,15 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
 
         section_type = fd.read(1)
         if section_type != b'R':
-            raise ValueError(f"Unexpected section type: {section_type}")
+            raise ValueError(f"Unexpected section type: {section_type!r}")
 
         magic = fd.read(len(_TAW_MAGIC))
         if magic != _TAW_MAGIC:
-            raise ValueError(f"Got unexpected magic bytes: {magic}")
+            raise ValueError(f"Got unexpected magic bytes: {magic!r}")
 
         sep = fd.read(len(_TAW_SEPARATOR))
         if sep != _TAW_SEPARATOR:
-            raise ValueError(f"Unexpected separator bytes: {sep}")
+            raise ValueError(f"Unexpected separator bytes: {sep!r}")
 
         sqa2 = [s.decode() for s in fd.read(25).split(b'\x00')]
 
@@ -142,7 +142,7 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
 
             parts = text.split(b'\x00')
             if len(parts) != 3:
-                raise ValueError(f"Unexpected metadata: {metadata}")
+                raise ValueError(f"Unexpected metadata: {metadata!r}")
 
             avionics=parts[0].decode()
             coverage=parts[1].decode()
@@ -171,7 +171,7 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
             if section_type == b'S':
                 break
             if section_type != b'R':
-                raise ValueError(f"Unexpected section type: {section_type}")
+                raise ValueError(f"Unexpected section type: {section_type!r}")
 
             region = int.from_bytes(fd.read(2), 'little')
             unknown = int.from_bytes(fd.read(4), 'little')
@@ -187,6 +187,7 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
             debug(f"Database start: {data_start}")
             debug(f"Database size: {data_size}")
 
+            output_file: Union[pathlib.PurePosixPath, str, None]
             if region_path:
                 output_file = pathlib.PurePosixPath(region_path)
             elif skip_unknown_regions:
@@ -225,7 +226,7 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
 
         # Unknown extra bytes at the end
         tail = fd.read()
-        debug(f"Tail: {tail}")
+        debug(f"Tail: {tail!r}")
 
 def main() -> None:
     # Parse command line arguments

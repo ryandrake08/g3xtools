@@ -85,7 +85,8 @@ def get_access_token(force: bool = False) -> str:
         Valid OAuth access token string for API authentication
     """
     auth_data = cache_json_data("garmin_auth.json", garmin_login.flygarmin_login, force)
-    return auth_data['access_token']
+    access_token: str = auth_data['access_token']
+    return access_token
 
 def get_aircraft_data(access_token: str, force: bool = False) -> list:
     """Obtain aircraft data with caching support.
@@ -120,7 +121,8 @@ def get_aircraft_data(access_token: str, force: bool = False) -> list:
             # If we can't read the cache, proceed normally
             pass
 
-    return cache_json_data("aircraft.json", lambda: garmin_api.flygarmin_list_aircraft(access_token), force)
+    result: list = cache_json_data("aircraft.json", lambda: garmin_api.flygarmin_list_aircraft(access_token), force)
+    return result
 
 def get_dataset_files(series_id: int, issue_name: str, force: bool = False) -> dict:
     """Obtain dataset file information with caching support.
@@ -134,7 +136,8 @@ def get_dataset_files(series_id: int, issue_name: str, force: bool = False) -> d
         Dictionary containing file URLs, sizes, and destination paths for the dataset
     """
     cache_filename = f"dataset-{series_id}-{issue_name}.json"
-    return cache_json_data(cache_filename, lambda: garmin_api.flygarmin_list_files(series_id, issue_name), force)
+    result: dict = cache_json_data(cache_filename, lambda: garmin_api.flygarmin_list_files(series_id, issue_name), force)
+    return result
 
 def get_unlock_data(access_token: str, series_id: int, issue_name: str, device_id: int, card_serial: int, force: bool = False) -> dict:
     """Obtain unlock code data with caching support.
@@ -151,7 +154,8 @@ def get_unlock_data(access_token: str, series_id: int, issue_name: str, device_i
         Dictionary containing unlock codes and activation data for the specified parameters
     """
     cache_filename = f"unlock-{series_id}-{issue_name}-{device_id}-{card_serial:08X}.json"
-    return cache_json_data(cache_filename, lambda: garmin_api.flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
+    result: dict = cache_json_data(cache_filename, lambda: garmin_api.flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
+    return result
 
 def get_default_device_system_serial(aircraft_data: list) -> str:
     """Get display serial of first device from aircraft data.
@@ -167,7 +171,8 @@ def get_default_device_system_serial(aircraft_data: list) -> str:
     """
     for aircraft in aircraft_data:
         for device in aircraft['devices']:
-            return device['displaySerial']
+            serial: str = device['displaySerial']
+            return serial
     raise ValueError("No devices found in aircraft data")
 
 def get_device(aircraft_data: list, display_serial: str) -> dict:
@@ -186,7 +191,8 @@ def get_device(aircraft_data: list, display_serial: str) -> dict:
     for aircraft in aircraft_data:
         for device in aircraft['devices']:
             if device.get('displaySerial') == display_serial:
-                return device
+                result: dict = device
+                return result
     raise ValueError(f"Display serial {display_serial} not found in aircraft data")
 
 def get_device_info(aircraft_data: list, display_serial: str) -> tuple[int, int]:

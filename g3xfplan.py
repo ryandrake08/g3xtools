@@ -7,6 +7,7 @@ import pathlib
 import sys
 import urllib.parse
 import webbrowser
+from typing import Union
 
 import astar
 import rtree
@@ -516,8 +517,8 @@ def main() -> None:
         # A segment can be on multiple airways.
         # First walk the route pairwise and create a list of possible airways for each segment,
         # also counting how often each airway is present in the overall route
-        airway_counts = {}
-        airway_segments = []
+        airway_counts: dict[int, int] = {}
+        airway_segments: list[Union[set[int], int, None]] = []
         for wp1, wp2 in zip(route, route[1:]):
             # Find all airway segments between the current waypoint and the previous waypoint
             airways_in_segment = set()
@@ -533,15 +534,18 @@ def main() -> None:
             airway_segments.append(airways_in_segment)
 
         # Next, walk the segments and assign airways, keeping track of the current airway to favor continuity
-        current_airway = None
-        for i, airways_in_segment in enumerate(airway_segments):
+        current_airway: Union[int, None] = None
+        for i, segment in enumerate(airway_segments):
+            # Type narrowing: segment can be set[int], int, or None
+            segment_airways: Union[set[int], int, None] = segment
+
             # If segment has no airways, set the current airway to None
-            if not airways_in_segment:
+            if not segment_airways:
                 current_airway = None
 
             # Favor the current airway, or if no current airway, find the one with the highest count
-            elif current_airway not in airways_in_segment:
-                current_airway = max(airways_in_segment, key=lambda x: airway_counts[x])
+            elif isinstance(segment_airways, set) and current_airway not in segment_airways:
+                current_airway = max(segment_airways, key=lambda x: airway_counts[x])
 
             # Update the segment in-place with the single airway
             airway_segments[i] = current_airway

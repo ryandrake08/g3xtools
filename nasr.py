@@ -91,7 +91,7 @@ def load_nasr_database() -> dict[str, Any]:
 
     try:
         with open(_NASR_DATABASE_PATH, 'rb') as f:
-            database = msgpack.unpackb(f.read(), strict_map_key=False)
+            database: dict[str, Any] = msgpack.unpackb(f.read(), strict_map_key=False)
         return database
     except Exception as e:
         raise RuntimeError(f"Failed to load NASR database: {e}") from e
@@ -361,7 +361,7 @@ class CsvZip:
             raise RuntimeError("CSV archive not opened")
         return self.csv_archive.open(name)
 
-def read_csv_file(csv_archive: 'CsvZip', file_name: str, columns: list[str], rowdata: list[list]) -> None:
+def read_csv_file(csv_archive: 'CsvZip', file_name: str, columns: list[str], rowdata: Union[list[list[str]], list[dict[str, Any]]]) -> None:
     """
     Reads a CSV file from a given archive and extracts specified columns into a list.
 
@@ -382,12 +382,12 @@ def read_csv_file(csv_archive: 'CsvZip', file_name: str, columns: list[str], row
     with csv_archive.open(file_name) as csv_file:
         csv_reader = csv.DictReader(io.TextIOWrapper(csv_file, encoding='iso-8859-1', errors='strict'))
         for row in csv_reader:
-            values = [
+            values: list[Union[float, str]] = [
                 # Handling CSV rows: Strip whitespace and convert to float if necessary
                 float(row[csv_header]) if csv_header in ['LAT_DECIMAL', 'LONG_DECIMAL'] else
                 row[csv_header].strip()
                     for csv_header in columns]
-            rowdata.append(values)
+            rowdata.append(values)  # type: ignore[arg-type]
 
 def main():
     """
@@ -432,9 +432,9 @@ def main():
     else:
         raise FileNotFoundError('nasr: No data found or specified.')
 
-    waypoints = []
-    airways = []
-    airway_seg = []
+    waypoints: list[list[str]] = []
+    airways: list[list[str]] = []
+    airway_seg: list[dict[str, Any]] = []
 
     # Open archive
     with CsvZip(filename) as csv_archive:

@@ -24,6 +24,7 @@ import struct
 import sys
 import zlib
 from dataclasses import dataclass, field
+from typing import Any
 
 try:
     import yaml
@@ -340,32 +341,14 @@ def write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
 
 def ace_to_yaml_dict(ace_file: AceFile) -> dict:
     """Convert AceFile to YAML-compatible dictionary."""
-    yaml_dict = {
-        'metadata': {
-            'name': ace_file.name,
-            'aircraft_make_model': ace_file.aircraft_make_model,
-            'aircraft_information': ace_file.aircraft_information,
-            'manufacturer_identification': ace_file.manufacturer_identification,
-            'copyright_information': ace_file.copyright_information,
-        },
-        'defaults': {
-            'group': ace_file.default_group,
-            'checklist': ace_file.default_checklist,
-        },
-        'groups': []
-    }
+    # Build groups list
+    groups_list: list[dict[str, Any]] = []
 
     for group in ace_file.groups:
-        group_dict = {
-            'name': group.name,
-            'checklists': []
-        }
+        checklists_list: list[dict[str, Any]] = []
 
         for checklist in group.checklists:
-            checklist_dict = {
-                'name': checklist.name,
-                'items': []
-            }
+            items_list: list[dict[str, Any]] = []
 
             for item in checklist.items:
                 if item.type == 'blank_line':
@@ -379,11 +362,34 @@ def ace_to_yaml_dict(ace_file: AceFile) -> dict:
                     if item.type == 'challenge_response' and item.response:
                         item_dict['response'] = item.response
 
-                checklist_dict['items'].append(item_dict)
+                items_list.append(item_dict)
 
-            group_dict['checklists'].append(checklist_dict)
+            checklist_dict = {
+                'name': checklist.name,
+                'items': items_list
+            }
+            checklists_list.append(checklist_dict)
 
-        yaml_dict['groups'].append(group_dict)
+        group_dict = {
+            'name': group.name,
+            'checklists': checklists_list
+        }
+        groups_list.append(group_dict)
+
+    yaml_dict = {
+        'metadata': {
+            'name': ace_file.name,
+            'aircraft_make_model': ace_file.aircraft_make_model,
+            'aircraft_information': ace_file.aircraft_information,
+            'manufacturer_identification': ace_file.manufacturer_identification,
+            'copyright_information': ace_file.copyright_information,
+        },
+        'defaults': {
+            'group': ace_file.default_group,
+            'checklist': ace_file.default_checklist,
+        },
+        'groups': groups_list
+    }
 
     return yaml_dict
 

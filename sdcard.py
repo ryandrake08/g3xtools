@@ -10,6 +10,7 @@ Usage: python3 sdcard.py /dev/diskN
 
 import shutil
 import sys
+from typing import Union
 
 # Public API
 __all__ = [
@@ -71,7 +72,7 @@ def windows_vsn(drive_letter: str) -> int:
     try:
         # GetVolumeInformation returns (label, serial, max_filename_len, flags, filesystem)
         volume_info = win32api.GetVolumeInformation(drive_letter)
-        vsn = volume_info[1]  # serial number is at index 1
+        vsn: int = volume_info[1]  # serial number is at index 1
 
         # Validate VSN is in valid 32-bit unsigned range
         if not 0 <= vsn <= 0xFFFFFFFF:
@@ -111,7 +112,7 @@ def detect_sd_card() -> str:
         print("Warning: psutil library not available for SD card detection", file=sys.stderr)
         return ""
 
-    candidates = []
+    candidates: list[dict[str, Union[float, str]]] = []
 
     for partition in psutil.disk_partitions():
         mountpoint = partition.mountpoint
@@ -148,12 +149,14 @@ def detect_sd_card() -> str:
         print("Warning: No suitable SD card detected", file=sys.stderr)
         return ""
     elif len(candidates) == 1:
-        return candidates[0]['path']
+        path: str = str(candidates[0]['path'])
+        return path
     else:
         # Multiple candidates - prefer smaller sizes (more likely to be SD cards vs external drives)
         candidates.sort(key=lambda x: x['size_gb'])
-        print(f"Warning: Multiple SD card candidates found. Selecting smallest: {candidates[0]['path']}")
-        return candidates[0]['path']
+        path = str(candidates[0]['path'])
+        print(f"Warning: Multiple SD card candidates found. Selecting smallest: {path}")
+        return path
 
 def read_vsn(device: str) -> int:
     """Read volume serial number from device using appropriate platform-specific method.

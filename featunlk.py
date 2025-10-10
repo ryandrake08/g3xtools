@@ -115,7 +115,7 @@ CHUNK_SIZE = 0x8000
 
 class Feature(Enum):
     NAVIGATION = 0, 0, ['ldr_sys/avtn_db.bin', 'avtn_db.bin', '.System/AVTN/avtn_db.bin']
-    CONFIG_ENABLE = 913, 2, []
+    CONFIG_ENABLE = 913, 2, []  # type: ignore[var-annotated]
     TERRAIN = 1826, 3, ['terrain_9as.tdb', 'trn.dat', '.System/AVTN/terrain.tdb', 'terrain.tdb']
     OBSTACLE = 2739, 4, ['terrain.odb', '.System/AVTN/obstacle.odb', 'obstacle.odb']
     APT_TERRAIN = 3652, 5, ['terrain.adb']
@@ -125,13 +125,13 @@ class Feature(Enum):
     BASEMAP = 7304, 10, ['bmap.bin']
     AIRPORT_DIR = 8217, 10, ['apt_dir.gca', 'fbo.gpi']
     AIR_SPORT = 9130, 10, ['air_sport.gpi', 'Poi/air_sport.gpi']
-    NAVIGATION_2 = 10043, 10, []
+    NAVIGATION_2 = 10043, 10, []  # type: ignore[var-annotated]
     SECTIONALS = 10956, 10, ['rasters/rasters.xml', 'rasters.xml']  # IFR_VFR_CHARTS
     OBSTACLE2 = 11869, 10, ['standard.odb']
     NAV_DB2 = 12782, 10, ['ldr_sys/nav_db2.bin', 'nav_db2.bin']
-    NAV_DB2_STBY = 13695, 10, []
-    SYSTEM_COPY = 14608, 11, []
-    CONFIG_ENABLE_NO_SERNO = 15521, 2, []
+    NAV_DB2_STBY = 13695, 10, []  # type: ignore[var-annotated]
+    SYSTEM_COPY = 14608, 11, []  # type: ignore[var-annotated]
+    CONFIG_ENABLE_NO_SERNO = 15521, 2, []  # type: ignore[var-annotated]
     SAFETAXI2 = 16434, 10, ['safetaxi2.gca']
     BASEMAP2 = 17347, 10, ['bmap2.bin']
 

@@ -128,7 +128,9 @@ def flygarmin_login() -> dict[str, Any]:
     # Host a web server on localhost to perform oauth login
     with socketserver.TCPServer(("localhost", 0), Handler) as httpd:
         host, port = httpd.server_address[:2]
-        url = f"http://{host}:{port}"
+        # Decode host if it's bytes (happens on some platforms)
+        host_str = host.decode() if isinstance(host, bytes) else host
+        url = f"http://{host_str}:{port}"
         print(f"Serving at {url}")
         webbrowser.open(url)
         while not data:

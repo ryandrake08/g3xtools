@@ -80,7 +80,8 @@ def flygarmin_list_aircraft(access_token: str) -> list:
     resp.raise_for_status()
     if 'application/json' not in resp.headers.get('Content-Type', ''):
         raise ValueError(f"Expected JSON response, got Content-Type: {resp.headers.get('Content-Type')}")
-    return resp.json()
+    result: list = resp.json()
+    return result
 
 def flygarmin_list_series(series_id: int) -> dict:
     """
@@ -104,7 +105,8 @@ def flygarmin_list_series(series_id: int) -> dict:
     resp.raise_for_status()
     if 'application/json' not in resp.headers.get('Content-Type', ''):
         raise ValueError(f"Expected JSON response, got Content-Type: {resp.headers.get('Content-Type')}")
-    return resp.json()
+    result: dict = resp.json()
+    return result
 
 def flygarmin_list_files(series_id: int, issue_name: str) -> dict:
     """
@@ -129,7 +131,8 @@ def flygarmin_list_files(series_id: int, issue_name: str) -> dict:
     resp.raise_for_status()
     if 'application/json' not in resp.headers.get('Content-Type', ''):
         raise ValueError(f"Expected JSON response, got Content-Type: {resp.headers.get('Content-Type')}")
-    return resp.json()
+    result: dict = resp.json()
+    return result
 
 def flygarmin_unlock(access_token: str, series_id: int, issue_name: str, device_id: int, card_serial: int) -> dict:
     """
@@ -164,7 +167,8 @@ def flygarmin_unlock(access_token: str, series_id: int, issue_name: str, device_
     resp.raise_for_status()
     if 'application/json' not in resp.headers.get('Content-Type', ''):
         raise ValueError(f"Expected JSON response, got Content-Type: {resp.headers.get('Content-Type')}")
-    return resp.json()
+    result: dict = resp.json()
+    return result
 
 def main() -> None:
     """Simple test interface for the Garmin API functions."""
@@ -182,26 +186,26 @@ def main() -> None:
     access_token = args.access_token
 
     if args.test == 'aircraft':
-        result = flygarmin_list_aircraft(access_token)
-        print(json.dumps(result, indent=2))
+        aircraft_result = flygarmin_list_aircraft(access_token)
+        print(json.dumps(aircraft_result, indent=2))
     elif args.test == 'series':
         if not args.series_id:
             print("Error: --series-id required for series test", file=sys.stderr)
             sys.exit(1)
-        result = flygarmin_list_series(args.series_id)
-        print(json.dumps(result, indent=2))
+        series_result = flygarmin_list_series(args.series_id)
+        print(json.dumps(series_result, indent=2))
     elif args.test == 'files':
         if not args.series_id or not args.issue_name:
             print("Error: --series-id and --issue-name required for files test", file=sys.stderr)
             sys.exit(1)
-        result = flygarmin_list_files(args.series_id, args.issue_name)
-        print(json.dumps(result, indent=2))
+        files_result = flygarmin_list_files(args.series_id, args.issue_name)
+        print(json.dumps(files_result, indent=2))
     elif args.test == 'unlock':
         if not all([args.series_id, args.issue_name, args.device_id, args.card_serial]):
             print("Error: --series-id, --issue-name, --device-id, and --card-serial required for unlock test", file=sys.stderr)
             sys.exit(1)
-        result = flygarmin_unlock(access_token, args.series_id, args.issue_name, args.device_id, args.card_serial)
-        print(json.dumps(result, indent=2))
+        unlock_result = flygarmin_unlock(access_token, args.series_id, args.issue_name, args.device_id, args.card_serial)
+        print(json.dumps(unlock_result, indent=2))
     elif access_token:
         print("Access token obtained successfully:", access_token)
     else:
