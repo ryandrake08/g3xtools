@@ -1024,7 +1024,6 @@ pip install "ruff>=0.1.0" "mypy>=1.0"
 
 # Auto-fix issues
 ruff check --fix .
-ruff format .
 ```
 
 #### Manual Testing

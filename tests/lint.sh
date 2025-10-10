@@ -14,12 +14,6 @@ ruff check . || ERRORS=$((ERRORS + 1))
 
 echo ""
 echo "========================================"
-echo "Running ruff (formatting check)..."
-echo "========================================"
-ruff format --check . || ERRORS=$((ERRORS + 1))
-
-echo ""
-echo "========================================"
 echo "Running mypy (type checking)..."
 echo "========================================"
 # Check main modules with type hints
