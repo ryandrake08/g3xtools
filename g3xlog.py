@@ -28,7 +28,7 @@ import pathlib
 import re
 import shutil
 import sys
-from typing import Union
+from typing import Optional
 
 import sdcard
 
@@ -177,7 +177,7 @@ def _find_log_files(search_path: pathlib.Path) -> list[pathlib.Path]:
 
 def _process_logs(
     search_path: pathlib.Path,
-    output_path: Union[pathlib.Path, None] = None,
+    output_path: Optional[pathlib.Path] = None,
     verbose: bool = False
 ) -> list[tuple[pathlib.Path, str, dict[str, str]]]:
     """

@@ -15,7 +15,7 @@ All fixtures are 100% synthetic and safe to commit to source control.
 
 import sys
 from pathlib import Path
-from typing import Union
+from typing import Optional
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -239,7 +239,7 @@ def create_nasr_fixtures(fixtures_dir: Path):
         },
     }
 
-    packed_data: Union[bytes, None] = msgpack.packb(database)
+    packed_data: Optional[bytes] = msgpack.packb(database)
     if packed_data:
         with open(fixtures_dir / "nasr_test.msgpack", "wb") as f:
             f.write(packed_data)

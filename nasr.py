@@ -498,7 +498,7 @@ def main():
         'airways': airways,
         'connections': connections
     }
-    packed_data: Union[bytes, None] = msgpack.packb(database)
+    packed_data: Optional[bytes] = msgpack.packb(database)
     if packed_data:
         with open(_NASR_DATABASE_PATH, 'wb') as f:
             f.write(packed_data)

@@ -111,7 +111,7 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 # Public API
 __all__ = [
@@ -462,7 +462,7 @@ def _ns(tag: str) -> str:
     return f"{{{_FPL_NAMESPACE}}}{tag}"
 
 
-def _find_text_optional(elem: ET.Element, tag: str, default: Optional[str] = None) -> Union[str, None]:
+def _find_text_optional(elem: ET.Element, tag: str, default: Optional[str] = None) -> Optional[str]:
     """
     Find text content of child element with namespace handling (optional field).
 
@@ -1221,7 +1221,7 @@ def get_waypoint(
     identifier: str,
     waypoint_type: str,
     country_code: str
-) -> Union[Waypoint, None]:
+) -> Optional[Waypoint]:
     """
     Find a waypoint in the flight plan by its key.
 

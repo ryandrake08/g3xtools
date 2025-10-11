@@ -7,7 +7,7 @@ import pathlib
 import sys
 import urllib.parse
 import webbrowser
-from typing import Union
+from typing import Optional, Union
 
 import astar
 import rtree
@@ -534,7 +534,7 @@ def main() -> None:
             airway_segments.append(airways_in_segment)
 
         # Next, walk the segments and assign airways, keeping track of the current airway to favor continuity
-        current_airway: Union[int, None] = None
+        current_airway: Optional[int] = None
         for i, segment in enumerate(airway_segments):
             # Type narrowing: segment can be set[int], int, or None
             segment_airways: Union[set[int], int, None] = segment
