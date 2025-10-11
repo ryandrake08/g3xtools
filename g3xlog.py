@@ -10,13 +10,15 @@ operational characteristics. Analyzes CSV log files to determine if sessions wer
 
 Usage:
     python3 g3xlog.py /path/to/search -o /output/path -v
+    python3 g3xlog.py -v  # Auto-detect SD card
 
 Environment Variables:
     G3X_SEARCH_PATH: Default search path for input log files
     G3X_LOG_PATH: Default output path for processed logs
 
 The tool automatically discovers log_*.csv files recursively and copies them to
-categorized subdirectories while preserving modification times.
+categorized subdirectories while preserving modification times. If no search path
+is specified, the tool will attempt to auto-detect a mounted SD card.
 """
 
 import argparse
@@ -27,6 +29,8 @@ import re
 import shutil
 import sys
 from typing import Union
+
+import sdcard
 
 # Classification thresholds
 _OIL_PRESSURE_THRESHOLD_PSI = 1  # Minimum oil pressure to indicate engine running
@@ -224,15 +228,15 @@ def main() -> None:
     """CLI entry point."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Process and categorize Garmin G3X aircraft data logs')
-    parser.add_argument('search_path', nargs='?', help='Path to search for data_log directories')
+    parser.add_argument('search_path', nargs='?', help='Path to search for data_log directories. If not specified, attempts to auto-detect SD card.')
     parser.add_argument('-o', '--output', help='Output directory for processed logs')
     parser.add_argument('-v', '--verbose', action='store_true', help='Output metadata information for each log file')
     args = parser.parse_args()
 
-    # Determine search path: command line > environment > error
-    mount_root_str = args.search_path or os.getenv('G3X_SEARCH_PATH')
+    # Determine search path: command line > environment > auto-detect
+    mount_root_str = args.search_path or os.getenv('G3X_SEARCH_PATH') or sdcard.detect_sd_card()
     if not mount_root_str:
-        print("Error: Search path must be provided via G3X_SEARCH_PATH environment variable or command line argument", file=sys.stderr)
+        print("Error: Search path must be provided via G3X_SEARCH_PATH environment variable, command line argument, or SD card must be mounted", file=sys.stderr)
         sys.exit(1)
 
     mount_root = pathlib.Path(mount_root_str).resolve()

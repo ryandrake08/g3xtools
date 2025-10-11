@@ -43,6 +43,7 @@ Data Model:
     └── files: List[FileSpec] (supported file specifications)
 
 Usage:
+    python3 g3xdevice.py                               # Auto-detect SD card and read GarminDevice.xml
     python3 g3xdevice.py GarminDevice.xml              # Show device summary
     python3 g3xdevice.py GarminDevice.xml --updates    # List installed updates
     python3 g3xdevice.py GarminDevice.xml --data-types # List supported data types
@@ -55,6 +56,8 @@ import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Any, Optional
+
+import sdcard
 
 # Public API
 __all__ = [
@@ -438,14 +441,24 @@ def read_device(file_path: pathlib.Path) -> Device:
 def main() -> None:
     """Command-line interface for reading GarminDevice.xml files."""
     parser = argparse.ArgumentParser(description='Read and display information from GarminDevice.xml files')
-    parser.add_argument('file', help='Path to GarminDevice.xml file')
+    parser.add_argument('file', nargs='?', help='Path to GarminDevice.xml file. If not specified, attempts to auto-detect SD card and use Garmin/GarminDevice.xml')
     parser.add_argument('-u', '--updates', action='store_true', help='List installed update files (databases, software)')
     parser.add_argument('-d', '--data-types', action='store_true', help='List supported data types and file formats')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show all available information')
     args = parser.parse_args()
 
+    # Determine file path: explicit argument or auto-detect SD card
+    if args.file:
+        file_path = pathlib.Path(args.file)
+    else:
+        # Try to auto-detect SD card
+        sd_mount = sdcard.detect_sd_card()
+        if not sd_mount:
+            print("Error: No file specified and SD card could not be auto-detected", file=sys.stderr)
+            sys.exit(1)
+        file_path = pathlib.Path(sd_mount) / "Garmin" / "GarminDevice.xml"
+
     # Check that file exists
-    file_path = pathlib.Path(args.file)
     if not file_path.exists():
         print(f"Error: File not found: {file_path}", file=sys.stderr)
         sys.exit(1)

@@ -54,7 +54,8 @@ from typing import Any, Optional, Union
 
 import bs4
 import msgpack
-import platformdirs
+
+import cache
 
 # Public API
 __all__ = [
@@ -63,7 +64,7 @@ __all__ = [
 
 _NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
 _DEFAULT_FILENAME = 'downloaded_file'
-_CACHE_PATH = platformdirs.user_cache_path("g3xtools", "g3xtools", ensure_exists=True)
+_CACHE_PATH = cache.user_cache_path("g3xtools", "g3xtools")
 _NASR_DATABASE_PATH = _CACHE_PATH / 'nasr.msgpack'
 
 def load_nasr_database() -> dict[str, Any]:

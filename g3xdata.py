@@ -36,16 +36,16 @@ import sys
 import urllib.parse
 from typing import Any
 
-import platformdirs
 import requests
 
+import cache
 import featunlk
 import garmin_api
 import garmin_login
 import sdcard
 import taw
 
-_CACHE_PATH = platformdirs.user_cache_path("g3xtools", "g3xtools", ensure_exists=True)
+_CACHE_PATH = cache.user_cache_path("g3xtools", "g3xtools")
 
 _session = requests.Session()
 _session.headers['User-Agent'] = None  # type: ignore
@@ -503,8 +503,7 @@ def main() -> None:
     # Update SDCard
     parser.add_argument('-s', '--system-serial', help='Specify avionics system serial number for SD card programming. If not specified, use G3X_SYSTEM_SERIAL environment variable or the first device in the first aircraft')
     parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path). If not specified, use G3X_SDCARD_PATH environment variable or try to detect a SD card mount point')
-    parser.add_argument('-d', '--sd-device', help=f"Specify SD card block device. This is required for building feat_unlk.dat and requires root privileges. If not specified, use G3X_SDCARD_DEVICE environment variable. Example: {sdcard.get_platform_device_example()}")
-    parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. Does not require root privileges. If not specified, use G3X_SDCARD_SERIAL environment variable or read from device")
+    parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. If not specified, checks cache for output path, then G3X_SDCARD_SERIAL environment variable")
     parser.add_argument('-c', '--check-crc', action='store_true', help='Perform CRC check on each data file during feat_unlk.dat generation (slow)')
 
     # FlyGarmin authenitcation, query, and download overrides
@@ -530,28 +529,13 @@ def main() -> None:
     # Verbose printing
     vprint = print if args.verbose else lambda *_: None
 
-    # Determine output path: command line > environment > SD card detection
+    # Determine output path: command line > environment > auto-detect
     output_arg = args.output or os.getenv('G3X_SDCARD_PATH') or sdcard.detect_sd_card()
     output_path = pathlib.Path(output_arg) if output_arg else None
 
-    # Determine SD device: command line > environment > none
-    sd_device_arg = args.sd_device or os.getenv('G3X_SDCARD_DEVICE')
-
-    # Determine VSN: command line > environment > read from device
+    # Determine VSN: command line > environment > cached from output path
     vsn_arg = args.vsn or os.getenv('G3X_SDCARD_SERIAL')
-    card_serial = None
-    if vsn_arg:
-        try:
-            card_serial = int(vsn_arg, 16)
-        except ValueError:
-            print(f"Error: Invalid volume serial number (must be hex): {vsn_arg}", file=sys.stderr)
-            sys.exit(1)
-    elif sd_device_arg:
-        try:
-            card_serial = sdcard.read_vsn(sd_device_arg)
-        except (OSError, ValueError) as e:
-            print(f"Error reading volume serial number: {e}", file=sys.stderr)
-            sys.exit(1)
+    card_serial = sdcard.get_vsn(vsn_arg, output_arg, args.verbose)
 
     # Get access token: command line > environment > auth cache > flygarmin login
     access_token = args.access_token or os.getenv('G3X_GARMIN_ACCESS_TOKEN') or _get_access_token(args.force_login)
