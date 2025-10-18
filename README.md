@@ -81,6 +81,7 @@ Downloads current aviation database updates from Garmin's fly.garmin.com service
 - Device-specific unlock code generation
 - Supports many aviation database types (obstacles, terrain, navigation, charts)
 - Automatic SD card detection (FAT32, 8-32GB) when output path not specified
+- Automatic device serial number detection from SD card's GarminDevice.xml
 - Automatic aircraft data refresh when database updates are available
 - Issue selection based on effective date windows
 
@@ -99,7 +100,13 @@ python3 g3xdata.py -e 60001A2345BC0
 # Show detailed chart series information and exit, does not require account login
 python3 g3xdata.py -i 2054
 
-# Create SD card image for a given G3X system, sdcard at given mount point, using known sdcard serial number
+# RECOMMENDED: Create SD card image using automatic detection
+# This will auto-detect the SD card, read the device serial from GarminDevice.xml, and use cached VSN
+python3 g3xdata.py
+# Or if you have the cached VSN already:
+python3 g3xdata.py -N 1234ABCD
+
+# Manual mode: Create SD card image for a given G3X system, sdcard at given mount point, using known sdcard serial number
 sudo python3 sdcard.py /dev/rdisk2s1 (--> outputs 1234ABCD)
 python3 g3xdata.py -s 60001A2345BC0 -o /path/to/sdcard -N 1234ABCD
 
@@ -123,9 +130,6 @@ python3 g3xdata.py
 
 # NOTE: Exactly one of: sdcard serial number -N or the sdcard block device -d must be specified. If neither are specified, data will be copied but not installable on G3X device
 
-# Create non-installable SD card image with automatic sdcard detection for the default system serial number
-python3 g3xdata.py
-
 # Force use of latest issues regardless of effective date (e.g., to get upcoming charts before effective date)
 python3 g3xdata.py -U -s 60001A2345BC0 -N 1234ABCD
 
@@ -135,6 +139,28 @@ python3 g3xdata.py -I 2054 2509 -I 2056 25D4
 # (DEBUG only) Include custom TAW files
 python3 g3xdata.py -W /path/to/custom.taw -W /path/to/other.taw
 ```
+
+**Automatic Device Detection:**
+
+The tool can automatically detect your G3X system serial number from a mounted SD card:
+
+1. **Auto-detect SD card**: When no output path is specified, the tool searches for mounted FAT32 volumes in the 8-32GB size range
+2. **Read device information**: If `Garmin/GarminDevice.xml` exists on the SD card, the tool extracts the system ID (device serial number)
+3. **Use cached VSN**: If the SD card's volume serial number (VSN) was previously cached (via `sdcard.py`), it will be used automatically
+4. **Select device**: The detected system ID is used to select the appropriate G3X device from your Garmin account
+
+This means in the simplest case, you can just run:
+```bash
+python3 g3xdata.py
+```
+
+The tool will:
+- Find your mounted SD card automatically
+- Read the device serial from `GarminDevice.xml` on the card
+- Use the cached VSN for that card (if available)
+- Download and install the appropriate databases for that specific G3X system
+
+**Note**: If you have multiple G3X devices in your account or want to override the auto-detected serial, you can still specify `-s SERIAL` explicitly.
 
 **Issue Selection:**
 By default, g3xdata.py selects the most appropriate database issue for each series based on the current date:
@@ -1089,11 +1115,10 @@ Update cards created with these tools are unofficial, and to be used at the user
 
 ### Project-wide TODOs
 
-1. Test suite (pytest)
-2. Progress indicators (tqdm)
-3. Concurrent downloads
-4. Retry logic (urllib3.Retry)
-5. Logging framework, rather than passing "verbose" around to functions
+1. Progress indicators (tqdm)
+2. Concurrent downloads
+3. Retry logic (urllib3.Retry)
+4. Logging framework, rather than passing "verbose" around to functions
 
 ### Future Flight Planning Features
 

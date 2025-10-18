@@ -34,12 +34,13 @@ import pathlib
 import shutil
 import sys
 import urllib.parse
-from typing import Any
+from typing import Any, Optional
 
 import requests
 
 import cache
 import featunlk
+import g3xdevice
 import garmin_api
 import garmin_login
 import sdcard
@@ -157,22 +158,58 @@ def _get_unlock_data(access_token: str, series_id: int, issue_name: str, device_
     result: dict = _cache_json_data(cache_filename, lambda: garmin_api.flygarmin_unlock(access_token, series_id, issue_name, device_id, card_serial), force)
     return result
 
-def _get_default_device_system_serial(aircraft_data: list) -> str:
-    """Get display serial of first device from aircraft data.
+def _get_default_device_system_serial(aircraft_data: list, output_path: Optional[pathlib.Path] = None) -> str:
+    """Get display serial from aircraft data, optionally matching SD card device ID.
+
+    Tries to intelligently select a device when multiple aircraft/devices exist:
+    1. If output_path provided and contains GarminDevice.xml, reads device ID and finds matching device
+    2. Otherwise, returns the first device found
 
     Args:
         aircraft_data: List of aircraft dictionaries from flygarmin API
+        output_path: Optional path to SD card mount point for device ID detection
 
     Returns:
-        Display serial string of first device
+        Display serial string of matching or first device (e.g., "60002C5719EB0")
 
     Raises:
-        ValueError: If no devices exist
+        ValueError: If no devices exist, or device ID found but no match
+
+    Example:
+        >>> # Auto-detect from SD card
+        >>> display_serial = _get_default_device_system_serial(aircraft_data, pathlib.Path("/Volumes/GARMIN"))
     """
+    # Try to get device ID hint from SD card's GarminDevice.xml
+    device_id_hint = None
+    if output_path and output_path.exists():
+        device_xml_path = output_path / "Garmin" / "GarminDevice.xml"
+        if device_xml_path.exists():
+            device_id_hint = g3xdevice.get_system_serial(device_xml_path)
+
+    # First pass: try to find device matching hint (if found)
+    if device_id_hint is not None:
+        for aircraft in aircraft_data:
+            for device in aircraft['devices']:
+                # Use 'serial' field (decimal int) for comparison
+                system_serial_full = device.get('serial')
+                if system_serial_full is None:
+                    continue
+
+                # Extract lower 32 bits and compare
+                system_serial_lower32 = system_serial_full & 0xFFFFFFFF
+
+                if system_serial_lower32 == device_id_hint:
+                    return str(device['displaySerial'])
+
+        # Device ID hint provided but no match found
+        raise ValueError(f"No device found with device ID {device_id_hint:#x} (from GarminDevice.xml)")
+
+    # No hint provided - return first device's displaySerial
     for aircraft in aircraft_data:
         for device in aircraft['devices']:
-            serial: str = device['displaySerial']
-            return serial
+            return str(device['displaySerial'])
+
+    # No devices at all
     raise ValueError("No devices found in aircraft data")
 
 def _get_device(aircraft_data: list, display_serial: str) -> dict:
@@ -533,6 +570,9 @@ def main() -> None:
     output_arg = args.output or os.getenv('G3X_SDCARD_PATH') or sdcard.detect_sd_card()
     output_path = pathlib.Path(output_arg) if output_arg else None
 
+    # Determine system serial: command line > environment
+    system_serial_arg = args.system_serial or os.getenv('G3X_SYSTEM_SERIAL')
+
     # Determine VSN: command line > environment > cached from output path
     vsn_arg = args.vsn or os.getenv('G3X_SDCARD_SERIAL')
     card_serial = sdcard.get_vsn(vsn_arg, output_arg, args.verbose)
@@ -549,8 +589,8 @@ def main() -> None:
     # List device details and exit
     args.device_info and _list_device_details(aircraft_data, args.device_info) # type: ignore
 
-    # Determine system serial: command line > environment > default device
-    system_serial_arg = args.system_serial or os.getenv('G3X_SYSTEM_SERIAL') or _get_default_device_system_serial(aircraft_data)
+    # If not set, keep looking for system serial: SD card auto-detect > default device
+    system_serial_arg = system_serial_arg or _get_default_device_system_serial(aircraft_data, output_path)
 
     # Get device ID and system serial in one call
     device_id, system_serial = _get_device_info(aircraft_data, system_serial_arg)

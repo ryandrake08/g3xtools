@@ -10,30 +10,29 @@ Quick Start - Reading:
     >>> device = read_device("GarminDevice.xml")
     >>> print(f"Device: {device.model.description}")
     >>> print(f"Part Number: {device.model.part_number}")
-    >>> print(f"Software Version: {device.model.software_version}")
+    >>> print(f"Software Version: v{device.model.software_version // 100}.{device.model.software_version % 100}")
     >>> print(f"Device ID: {device.device_id}")
 
 Quick Start - Listing Updates:
     >>> for update in device.update_files:
-    ...     print(f"{update.part_number} v{update.version_major}.{update.version_minor}: {update.description}")
+    ...     print(f"{update.part_number} v{update.version.major}.{update.version.minor}: {update.description}")
 
 Data Model:
     Device
     ├── model: Model (device hardware/software info)
-    ├── device_id: str (unique device identifier)
+    ├── device_id: int (unique device identifier)
     ├── data_types: List[DataType] (supported file types)
     ├── update_files: List[UpdateFile] (installed databases/software)
     └── extensions: Any (optional extension data)
 
     Model
     ├── part_number: str (e.g., "006-B1727-3B")
-    ├── software_version: str (e.g., "952")
+    ├── software_version: int (e.g., 952 displays as v9.52)
     └── description: str (e.g., "GDU 460")
 
     UpdateFile
     ├── part_number: str
-    ├── version_major: int
-    ├── version_minor: int
+    ├── version: Version (major and minor components)
     ├── description: str (optional, human-readable name)
     ├── path: str (optional, installation path)
     └── file_name: str (optional, file name)
@@ -70,8 +69,9 @@ __all__ = [
     'Specification',
     'DataType',
     'Device',
-    # Primary function
+    # Functions
     'read_device',
+    'get_system_serial',
 ]
 
 # Constants (private - implementation details)
@@ -86,11 +86,11 @@ class Model:
 
     Attributes:
         part_number: Device part number (e.g., "006-B1727-3B")
-        software_version: Software/firmware version (e.g., "952")
+        software_version: Software version as integer (e.g., 952 displays as v9.52)
         description: Human-readable device description (e.g., "GDU 460")
     """
     part_number: str
-    software_version: str
+    software_version: int
     description: str
 
 
@@ -114,15 +114,13 @@ class UpdateFile:
 
     Attributes:
         part_number: Update part number
-        version_major: Major version number
-        version_minor: Minor version number
+        version: Version number with major and minor components
         description: Human-readable description (e.g., "USA-VFR Navigation Data 2510")
         path: Installation path on device (e.g., ".System")
         file_name: File name (e.g., "gmapbmap.img")
     """
     part_number: str
-    version_major: int
-    version_minor: int
+    version: Version
     description: Optional[str] = None
     path: Optional[str] = None
     file_name: Optional[str] = None
@@ -134,10 +132,10 @@ class Specification:
     File format specification.
 
     Attributes:
-        identifier: Format identifier (e.g., "http://www.topografix.com/GPX/1/1" or "IMG")
+        identifier: Format identifier (optional, e.g., "http://www.topografix.com/GPX/1/1" or "IMG")
         documentation: URL to format documentation (optional)
     """
-    identifier: str
+    identifier: Optional[str] = None
     documentation: Optional[str] = None
 
 
@@ -147,13 +145,13 @@ class Location:
     File location on device.
 
     Attributes:
-        path: Directory path (e.g., "GPX", ".System")
+        file_extension: File extension without dot (required, e.g., "gpx", "img")
+        path: Directory path (optional, e.g., "GPX", ".System")
         base_name: Base file name without extension (optional)
-        file_extension: File extension without dot (e.g., "gpx", "img")
     """
-    path: str
+    file_extension: str
+    path: Optional[str] = None
     base_name: Optional[str] = None
-    file_extension: Optional[str] = None
 
 
 @dataclass
@@ -191,13 +189,13 @@ class Device:
 
     Attributes:
         model: Device model information
-        device_id: Unique device identifier
+        device_id: Unique device identifier (integer, displayed as hex)
         data_types: List of supported data types
         update_files: List of installed update files
         extensions: Extension data (optional)
     """
     model: Model
-    device_id: str
+    device_id: int
     data_types: list[DataType]
     update_files: list[UpdateFile]
     extensions: Optional[Any] = None
@@ -233,13 +231,57 @@ def _parse_model(model_elem: ET.Element, ns: str) -> Model:
         Model dataclass instance
     """
     part_number = _get_text(model_elem.find(f"{ns}PartNumber"))
-    software_version = _get_text(model_elem.find(f"{ns}SoftwareVersion"))
+    if not part_number:
+        raise ValueError("Model XML missing required PartNumber element")
+
+    software_version_str = _get_text(model_elem.find(f"{ns}SoftwareVersion"))
+    if not software_version_str:
+        raise ValueError("Model XML missing required SoftwareVersion element")
+
+    try:
+        software_version = int(software_version_str)
+    except ValueError as e:
+        raise ValueError(f"SoftwareVersion must be a valid integer, got: {software_version_str}") from e
+
     description = _get_text(model_elem.find(f"{ns}Description"))
+    if not description:
+        raise ValueError("Model XML missing required Description element")
 
     return Model(
         part_number=part_number,
         software_version=software_version,
         description=description
+    )
+
+
+def _parse_version(version_elem: ET.Element, ns: str) -> Version:
+    """
+    Parse Version element.
+
+    Args:
+        version_elem: Version XML element
+        ns: Namespace prefix
+
+    Returns:
+        Version dataclass instance
+    """
+    major_str = _get_text(version_elem.find(f"{ns}Major"))
+    if not major_str:
+        raise ValueError("Version XML missing required Major element")
+
+    minor_str = _get_text(version_elem.find(f"{ns}Minor"))
+    if not minor_str:
+        raise ValueError("Version XML missing required Minor element")
+
+    try:
+        major = int(major_str)
+        minor = int(minor_str)
+    except ValueError as e:
+        raise ValueError(f"Version Major/Minor must be valid integers: {e}") from e
+
+    return Version(
+        major=major,
+        minor=minor
     )
 
 
@@ -274,14 +316,17 @@ def _parse_location(loc_elem: ET.Element, ns: str) -> Location:
     Returns:
         Location dataclass instance
     """
-    path = _get_text(loc_elem.find(f"{ns}Path"))
+    file_extension = _get_text(loc_elem.find(f"{ns}FileExtension"))
+    if not file_extension:
+        raise ValueError("Location XML missing required FileExtension element")
+
+    path = _get_text(loc_elem.find(f"{ns}Path")) or None
     base_name = _get_text(loc_elem.find(f"{ns}BaseName")) or None
-    file_extension = _get_text(loc_elem.find(f"{ns}FileExtension")) or None
 
     return Location(
+        file_extension=file_extension,
         path=path,
-        base_name=base_name,
-        file_extension=file_extension
+        base_name=base_name
     )
 
 
@@ -297,11 +342,18 @@ def _parse_file_spec(file_elem: ET.Element, ns: str) -> FileSpec:
         FileSpec dataclass instance
     """
     spec_elem = file_elem.find(f"{ns}Specification")
-    loc_elem = file_elem.find(f"{ns}Location")
-    transfer_direction = _get_text(file_elem.find(f"{ns}TransferDirection"))
+    if spec_elem is None:
+        raise ValueError("File XML missing required Specification element")
+    specification = _parse_specification(spec_elem, ns)
 
-    specification = _parse_specification(spec_elem, ns) if spec_elem is not None else Specification("")
-    location = _parse_location(loc_elem, ns) if loc_elem is not None else Location("")
+    loc_elem = file_elem.find(f"{ns}Location")
+    if loc_elem is None:
+        raise ValueError("File XML missing required Location element")
+    location = _parse_location(loc_elem, ns)
+
+    transfer_direction = _get_text(file_elem.find(f"{ns}TransferDirection"))
+    if not transfer_direction:
+        raise ValueError("File XML missing required TransferDirection element")
 
     return FileSpec(
         specification=specification,
@@ -322,7 +374,12 @@ def _parse_data_type(dt_elem: ET.Element, ns: str) -> DataType:
         DataType dataclass instance
     """
     name = _get_text(dt_elem.find(f"{ns}Name"))
+    if not name:
+        raise ValueError("DataType XML missing required Name element")
+
     files = [_parse_file_spec(f, ns) for f in dt_elem.findall(f"{ns}File")]
+    if not files:
+        raise ValueError(f"DataType '{name}' must have at least one File element")
 
     return DataType(
         name=name,
@@ -342,14 +399,13 @@ def _parse_update_file(uf_elem: ET.Element, ns: str) -> UpdateFile:
         UpdateFile dataclass instance
     """
     part_number = _get_text(uf_elem.find(f"{ns}PartNumber"))
+    if not part_number:
+        raise ValueError("UpdateFile XML missing required PartNumber element")
 
     version_elem = uf_elem.find(f"{ns}Version")
-    if version_elem is not None:
-        version_major = int(_get_text(version_elem.find(f"{ns}Major"), "0"))
-        version_minor = int(_get_text(version_elem.find(f"{ns}Minor"), "0"))
-    else:
-        version_major = 0
-        version_minor = 0
+    if version_elem is None:
+        raise ValueError(f"UpdateFile '{part_number}' missing required Version element")
+    version = _parse_version(version_elem, ns)
 
     description = _get_text(uf_elem.find(f"{ns}Description")) or None
     path = _get_text(uf_elem.find(f"{ns}Path")) or None
@@ -357,8 +413,7 @@ def _parse_update_file(uf_elem: ET.Element, ns: str) -> UpdateFile:
 
     return UpdateFile(
         part_number=part_number,
-        version_major=version_major,
-        version_minor=version_minor,
+        version=version,
         description=description,
         path=path,
         file_name=file_name
@@ -384,21 +439,27 @@ def _parse_device(root: ET.Element) -> Device:
         raise ValueError("Device XML missing required Model element")
     model = _parse_model(model_elem, ns)
 
-    # Parse Id (required)
-    device_id = _get_text(root.find(f"{ns}Id"))
-    if not device_id:
+    # Parse Id (required) - stored as decimal integer in XML
+    device_id_str = _get_text(root.find(f"{ns}Id"))
+    if not device_id_str:
         raise ValueError("Device XML missing required Id element")
+    try:
+        device_id = int(device_id_str)
+    except ValueError as e:
+        raise ValueError(f"Device Id must be a valid integer, got: {device_id_str}") from e
 
     # Parse MassStorageMode (optional)
     data_types = []
     update_files = []
     msm_elem = root.find(f"{ns}MassStorageMode")
     if msm_elem is not None:
-        # Parse DataType elements
+        # Parse DataType elements (optional)
         data_types = [_parse_data_type(dt, ns) for dt in msm_elem.findall(f"{ns}DataType")]
 
-        # Parse UpdateFile elements
+        # Parse UpdateFile elements (at least one required if MassStorageMode present)
         update_files = [_parse_update_file(uf, ns) for uf in msm_elem.findall(f"{ns}UpdateFile")]
+        if not update_files:
+            raise ValueError("MassStorageMode must contain at least one UpdateFile element")
 
     # Parse Extensions (optional)
     extensions_elem = root.find(f"{ns}Extensions")
@@ -438,10 +499,36 @@ def read_device(file_path: pathlib.Path) -> Device:
     return _parse_device(root)
 
 
+def get_system_serial(file_path: pathlib.Path) -> Optional[int]:
+    """
+    Get system serial (device ID) from GarminDevice.xml file.
+
+    Extracts the device ID (system serial number) from a GarminDevice.xml file.
+
+    Args:
+        file_path: Path to GarminDevice.xml file
+
+    Returns:
+        Device ID as integer, or None if file can't be parsed
+
+    Example:
+        >>> serial = get_system_serial(pathlib.Path("/Volumes/GARMIN/Garmin/GarminDevice.xml"))
+        >>> if serial:
+        ...     print(f"System Serial: {serial:#x}")
+    """
+    try:
+        device = read_device(file_path)
+        return device.device_id
+    except (ET.ParseError, ValueError, OSError):
+        # Silently fail if file cannot be read or parsed
+        return None
+
+
 def main() -> None:
     """Command-line interface for reading GarminDevice.xml files."""
     parser = argparse.ArgumentParser(description='Read and display information from GarminDevice.xml files')
     parser.add_argument('file', nargs='?', help='Path to GarminDevice.xml file. If not specified, attempts to auto-detect SD card and use Garmin/GarminDevice.xml')
+    parser.add_argument('-s', '--system-serial', action='store_true', help='Extract and display system serial number only')
     parser.add_argument('-u', '--updates', action='store_true', help='List installed update files (databases, software)')
     parser.add_argument('-d', '--data-types', action='store_true', help='List supported data types and file formats')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show all available information')
@@ -470,12 +557,17 @@ def main() -> None:
         print(f"Error parsing device file: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Show system serial only
+    if args.system_serial:
+        print(f"{device.device_id:#x}")
+        sys.exit(0)
+
     # Default: Show device summary
     if not args.updates and not args.data_types:
         print(f"Device: {device.model.description}")
         print(f"Part Number: {device.model.part_number}")
-        print(f"Software Version: {device.model.software_version}")
-        print(f"Device ID: {device.device_id}")
+        print(f"Software Version: v{device.model.software_version // 100}.{device.model.software_version % 100}")
+        print(f"Device ID: {device.device_id:#x}")
         print(f"Installed Updates: {len(device.update_files)}")
         print(f"Supported Data Types: {len(device.data_types)}")
 
@@ -503,20 +595,20 @@ def main() -> None:
             if databases:
                 print("\n  Databases:")
                 for update in databases:
-                    version = f"{update.version_major}.{update.version_minor}"
+                    version = f"{update.version.major}.{update.version.minor}"
                     print(f"    {update.part_number:20s} v{version:6s} - {update.description}")
 
             if software:
                 print("\n  Software/Firmware:")
                 for update in software:
-                    version = f"{update.version_major}.{update.version_minor}"
+                    version = f"{update.version.major}.{update.version.minor}"
                     desc = update.file_name or update.part_number
                     print(f"    {update.part_number:20s} v{version:6s} - {desc}")
 
             if other:
                 print("\n  Other:")
                 for update in other:
-                    version = f"{update.version_major}.{update.version_minor}"
+                    version = f"{update.version.major}.{update.version.minor}"
                     desc = update.file_name or "(no description)"
                     print(f"    {update.part_number:20s} v{version:6s} - {desc}")
 
@@ -550,7 +642,10 @@ def main() -> None:
 
                     # Show format
                     spec_id = file_spec.specification.identifier
-                    spec_short = spec_id.split('/')[-1] if spec_id.startswith("http") else spec_id
+                    if spec_id:
+                        spec_short = spec_id.split('/')[-1] if spec_id.startswith("http") else spec_id
+                    else:
+                        spec_short = "(no format)"
 
                     print(f"    {direction:15s} {file_path_str:40s} [{spec_short}]")
 

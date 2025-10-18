@@ -21,10 +21,10 @@ def create_minimal_device_xml() -> str:
 <Device xmlns="http://www.garmin.com/xmlschemas/GarminDevice/v2">
     <Model>
         <PartNumber>006-B1234-00</PartNumber>
-        <SoftwareVersion>10.20</SoftwareVersion>
+        <SoftwareVersion>1020</SoftwareVersion>
         <Description>GDU 460</Description>
     </Model>
-    <Id>ABC123DEF456</Id>
+    <Id>3221290672</Id>
 </Device>
 """
 
@@ -38,7 +38,7 @@ def create_full_device_xml() -> str:
         <SoftwareVersion>952</SoftwareVersion>
         <Description>GDU 460</Description>
     </Model>
-    <Id>60001A2345BC0</Id>
+    <Id>3318608560</Id>
     <MassStorageMode>
         <DataType>
             <Name>GPSData</Name>
@@ -101,9 +101,9 @@ def test_read_device_minimal(tmp_path):
     device = g3xdevice.read_device(xml_file)
 
     assert device.model.part_number == "006-B1234-00"
-    assert device.model.software_version == "10.20"
+    assert device.model.software_version == 1020
     assert device.model.description == "GDU 460"
-    assert device.device_id == "ABC123DEF456"
+    assert device.device_id == 3221290672
     assert device.data_types == []
     assert device.update_files == []
 
@@ -117,11 +117,11 @@ def test_read_device_full(tmp_path):
 
     # Model
     assert device.model.part_number == "006-B1727-3B"
-    assert device.model.software_version == "952"
+    assert device.model.software_version == 952
     assert device.model.description == "GDU 460"
 
     # Device ID
-    assert device.device_id == "60001A2345BC0"
+    assert device.device_id == 3318608560
 
     # Data types
     assert len(device.data_types) == 2
@@ -143,16 +143,16 @@ def test_read_device_full(tmp_path):
 
     nav_data = device.update_files[0]
     assert nav_data.part_number == "006-D3123-10"
-    assert nav_data.version_major == 25
-    assert nav_data.version_minor == 10
+    assert nav_data.version.major == 25
+    assert nav_data.version.minor == 10
     assert nav_data.description == "USA-VFR Navigation Data 2510"
     assert nav_data.path == ".System/AVTN"
     assert nav_data.file_name == "nav_dir.gca"
 
     terrain = device.update_files[1]
     assert terrain.part_number == "006-D4123-00"
-    assert terrain.version_major == 1
-    assert terrain.version_minor == 0
+    assert terrain.version.major == 1
+    assert terrain.version.minor == 0
 
 
 def test_read_device_missing_model(tmp_path):
@@ -175,7 +175,7 @@ def test_read_device_missing_id(tmp_path):
 <Device xmlns="http://www.garmin.com/xmlschemas/GarminDevice/v2">
     <Model>
         <PartNumber>006-B1234-00</PartNumber>
-        <SoftwareVersion>10.20</SoftwareVersion>
+        <SoftwareVersion>1020</SoftwareVersion>
         <Description>GDU 460</Description>
     </Model>
 </Device>
@@ -206,12 +206,12 @@ def test_model_dataclass():
     """Verify Model dataclass structure."""
     model = g3xdevice.Model(
         part_number="006-B1234-00",
-        software_version="10.20",
+        software_version=1020,
         description="Test Device"
     )
 
     assert model.part_number == "006-B1234-00"
-    assert model.software_version == "10.20"
+    assert model.software_version == 1020
     assert model.description == "Test Device"
 
 
@@ -219,16 +219,15 @@ def test_update_file_dataclass():
     """Verify UpdateFile dataclass structure."""
     update = g3xdevice.UpdateFile(
         part_number="006-D1234-10",
-        version_major=25,
-        version_minor=10,
+        version=g3xdevice.Version(25, 10),
         description="Test Database",
         path=".System",
         file_name="test.dat"
     )
 
     assert update.part_number == "006-D1234-10"
-    assert update.version_major == 25
-    assert update.version_minor == 10
+    assert update.version.major == 25
+    assert update.version.minor == 10
     assert update.description == "Test Database"
     assert update.path == ".System"
     assert update.file_name == "test.dat"
@@ -238,8 +237,7 @@ def test_update_file_optional_fields():
     """Verify UpdateFile optional fields default to None."""
     update = g3xdevice.UpdateFile(
         part_number="006-D1234-10",
-        version_major=1,
-        version_minor=0
+        version=g3xdevice.Version(1, 0)
     )
 
     assert update.description is None
@@ -261,9 +259,9 @@ def test_specification_dataclass():
 def test_location_dataclass():
     """Verify Location dataclass structure."""
     location = g3xdevice.Location(
+        file_extension="gpx",
         path="GPX",
-        base_name="waypoints",
-        file_extension="gpx"
+        base_name="waypoints"
     )
 
     assert location.path == "GPX"
@@ -274,7 +272,7 @@ def test_location_dataclass():
 def test_file_spec_dataclass():
     """Verify FileSpec dataclass structure."""
     spec = g3xdevice.Specification(identifier="GPX")
-    location = g3xdevice.Location(path="GPX", file_extension="gpx")
+    location = g3xdevice.Location(file_extension="gpx", path="GPX")
 
     file_spec = g3xdevice.FileSpec(
         specification=spec,
@@ -290,7 +288,7 @@ def test_file_spec_dataclass():
 def test_data_type_dataclass():
     """Verify DataType dataclass structure."""
     spec = g3xdevice.Specification(identifier="GPX")
-    location = g3xdevice.Location(path="GPX")
+    location = g3xdevice.Location(file_extension="gpx", path="GPX")
     file_spec = g3xdevice.FileSpec(spec, location, "InputToUnit")
 
     data_type = g3xdevice.DataType(
@@ -305,31 +303,31 @@ def test_data_type_dataclass():
 
 def test_device_dataclass():
     """Verify Device dataclass structure."""
-    model = g3xdevice.Model("006-B1234-00", "10.20", "Test")
+    model = g3xdevice.Model("006-B1234-00", 1020, "Test")
     device = g3xdevice.Device(
         model=model,
-        device_id="ABC123",
+        device_id=3221290672,
         data_types=[],
         update_files=[]
     )
 
     assert device.model.part_number == "006-B1234-00"
-    assert device.device_id == "ABC123"
+    assert device.device_id == 3221290672
     assert device.data_types == []
     assert device.update_files == []
 
 
 def test_parse_update_file_without_version(tmp_path):
-    """Handle UpdateFile without version element."""
+    """Reject UpdateFile without required version element."""
     xml_file = tmp_path / "device.xml"
     xml_file.write_text("""<?xml version="1.0" encoding="UTF-8"?>
 <Device xmlns="http://www.garmin.com/xmlschemas/GarminDevice/v2">
     <Model>
         <PartNumber>006-B1234-00</PartNumber>
-        <SoftwareVersion>10.20</SoftwareVersion>
+        <SoftwareVersion>1020</SoftwareVersion>
         <Description>Test</Description>
     </Model>
-    <Id>ABC123</Id>
+    <Id>3221290672</Id>
     <MassStorageMode>
         <UpdateFile>
             <PartNumber>006-D1234-10</PartNumber>
@@ -339,16 +337,12 @@ def test_parse_update_file_without_version(tmp_path):
 </Device>
 """)
 
-    device = g3xdevice.read_device(xml_file)
-
-    # Should default to 0.0
-    assert len(device.update_files) == 1
-    assert device.update_files[0].version_major == 0
-    assert device.update_files[0].version_minor == 0
+    with pytest.raises(ValueError, match="missing required Version element"):
+        g3xdevice.read_device(xml_file)
 
 
 def test_parse_empty_text_elements(tmp_path):
-    """Handle empty text elements gracefully."""
+    """Reject empty required text elements."""
     xml_file = tmp_path / "device.xml"
     xml_file.write_text("""<?xml version="1.0" encoding="UTF-8"?>
 <Device xmlns="http://www.garmin.com/xmlschemas/GarminDevice/v2">
@@ -357,16 +351,13 @@ def test_parse_empty_text_elements(tmp_path):
         <SoftwareVersion></SoftwareVersion>
         <Description></Description>
     </Model>
-    <Id>ABC123</Id>
+    <Id>3221290672</Id>
 </Device>
 """)
 
-    device = g3xdevice.read_device(xml_file)
-
-    # Empty elements should result in empty strings
-    assert device.model.part_number == ""
-    assert device.model.software_version == ""
-    assert device.model.description == ""
+    # Empty PartNumber should trigger validation error
+    with pytest.raises(ValueError, match="missing required PartNumber element"):
+        g3xdevice.read_device(xml_file)
 
 
 def test_parse_multiple_data_types(tmp_path):
@@ -376,16 +367,16 @@ def test_parse_multiple_data_types(tmp_path):
 <Device xmlns="http://www.garmin.com/xmlschemas/GarminDevice/v2">
     <Model>
         <PartNumber>006-B1234-00</PartNumber>
-        <SoftwareVersion>10.20</SoftwareVersion>
+        <SoftwareVersion>1020</SoftwareVersion>
         <Description>Test</Description>
     </Model>
-    <Id>ABC123</Id>
+    <Id>3221290672</Id>
     <MassStorageMode>
         <DataType>
             <Name>GPSData</Name>
             <File>
                 <Specification><Identifier>GPX</Identifier></Specification>
-                <Location><Path>GPX</Path></Location>
+                <Location><FileExtension>gpx</FileExtension><Path>GPX</Path></Location>
                 <TransferDirection>InputToUnit</TransferDirection>
             </File>
         </DataType>
@@ -393,7 +384,7 @@ def test_parse_multiple_data_types(tmp_path):
             <Name>Waypoints</Name>
             <File>
                 <Specification><Identifier>GPI</Identifier></Specification>
-                <Location><Path>POI</Path></Location>
+                <Location><FileExtension>gpi</FileExtension><Path>POI</Path></Location>
                 <TransferDirection>InputToUnit</TransferDirection>
             </File>
         </DataType>
@@ -401,10 +392,14 @@ def test_parse_multiple_data_types(tmp_path):
             <Name>Tracks</Name>
             <File>
                 <Specification><Identifier>FIT</Identifier></Specification>
-                <Location><Path>Activity</Path></Location>
+                <Location><FileExtension>fit</FileExtension><Path>Activity</Path></Location>
                 <TransferDirection>OutputFromUnit</TransferDirection>
             </File>
         </DataType>
+        <UpdateFile>
+            <PartNumber>006-D1234-10</PartNumber>
+            <Version><Major>1</Major><Minor>0</Minor></Version>
+        </UpdateFile>
     </MassStorageMode>
 </Device>
 """)
@@ -424,10 +419,10 @@ def test_parse_multiple_files_per_data_type(tmp_path):
 <Device xmlns="http://www.garmin.com/xmlschemas/GarminDevice/v2">
     <Model>
         <PartNumber>006-B1234-00</PartNumber>
-        <SoftwareVersion>10.20</SoftwareVersion>
+        <SoftwareVersion>1020</SoftwareVersion>
         <Description>Test</Description>
     </Model>
-    <Id>ABC123</Id>
+    <Id>3221290672</Id>
     <MassStorageMode>
         <DataType>
             <Name>Maps</Name>
@@ -442,6 +437,10 @@ def test_parse_multiple_files_per_data_type(tmp_path):
                 <TransferDirection>InputToUnit</TransferDirection>
             </File>
         </DataType>
+        <UpdateFile>
+            <PartNumber>006-D1234-10</PartNumber>
+            <Version><Major>1</Major><Minor>0</Minor></Version>
+        </UpdateFile>
     </MassStorageMode>
 </Device>
 """)
@@ -463,16 +462,16 @@ def test_transfer_directions(tmp_path):
 <Device xmlns="http://www.garmin.com/xmlschemas/GarminDevice/v2">
     <Model>
         <PartNumber>006-B1234-00</PartNumber>
-        <SoftwareVersion>10.20</SoftwareVersion>
+        <SoftwareVersion>1020</SoftwareVersion>
         <Description>Test</Description>
     </Model>
-    <Id>ABC123</Id>
+    <Id>3221290672</Id>
     <MassStorageMode>
         <DataType>
             <Name>Input</Name>
             <File>
                 <Specification><Identifier>GPX</Identifier></Specification>
-                <Location><Path>GPX</Path></Location>
+                <Location><FileExtension>gpx</FileExtension><Path>GPX</Path></Location>
                 <TransferDirection>InputToUnit</TransferDirection>
             </File>
         </DataType>
@@ -480,7 +479,7 @@ def test_transfer_directions(tmp_path):
             <Name>Output</Name>
             <File>
                 <Specification><Identifier>FIT</Identifier></Specification>
-                <Location><Path>Activity</Path></Location>
+                <Location><FileExtension>fit</FileExtension><Path>Activity</Path></Location>
                 <TransferDirection>OutputFromUnit</TransferDirection>
             </File>
         </DataType>
@@ -488,10 +487,14 @@ def test_transfer_directions(tmp_path):
             <Name>Bidirectional</Name>
             <File>
                 <Specification><Identifier>TCX</Identifier></Specification>
-                <Location><Path>Courses</Path></Location>
+                <Location><FileExtension>tcx</FileExtension><Path>Courses</Path></Location>
                 <TransferDirection>InputOutput</TransferDirection>
             </File>
         </DataType>
+        <UpdateFile>
+            <PartNumber>006-D1234-10</PartNumber>
+            <Version><Major>1</Major><Minor>0</Minor></Version>
+        </UpdateFile>
     </MassStorageMode>
 </Device>
 """)
