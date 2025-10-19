@@ -1045,17 +1045,42 @@ pytest -x
 
 #### Code Quality
 
-The project uses **ruff** for linting/formatting and **mypy** for type checking:
+The project uses **pre-commit** to manage code quality checks including **ruff** (linting/formatting), **mypy** (type checking), and **vermin** (Python version compatibility):
 
 ```bash
-# Install quality tools
-pip install "ruff>=0.1.0" "mypy>=1.0"
+# Install dev dependencies (includes pre-commit)
+pip install -e ".[dev]"
 
-# Run all checks
-./tests/lint.sh
+# Install pre-commit git hooks (runs automatically on commit)
+pre-commit install
 
-# Auto-fix issues
+# Run code quality checks only (fast)
+pre-commit run --all-files
+
+# Run ALL checks including tests (recommended before pushing)
+./tests/check-all.sh
+
+# Auto-fix formatting issues
+ruff format .
 ruff check --fix .
+```
+
+**Configured Checks:**
+- **ruff**: Fast Python linter and formatter (auto-fixes enabled)
+- **mypy**: Static type checking with type stubs
+- **vermin**: Python 3.9+ compatibility verification
+- **trailing-whitespace**: Removes trailing whitespace
+- **end-of-file-fixer**: Ensures files end with newline
+- **check-yaml**: Validates YAML syntax
+- **mixed-line-ending**: Enforces LF line endings
+
+**Recommended Workflow:**
+```bash
+# During development - runs automatically if hooks installed
+git commit
+
+# Before pushing - run full suite
+./tests/check-all.sh
 ```
 
 #### Manual Testing

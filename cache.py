@@ -16,6 +16,7 @@ Dependencies:
 
 import pathlib
 import sys
+from typing import cast
 
 # Public API
 __all__ = [
@@ -46,7 +47,7 @@ def user_cache_path(appname: str, appauthor: str = '', ensure_exists: bool = Tru
     """
     try:
         from platformdirs import user_cache_path as _platformdirs_cache
-        return _platformdirs_cache(appname, appauthor, ensure_exists=ensure_exists)
+        return cast(pathlib.Path, _platformdirs_cache(appname, appauthor, ensure_exists=ensure_exists))
     except ImportError:
         # Fallback implementation for manual platform detection
         if sys.platform == 'darwin':

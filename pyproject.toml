@@ -38,6 +38,7 @@ lint = [
     "ruff>=0.1.0",
     "mypy>=1.0",
     "vermin>=1.5",
+    "pre-commit>=3.0.0",
 ]
 dev = [
     "psutil>=5.9.0",
@@ -49,6 +50,9 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0",
     "vermin>=1.5",
+    "pre-commit>=3.0.0",
+    "types-PyYAML>=6.0.12",
+    "types-requests>=2.32.4",
 ]
 
 [project.scripts]
@@ -67,11 +71,11 @@ Homepage = "https://github.com/ryandrake08/g3xtools"
 Issues = "https://github.com/ryandrake08/g3xtools/issues"
 
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_backend"
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["g3xlog", "g3xheaders", "g3xchecklist", "g3xdata", "garmin_login", "garmin_api", "taw", "featunlk", "sdcard", "fpl", "nasr", "g3xfplan"]
+py-modules = ["g3xlog", "g3xheaders", "g3xchecklist", "g3xdata", "garmin_login", "garmin_api", "taw", "featunlk", "sdcard", "fpl", "nasr", "g3xfplan", "cache", "g3xdevice"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -115,6 +119,7 @@ select = [
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)
+    "N802",  # this is fine
 ]
 
 [tool.ruff.lint.per-file-ignores]
