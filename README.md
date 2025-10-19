@@ -76,6 +76,7 @@ Downloads current aviation database updates from Garmin's fly.garmin.com service
 - OAuth authentication with automatic token caching using platformdirs
 - URL-based file caching with organized directory structure
 - Conditional downloads (skip if file already cached)
+- Optional progress bars for download and extraction phases
 - TAW archive extraction
 - Cross-platform volume serial number reading and SD card auto-detection
 - Device-specific unlock code generation
@@ -105,6 +106,11 @@ python3 g3xdata.py -i 2054
 python3 g3xdata.py
 # Or if you have the cached VSN already:
 python3 g3xdata.py -N 1234ABCD
+
+# Show progress bars during download and extraction
+python3 g3xdata.py -p
+# Combine with verbose output for detailed progress
+python3 g3xdata.py -p -v
 
 # Manual mode: Create SD card image for a given G3X system, sdcard at given mount point, using known sdcard serial number
 sudo python3 sdcard.py /dev/rdisk2s1 (--> outputs 1234ABCD)
@@ -1115,10 +1121,9 @@ Update cards created with these tools are unofficial, and to be used at the user
 
 ### Project-wide TODOs
 
-1. Progress indicators (tqdm)
-2. Concurrent downloads
-3. Retry logic (urllib3.Retry)
-4. Logging framework, rather than passing "verbose" around to functions
+1. Concurrent downloads
+2. Retry logic (urllib3.Retry)
+3. Logging framework, rather than passing "verbose" around to functions
 
 ### Future Flight Planning Features
 

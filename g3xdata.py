@@ -24,6 +24,7 @@ Example usage:
     python3 g3xdata.py -l                              # List aircraft
     python3 g3xdata.py -s ABC123                       # Create SD card for system ABC123
     python3 g3xdata.py -s ABC123 -o /sdcard            # Create SD card with specific output path
+    python3 g3xdata.py -s ABC123 -p                    # Show progress bar during downloads
 """
 
 import argparse
@@ -37,6 +38,7 @@ import urllib.parse
 from typing import Any, Optional
 
 import requests
+from tqdm import tqdm
 
 import cache
 import featunlk
@@ -476,6 +478,48 @@ def _copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) 
 
     return output_file_path
 
+def _count_total_files(databases: list[tuple[int, str]], force_refresh_datasets: bool = False) -> int:
+    """Count total number of files to download across all databases.
+
+    Args:
+        databases: List of (series_id, issue_name) tuples
+        force_refresh_datasets: If True, force refresh of dataset metadata
+
+    Returns:
+        Total number of files (main + auxiliary) across all datasets
+    """
+    total = 0
+    for series_id, issue_name in databases:
+        files_data = _get_dataset_files(series_id, issue_name, force_refresh_datasets)
+        total += len(files_data.get('mainFiles', []))
+        total += len(files_data.get('auxiliaryFiles', []))
+    return total
+
+def _count_extraction_operations(databases: list[tuple[int, str]], manual_taw_files: Optional[list] = None) -> int:
+    """Count total number of extraction/copy operations.
+
+    Counts each mainFile (TAW) and auxiliaryFile as one operation.
+    Does not count individual TAW regions since that would require pre-scanning files.
+
+    Args:
+        databases: List of (series_id, issue_name) tuples
+        manual_taw_files: Optional list of manual TAW file paths to include
+
+    Returns:
+        Total number of extraction/copy operations
+    """
+    total = 0
+    for series_id, issue_name in databases:
+        files_data = _get_dataset_files(series_id, issue_name)
+        total += len(files_data.get('mainFiles', []))  # TAW extractions
+        total += len(files_data.get('auxiliaryFiles', []))  # File copies
+
+    # Add manual TAW files
+    if manual_taw_files:
+        total += len(manual_taw_files)
+
+    return total
+
 def _installable_databases(aircraft_data: list, device_id: int, force_latest: bool = False) -> list[tuple[int, str]]:
     """Get all installable series/issue combinations for a specific device.
 
@@ -537,6 +581,10 @@ def main() -> None:
     parser.add_argument('-i', '--series-info', type=int, metavar='SERIES_ID', help='Show detailed information about a specific series ID')
     parser.add_argument('-e', '--device-info', metavar='SYSTEM_SERIAL', help='Show detailed information about a specific device and its installable charts')
 
+    # Console output
+    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
+    parser.add_argument('-p', '--progress', action='store_true', help='Show progress bars during downloads and extraction')
+
     # Update SDCard
     parser.add_argument('-s', '--system-serial', help='Specify avionics system serial number for SD card programming. If not specified, use G3X_SYSTEM_SERIAL environment variable or the first device in the first aircraft')
     parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path). If not specified, use G3X_SDCARD_PATH environment variable or try to detect a SD card mount point')
@@ -553,7 +601,6 @@ def main() -> None:
     parser.add_argument('-U', '--force-use-latest-issues', action='store_true', help='Force use of latest issues regardless of effective date window')
 
     # Debug only
-    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('-I', '--include-series', action='append', nargs=2, metavar=('SERIES_ID', 'ISSUE_NAME'), help='Add specific series ID and issue name to output (can be specified multiple times, e.g., -I 2054 2509 -I 2056 25D4)')
     parser.add_argument('-W', '--include-taw', action='append', metavar='TAW_FILE', help='Include specific TAW file for extraction (can be specified multiple times, e.g., -W /path/to/file.taw -W /path/to/other.taw)')
 
@@ -563,8 +610,8 @@ def main() -> None:
     # List series details and exit
     args.series_info and _list_series_details(args.series_info) # type: ignore
 
-    # Verbose printing
-    vprint = print if args.verbose else lambda *_: None
+    # Verbose printing - use tqdm.write() for proper progress bar interaction
+    vprint = (lambda *args_print, **kwargs: tqdm.write(*args_print, **kwargs)) if args.verbose else lambda *_: None
 
     # Determine output path: command line > environment > auto-detect
     output_arg = args.output or os.getenv('G3X_SDCARD_PATH') or sdcard.detect_sd_card()
@@ -606,14 +653,23 @@ def main() -> None:
 
     # File downloading
 
-    for series_id, issue_name in databases:
-        # Get the dataset descriptor for this series/issue
-        files_data = _get_dataset_files(series_id, issue_name, args.force_refresh_datasets)
+    # Count total files and create progress bar
+    total_files = _count_total_files(databases, args.force_refresh_datasets) if args.progress else 0
+    pbar = tqdm(total=total_files, desc="Downloading", disable=not args.progress, unit="file", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
 
-        # Download all files (main and auxiliary)
-        for file_info in files_data.get('mainFiles', []) + files_data.get('auxiliaryFiles', []):
-            vprint(f"Obtaining {file_info['url']}")
-            _download_file(file_info['url'], file_info['fileSize'], args.force_file_download)
+    try:
+        for series_id, issue_name in databases:
+            # Get the dataset descriptor for this series/issue
+            files_data = _get_dataset_files(series_id, issue_name, args.force_refresh_datasets)
+
+            # Download all files (main and auxiliary)
+            for file_info in files_data.get('mainFiles', []) + files_data.get('auxiliaryFiles', []):
+                if args.verbose:
+                    tqdm.write(f"Obtaining {file_info['url']}")
+                _download_file(file_info['url'], file_info['fileSize'], args.force_file_download)
+                pbar.update(1)
+    finally:
+        pbar.close()
 
     # File copy / extraction
 
@@ -621,51 +677,70 @@ def main() -> None:
         # Store list of data files / taw_regions
         features = []
 
-        # Iterate through all installable series/issue combinations
-        for series_id, issue_name in databases:
-            vprint(f"Adding to SD card series {series_id}, issue {issue_name}")
+        # Count extraction operations and create progress bar
+        total_operations = _count_extraction_operations(databases, args.include_taw) if args.progress else 0
+        extract_pbar = tqdm(total=total_operations, desc="Extracting", disable=not args.progress, unit="file", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
 
-            # Get the dataset descriptor for this series/issue
-            files_data = _get_dataset_files(series_id, issue_name)
+        try:
+            # Iterate through all installable series/issue combinations
+            for series_id, issue_name in databases:
+                if args.verbose:
+                    tqdm.write(f"Adding to SD card series {series_id}, issue {issue_name}")
 
-            # Verfiy the main file is a TAW
-            if files_data['issueType'] != "TAW":
-                print(f"Warning: Unexpected issue type {files_data['issue_type']} for series {series_id}, issue {issue_name}", file=sys.stderr)
-                continue
+                # Get the dataset descriptor for this series/issue
+                files_data = _get_dataset_files(series_id, issue_name)
 
-            # Extract main files
-            for file_info in files_data.get('mainFiles', []):
-                # Get destination path
-                cached_path = _get_cached_file_path_for_url(file_info['url'])
-
-                # Extract each file to the root sdcard
-                for taw_region_path, output_file_path in taw.extract_taw(cached_path, output_path, skip_unknown_regions=True):
-                    vprint(f"Extracted {cached_path} taw region {taw_region_path} to {output_file_path}")
-                    if taw_region_path:
-                        features.append((taw_region_path, output_file_path))
-
-            # Copy auxiliary files
-            for file_info in files_data.get('auxiliaryFiles', []):
-                output_file_path = _copy_file(file_info, output_path, args.force_file_copy)
-                vprint(f"Copied {file_info['url']} to {output_file_path}")
-
-            vprint("Finished adding series")
-
-        # Process manually specified TAW files
-        if args.include_taw:
-            for taw_file_path in args.include_taw:
-                vprint(f"Adding manual TAW file {taw_file_path}")
-                taw_path = pathlib.Path(taw_file_path)
-
-                if not taw_path.exists():
-                    print(f"Warning: TAW file {taw_file_path} does not exist, skipping", file=sys.stderr)
+                # Verfiy the main file is a TAW
+                if files_data['issueType'] != "TAW":
+                    print(f"Warning: Unexpected issue type {files_data['issue_type']} for series {series_id}, issue {issue_name}", file=sys.stderr)
                     continue
 
-                # Extract each file to the root sdcard
-                for taw_region_path, output_file_path in taw.extract_taw(taw_path, output_path, skip_unknown_regions=True):
-                    vprint(f"Extracted {taw_file_path} taw region {taw_region_path} to {output_file_path}")
-                    if taw_region_path:
-                        features.append((taw_region_path, output_file_path))
+                # Extract main files
+                for file_info in files_data.get('mainFiles', []):
+                    # Get destination path
+                    cached_path = _get_cached_file_path_for_url(file_info['url'])
+
+                    # Extract each file to the root sdcard
+                    for taw_region_path, output_file_path in taw.extract_taw(cached_path, output_path, skip_unknown_regions=True):
+                        if args.verbose:
+                            tqdm.write(f"Extracted {cached_path} taw region {taw_region_path} to {output_file_path}")
+                        if taw_region_path:
+                            features.append((taw_region_path, output_file_path))
+
+                    extract_pbar.update(1)
+
+                # Copy auxiliary files
+                for file_info in files_data.get('auxiliaryFiles', []):
+                    output_file_path = _copy_file(file_info, output_path, args.force_file_copy)
+                    if args.verbose:
+                        tqdm.write(f"Copied {file_info['url']} to {output_file_path}")
+                    extract_pbar.update(1)
+
+                if args.verbose:
+                    tqdm.write("Finished adding series")
+
+            # Process manually specified TAW files
+            if args.include_taw:
+                for taw_file_path in args.include_taw:
+                    if args.verbose:
+                        tqdm.write(f"Adding manual TAW file {taw_file_path}")
+                    taw_path = pathlib.Path(taw_file_path)
+
+                    if not taw_path.exists():
+                        print(f"Warning: TAW file {taw_file_path} does not exist, skipping", file=sys.stderr)
+                        extract_pbar.update(1)
+                        continue
+
+                    # Extract each file to the root sdcard
+                    for taw_region_path, output_file_path in taw.extract_taw(taw_path, output_path, skip_unknown_regions=True):
+                        if args.verbose:
+                            tqdm.write(f"Extracted {taw_file_path} taw region {taw_region_path} to {output_file_path}")
+                        if taw_region_path:
+                            features.append((taw_region_path, output_file_path))
+
+                    extract_pbar.update(1)
+        finally:
+            extract_pbar.close()
 
         # Activate features on the sdcard
 
