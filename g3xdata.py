@@ -568,7 +568,7 @@ def _installable_databases(aircraft_data: list, device_id: int, force_latest: bo
                             databases.append((series['id'], selected_issue['name']))
                         else:
                             # No valid issue found, warn the user
-                            print(f"Warning: No valid issue found for dataset: {avdb['name']}, series: {series['region']['name']} ({series['id']})", file=sys.stderr)
+                            print(f"Warning: No available download, possibly no longer subscribed: {avdb['name']}, series: {series['region']['name']} ({series['id']})", file=sys.stderr)
 
     return databases
 
@@ -588,7 +588,7 @@ def main() -> None:
     # Update SDCard
     parser.add_argument('-s', '--system-serial', help='Specify avionics system serial number for SD card programming. If not specified, use G3X_SYSTEM_SERIAL environment variable or the first device in the first aircraft')
     parser.add_argument('-o', '--output', help='Specify output path (usually a mounted SD card path). If not specified, use G3X_SDCARD_PATH environment variable or try to detect a SD card mount point')
-    parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. If not specified, checks cache for output path, then G3X_SDCARD_SERIAL environment variable")
+    parser.add_argument('-N', '--vsn', help="Specify SD card volume serial number for building feat_unlk.dat. If not specified, use G3X_SDCARD_SERIAL environment variable, or check what was used last time for this output path")
     parser.add_argument('-c', '--check-crc', action='store_true', help='Perform CRC check on each data file during feat_unlk.dat generation (slow)')
 
     # FlyGarmin authenitcation, query, and download overrides
