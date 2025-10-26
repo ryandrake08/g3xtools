@@ -1,8 +1,8 @@
- #!/usr/bin/env python3
+#!/usr/bin/env python3
 
 """
 This module provides functions to interact with the FAA NASR Subscription page
-and processes NASR data into a msgpack database for flight planning.
+and processes NASR data into msgpack or sqlite databases for flight planning.
 
 CSV files processed:
     - APT_BASE.csv: Contains airport waypoint data.
@@ -17,16 +17,22 @@ Command Line Arguments:
     --name: Downloads archived data by name.
     --list: Lists the available NASR data in the Archive section.
     --filename: Specifies the NASR data filename. Uses basename of URL if not provided.
+    --msgpack [FILE]: Output msgpack format (default: platform-specific cached file).
+    --sqlite FILE: Output sqlite format (filename required).
+    --with-geometry: Include spatialite geometry (only valid with --sqlite).
 
 Usage:
-    python nasr.py --current [--filename <filename>]
-    python nasr.py --preview [--filename <filename>]
+    python nasr.py --current
+    python nasr.py --current --msgpack custom.msgpack
+    python nasr.py --current --sqlite nasr.db
+    python nasr.py --current --sqlite nasr.db --with-geometry
+    python nasr.py --current --msgpack --sqlite nasr.db --with-geometry
     python nasr.py --list
         (then)
-    python nasr.py --name <name> [--filename <filename>]
+    python nasr.py --name <name>
 
         (to skip downloading)
-    python nasr.py --filename <filename>
+    python nasr.py --filename <filename> --sqlite nasr.db
 
 Functions:
     list_archives() -> dict:
@@ -44,6 +50,7 @@ import collections
 import csv
 import io
 import os
+import pathlib
 import re
 import time
 import urllib.error
@@ -65,7 +72,7 @@ __all__ = [
 _NASR_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
 _DEFAULT_FILENAME = 'downloaded_file'
 _CACHE_PATH = cache.user_cache_path("g3xtools", "g3xtools")
-_NASR_DATABASE_PATH = _CACHE_PATH / 'nasr.msgpack'
+_NASR_MSGPACK_DATABASE_PATH = _CACHE_PATH / 'nasr.msgpack'
 
 def load_nasr_database() -> dict[str, Any]:
     """
@@ -84,14 +91,14 @@ def load_nasr_database() -> dict[str, Any]:
         >>> airways = database['airways']
         >>> connections = database['connections']
     """
-    if not _NASR_DATABASE_PATH.exists():
+    if not _NASR_MSGPACK_DATABASE_PATH.exists():
         raise FileNotFoundError(
-            f"NASR database not found at {_NASR_DATABASE_PATH}\n"
+            f"NASR database not found at {_NASR_MSGPACK_DATABASE_PATH}\n"
             f"Run 'python3 nasr.py --current' to download and build the database"
         )
 
     try:
-        with open(_NASR_DATABASE_PATH, 'rb') as f:
+        with open(_NASR_MSGPACK_DATABASE_PATH, 'rb') as f:
             database: dict[str, Any] = msgpack.unpackb(f.read(), strict_map_key=False)
         return database
     except Exception as e:
@@ -390,55 +397,13 @@ def read_csv_file(csv_archive: 'CsvZip', file_name: str, columns: list[str], row
                     for csv_header in columns]
             rowdata.append(values)  # type: ignore[arg-type]
 
-def main():
-    """
-    Main function to download NASR data and store it in data structures useful for flight planning.
-    """
-
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Download NASR data and store it in data structures useful for flight planning.')
-    mode_group = parser.add_mutually_exclusive_group(required=True)
-    mode_group.add_argument('--current', action='store_true', help='Download the Current data.')
-    mode_group.add_argument('--preview', action='store_true', help='Download the Preview data.')
-    mode_group.add_argument('--name', help='Download archived data by name.')
-    mode_group.add_argument('--list', action='store_true', help='List of NASR data in the Archive section.')
-    parser.add_argument('--filename', help='Specify the NASR data filename. Uses basename of URL if not provided.')
-    args = parser.parse_args()
-
-    # Process the archive section
-    if args.list:
-        # List available NASR data if --list is passed, then exit
-        print('\n'.join(list_archives().keys()))
-        return
-
-    elif args.name:
-        # Look up fullzip link by name
-        fullzip_link = list_archives().get(args.name)
-        if not fullzip_link:
-            raise ValueError(f"Archive '{args.name}' not found")
-
-        # Download the file
-        filename = download(fullzip_link, args.filename)
-
-    elif args.preview or args.current:
-        # Process the Preview or Current section
-        fullzip_link = list(current_or_preview('Preview' if args.preview else 'Current').values())[0]
-
-        # Download the file
-        filename = download(fullzip_link, args.filename)
-
-    elif args.filename:
-        filename = args.filename
-
-    else:
-        raise FileNotFoundError('nasr: No data found or specified.')
-
+def write_msgpack_file(csvzip_path: pathlib.Path, msgpack_path: pathlib.Path):
     waypoints: list[list[str]] = []
     airways: list[list[str]] = []
     airway_seg: list[dict[str, Any]] = []
 
     # Open archive
-    with CsvZip(filename) as csv_archive:
+    with CsvZip(csvzip_path) as csv_archive:
         # Read waypoint data
         read_csv_file(csv_archive, 'APT_BASE.csv', ['ARPT_ID', 'SITE_TYPE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE', 'ICAO_ID'], waypoints)
         read_csv_file(csv_archive, 'FIX_BASE.csv', ['FIX_ID', 'FIX_USE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
@@ -500,8 +465,269 @@ def main():
     }
     packed_data: Optional[bytes] = msgpack.packb(database)
     if packed_data:
-        with open(_NASR_DATABASE_PATH, 'wb') as f:
+        with open(msgpack_path, 'wb') as f:
             f.write(packed_data)
+
+def validate_sql_identifier(identifier):
+    """Validate that an identifier is safe for SQL use."""
+    if not identifier:
+        raise ValueError("Identifier cannot be empty")
+
+    # Allow only alphanumeric characters and underscores, starting with letter or underscore
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', identifier):
+        raise ValueError(f"Invalid SQL identifier: {identifier}")
+
+    # Prevent SQL reserved words (add more as needed)
+    reserved_words = {'SELECT', 'INSERT', 'DELETE', 'UPDATE', 'DROP', 'CREATE', 'TABLE', 'FROM', 'WHERE'}
+    if identifier.upper() in reserved_words:
+        raise ValueError(f"Reserved word not allowed as identifier: {identifier}")
+
+    return identifier
+
+def write_sqlite_file(csvzip_path: pathlib.Path, db_path: pathlib.Path, spatialite: bool):
+    import sqlite3
+
+    # Delete old database if it already exists
+    if db_path.exists():
+        db_path.unlink()
+
+    # Create a connection to the SQLite database
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    # Open archive
+    with CsvZip(csvzip_path) as csv_archive:
+        # Create a dictionary to hold the table structures
+        table_structures = collections.defaultdict(list)
+
+        # Find all .csv files in the archive
+        csv_files = [name for name in csv_archive.namelist() if name.endswith('.csv')]
+
+        # Read the structure files in order to create the tables
+        for csv_filename in [name for name in csv_files if name.endswith('_CSV_DATA_STRUCTURE.csv')]:
+            # Open the structure file
+            with csv_archive.open(csv_filename) as csv_file:
+                csv_reader = csv.DictReader(io.TextIOWrapper(csv_file, encoding='us-ascii', errors='strict'))
+
+                # Populate the table structures dictionary
+                for row in csv_reader:
+                    csv_table_name = row['CSV File']
+                    column_name = row['Column Name']
+                    max_length = row['Max Length']
+                    data_type = row['Data Type']
+                    nullable = row['Nullable']
+
+                    # Determine the SQLite data type
+                    if data_type == 'VARCHAR':
+                        sqlite_type = f'VARCHAR({max_length})'
+                    elif data_type == 'NUMBER':
+                        # SQLite does not have NUMERIC(p,s) so we have to determine if it is an INTEGER or REAL
+                        sqlite_type = 'INTEGER' if ',0)' in max_length else 'REAL'
+                    else:
+                        raise ValueError(f"Unknown data type: {data_type}")
+
+                    # Determine if the column is nullable
+                    not_null = ' NOT NULL' if nullable == 'N' else ''
+
+                    # Append the column definition to the table structure
+                    table_structures[csv_table_name].append(f'{column_name} {sqlite_type}{not_null}')
+
+        # Add the data to the tables
+        for csv_filename in [name for name in csv_files if not name.endswith('_CSV_DATA_STRUCTURE.csv')]:
+            # Determine the table name
+            csv_table_name = os.path.splitext(csv_filename)[0]
+            column_definition = table_structures[csv_table_name]
+
+            # Validate table name for SQL injection prevention
+            safe_table_name = validate_sql_identifier(csv_table_name)
+
+            # Create the table
+            c.execute(f'CREATE TABLE IF NOT EXISTS {safe_table_name} ({", ".join(column_definition)})')
+
+            # File encoding is usually iso-8859-1
+            file_encodings = { 'CDR': 'utf-8' }
+            file_encoding = file_encodings.get(csv_table_name, 'iso-8859-1')
+
+            # Open the data file
+            with csv_archive.open(csv_filename) as csv_file:
+                csv_reader = csv.DictReader(io.TextIOWrapper(csv_file, encoding=file_encoding, errors='strict'))
+                for row in csv_reader:
+                    # Insert the data
+                    placeholders = ', '.join(['?'] * len(row))
+                    c.execute(f'INSERT INTO {safe_table_name} VALUES ({placeholders})', tuple(row.values()))
+
+    # Run post-processing SQL to add helpful columns not included in the NASR data
+    sql_path = pathlib.Path(__file__).parent / 'post_process_nasr.sql'
+    with open(sql_path, encoding='us-ascii') as f:
+        c.executescript(f.read())
+
+    conn.commit()
+
+    if spatialite:
+        try:
+            # Load spatialite extension
+            conn.enable_load_extension(True)
+            conn.load_extension('mod_spatialite')
+        except sqlite3.OperationalError as e:
+            # Exit early on failure. The rest of the script just adds geometry columns.
+            print('Error loading mod_spatialite:', e, 'Spatialite support will not be available.')
+            conn.close()
+            exit(0)
+
+        # Create the spatialite metadata
+        c.execute('SELECT InitSpatialMetadata(1)')
+
+        # Add geometry columns for tables that have point geometries
+        def add_geometry_column(table, geom_column, geometry_type):
+            c.execute(f'SELECT AddGeometryColumn("{table}", "{geom_column}", 4269, "{geometry_type}", "XY")')
+            c.execute(f'SELECT CreateSpatialIndex("{table}", "{geom_column}")')
+
+        def add_point_geometry(table, geom_column, latitude_column, longitude_column):
+            c.execute(f'UPDATE {table} SET {geom_column} = MakePoint({longitude_column}, {latitude_column}, 4269)')
+
+        tables = [
+            ['APT_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['APT_RWY_END', 'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['APT_RWY_END', 'GEOMETRY_DISPLACED_THR', 'LAT_DISPLACED_THR_DECIMAL', 'LONG_DISPLACED_THR_DECIMAL'],
+            ['APT_RWY_END', 'GEOMETRY_LAHSO',         'LAT_LAHSO_DECIMAL',         'LONG_LAHSO_DECIMAL'],
+            ['ARB_BASE',    'GEOMETRY_REFERENCE',     'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['ARB_SEG',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['AWOS',        'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['AWY_SEG_ALT', 'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['COM',         'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['DP_RTE',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['FIX_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['FRQ',         'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['FSS_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['ILS_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['ILS_DME',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['ILS_GS',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['ILS_MKR',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['MAA_BASE',    'GEOMETRY_REFERENCE',     'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['MAA_SHP',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['MTR_PT',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['NAV_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['NAV_BASE',    'GEOMETRY_TACAN_DME',     'TACAN_DME_LAT_DECIMAL',     'TACAN_DME_LONG_DECIMAL'],
+            ['PJA_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['STAR_RTE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+            ['WXL_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL']
+        ]
+
+        for table, geom_column, lat_column, long_column in tables:
+            add_geometry_column(table, geom_column, 'POINT')
+            add_point_geometry(table, geom_column, lat_column, long_column)
+            conn.commit()
+
+        # Add multipoint geometries for AWY, DP, MTR, STAR
+        def add_multipoint_geometry(table, geom_column, point_table, point_geom_column, identifying_columns):
+            where_clause = ' AND '.join([f'{table}.{col} = {point_table}.{col}' for col in identifying_columns])
+            c.execute(f'UPDATE {table} SET {geom_column} = (SELECT CastToMultipoint(Collect({point_geom_column})) FROM {point_table} WHERE {where_clause})')
+
+        multipoint_tables: list[tuple[str, str, str, str, list[str]]] = [
+            ('AWY_LINES', 'GEOMETRY', 'AWY_SEG_ALT', 'GEOMETRY', ['AWY_LOCATION', 'AWY_ID', 'LINE_SEQ']),
+            ('DP_LINES',  'GEOMETRY', 'DP_RTE',      'GEOMETRY', ['DP_COMPUTER_CODE', 'ROUTE_NAME', 'BODY_SEQ']),
+            ('MTR_LINES', 'GEOMETRY', 'MTR_PT',      'GEOMETRY', ['ROUTE_TYPE_CODE', 'ROUTE_ID']),
+            ('STAR_LINES','GEOMETRY', 'STAR_RTE',    'GEOMETRY', ['STAR_COMPUTER_CODE', 'ROUTE_NAME', 'BODY_SEQ'])
+        ]
+
+        for table, geom_column, point_table, point_geom_column, identifying_columns in multipoint_tables:
+            add_geometry_column(table, geom_column, 'MULTIPOINT')
+            add_multipoint_geometry(table, geom_column, point_table, point_geom_column, identifying_columns)
+            conn.commit()
+
+        # TODO: Add multipoint geometries for PFRs. These are complicated in that they can be comprised of:
+        # NAVAID, FIX, DP, STAR, AIRWAY, a RADIAL from a NAVAID, or a FRD (FIX RADIAL DISTANCE)
+
+        # TODO: Add multipoint geometries for CDRs. These are poorly represented in the data, and require
+        # more parsing logic.
+
+        # Add polygon geometries for: MAA_SHP
+        def add_polygon_geometry(table, geom_column, point_table, point_geom_column, identifying_columns):
+            where_clause = ' AND '.join([f'{table}.{col} = {point_table}.{col}' for col in identifying_columns])
+            c.execute(f'UPDATE {table} SET {geom_column} = (SELECT MakePolygon({point_geom_column}) FROM {point_table} WHERE {where_clause})')
+
+        add_geometry_column('MAA_BASE', 'GEOMETRY', 'POLYGON')
+        add_polygon_geometry('MAA_BASE', 'GEOMETRY', 'MAA_SHP', 'GEOMETRY', ['MAA_ID'])
+        conn.commit()
+
+        # TODO: Add polygon geometries for ARB_SEG. These are complicated, too.
+        #    Some of the ARTCC boundaries defined by the ARTCC facility are composed of
+        #    more than a single closed shape. Due to the format constraints and naming
+        #    conventions of the legacy ARB file it is not possible to publish each
+        #    shape separately. In these cases it is necessary to read the point
+        #    description text for the key phrase "TO POINT OF BEGINNING" to identify
+        #    where the shape returns to the beginning and forms a closed shape.
+
+def main():
+    """
+    Main function to download NASR data and store it in data structures useful for flight planning.
+    """
+
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Download NASR data and store it in data structures useful for flight planning.')
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument('--current', action='store_true', help='Download the Current data.')
+    mode_group.add_argument('--preview', action='store_true', help='Download the Preview data.')
+    mode_group.add_argument('--name', help='Download archived data by name.')
+    mode_group.add_argument('--list', action='store_true', help='List of NASR data in the Archive section.')
+    parser.add_argument('--filename', help='Specify the NASR data filename. Uses basename of URL if not provided.')
+
+    # Output format arguments
+    parser.add_argument('--msgpack', nargs='?', const=_NASR_MSGPACK_DATABASE_PATH, metavar='FILE',
+                        help=f'Output msgpack format (default: {_NASR_MSGPACK_DATABASE_PATH})')
+    parser.add_argument('--sqlite', metavar='FILE',
+                        help='Output sqlite format (filename required)')
+    parser.add_argument('--with-geometry', action='store_true',
+                        help='Include spatialite geometry (only valid with --sqlite)')
+
+    args = parser.parse_args()
+
+    # Validation
+    if args.with_geometry and not args.sqlite:
+        parser.error('--with-geometry requires --sqlite')
+
+    # Process the archive section
+    if args.list:
+        # List available NASR data if --list is passed, then exit
+        print('\n'.join(list_archives().keys()))
+        return
+
+    elif args.name:
+        # Look up fullzip link by name
+        fullzip_link = list_archives().get(args.name)
+        if not fullzip_link:
+            raise ValueError(f"Archive '{args.name}' not found")
+
+        # Download the file
+        filename = download(fullzip_link, args.filename)
+
+    elif args.preview or args.current:
+        # Process the Preview or Current section
+        fullzip_link = list(current_or_preview('Preview' if args.preview else 'Current').values())[0]
+
+        # Download the file
+        filename = download(fullzip_link, args.filename)
+
+    elif args.filename:
+        filename = args.filename
+
+    else:
+        raise FileNotFoundError('nasr: No data found or specified.')
+
+    # Default behavior: if no output format specified, use msgpack
+    if not args.msgpack and not args.sqlite:
+        args.msgpack = _NASR_MSGPACK_DATABASE_PATH
+
+    # Process output formats
+    csvzip_path = pathlib.Path(filename)
+
+    if args.msgpack:
+        msgpack_path = pathlib.Path(args.msgpack) if isinstance(args.msgpack, str) else args.msgpack
+        write_msgpack_file(csvzip_path, msgpack_path)
+
+    if args.sqlite:
+        sqlite_path = pathlib.Path(args.sqlite)
+        write_sqlite_file(csvzip_path, sqlite_path, args.with_geometry)
 
 if __name__ == '__main__':
     main()

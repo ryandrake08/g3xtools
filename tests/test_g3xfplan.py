@@ -63,11 +63,11 @@ def test_router_initialization_with_test_nasr(fixtures_dir):
     # Temporarily set NASR database path for testing
     import nasr
 
-    original_path = nasr._NASR_DATABASE_PATH
+    original_path = nasr._NASR_MSGPACK_DATABASE_PATH
 
     try:
         # Point to test database
-        nasr._NASR_DATABASE_PATH = fixtures_dir / "nasr_test.msgpack"
+        nasr._NASR_MSGPACK_DATABASE_PATH = fixtures_dir / "nasr_test.msgpack"
 
         # Initialize router with required parameters
         # Router(waypoint_preferences, airway_preferences, max_leg_length, user_waypoints)
@@ -99,17 +99,17 @@ def test_router_initialization_with_test_nasr(fixtures_dir):
 
     finally:
         # Restore original path
-        nasr._NASR_DATABASE_PATH = original_path
+        nasr._NASR_MSGPACK_DATABASE_PATH = original_path
 
 
 def test_route_finds_path(fixtures_dir):
     """A* should find a path between connected waypoints."""
     import nasr
 
-    original_path = nasr._NASR_DATABASE_PATH
+    original_path = nasr._NASR_MSGPACK_DATABASE_PATH
 
     try:
-        nasr._NASR_DATABASE_PATH = fixtures_dir / "nasr_test.msgpack"
+        nasr._NASR_MSGPACK_DATABASE_PATH = fixtures_dir / "nasr_test.msgpack"
 
         waypoint_prefs = {"A": "INCLUDE", "VFR": "INCLUDE", "V": "INCLUDE", "N": "INCLUDE", "USER": "INCLUDE"}
         airway_prefs = {"V": "INCLUDE", "J": "INCLUDE", "TEST": "INCLUDE"}
@@ -127,17 +127,17 @@ def test_route_finds_path(fixtures_dir):
         assert route[-1] == 1, "Route should end at destination"
 
     finally:
-        nasr._NASR_DATABASE_PATH = original_path
+        nasr._NASR_MSGPACK_DATABASE_PATH = original_path
 
 
 def test_user_waypoint_integration(fixtures_dir):
     """User waypoints should be properly integrated into routing."""
     import nasr
 
-    original_path = nasr._NASR_DATABASE_PATH
+    original_path = nasr._NASR_MSGPACK_DATABASE_PATH
 
     try:
-        nasr._NASR_DATABASE_PATH = fixtures_dir / "nasr_test.msgpack"
+        nasr._NASR_MSGPACK_DATABASE_PATH = fixtures_dir / "nasr_test.msgpack"
 
         waypoint_prefs = {"A": "INCLUDE", "VFR": "INCLUDE", "V": "INCLUDE", "N": "INCLUDE", "USER": "INCLUDE"}
         airway_prefs = {"V": "INCLUDE", "J": "INCLUDE", "TEST": "INCLUDE"}
@@ -158,17 +158,17 @@ def test_user_waypoint_integration(fixtures_dir):
         assert usr_wp[3] == -120.25
 
     finally:
-        nasr._NASR_DATABASE_PATH = original_path
+        nasr._NASR_MSGPACK_DATABASE_PATH = original_path
 
 
 def test_route_calculation_returns_waypoint_list(fixtures_dir):
     """Route calculation should return list of waypoint indices."""
     import nasr
 
-    original_path = nasr._NASR_DATABASE_PATH
+    original_path = nasr._NASR_MSGPACK_DATABASE_PATH
 
     try:
-        nasr._NASR_DATABASE_PATH = fixtures_dir / "nasr_test.msgpack"
+        nasr._NASR_MSGPACK_DATABASE_PATH = fixtures_dir / "nasr_test.msgpack"
 
         waypoint_prefs = {"A": "INCLUDE", "VFR": "INCLUDE", "V": "INCLUDE", "N": "INCLUDE", "USER": "INCLUDE"}
         airway_prefs = {"V": "INCLUDE", "J": "INCLUDE", "TEST": "INCLUDE"}
@@ -185,4 +185,4 @@ def test_route_calculation_returns_waypoint_list(fixtures_dir):
         assert all(0 <= x < len(router.waypoints) for x in route), "Indices should be valid"
 
     finally:
-        nasr._NASR_DATABASE_PATH = original_path
+        nasr._NASR_MSGPACK_DATABASE_PATH = original_path

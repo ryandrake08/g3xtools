@@ -410,13 +410,27 @@ Downloads and processes FAA NASR (National Airspace System Resources) data to cr
 **Features:**
 - Downloads current or preview NASR data from FAA
 - Creates MessagePack database (`nasr.msgpack`) optimized for A* pathfinding
+- Optional SQLite/Spatialite database output for GIS tools and external analysis
 - Processes waypoints, airways, and navigation data
 - Supports specific archive selection by name
+- Can output multiple formats in a single run
 
 **Usage:**
 ```bash
-# Download current NASR data and generate database
+# Download current NASR data and generate default msgpack database
 python3 nasr.py --current
+
+# Generate msgpack database with custom filename
+python3 nasr.py --current --msgpack custom.msgpack
+
+# Generate SQLite database (all NASR tables)
+python3 nasr.py --current --sqlite nasr.db
+
+# Generate SQLite database with spatialite geometry columns
+python3 nasr.py --current --sqlite nasr.db --with-geometry
+
+# Generate both msgpack and SQLite in one run
+python3 nasr.py --current --msgpack --sqlite nasr.db --with-geometry
 
 # Download preview NASR data
 python3 nasr.py --preview
@@ -428,13 +442,18 @@ python3 nasr.py --list
 python3 nasr.py --name <name>
 
 # Process existing NASR zip file
-python3 nasr.py --filename <file.zip>
+python3 nasr.py --filename <file.zip> --sqlite nasr.db
 ```
 
-**Database Location:**
-- **macOS**: `~/Library/Caches/g3xfplan/nasr.msgpack`
-- **Linux**: `~/.cache/g3xfplan/nasr.msgpack`
-- **Windows**: `%LOCALAPPDATA%\g3xfplan\Cache\nasr.msgpack`
+**Output Formats:**
+- **msgpack** (default): Optimized binary format for g3xfplan.py, contains waypoints, airways, and connections
+- **sqlite**: Full NASR database with all tables for external tools and GIS applications
+- **spatialite** (--with-geometry): SQLite with geometry columns for spatial queries and GIS integration
+
+**Default msgpack Database Location:**
+- **macOS**: `~/Library/Caches/g3xtools/nasr.msgpack`
+- **Linux**: `~/.cache/g3xtools/nasr.msgpack`
+- **Windows**: `%LOCALAPPDATA%\g3xtools\Cache\nasr.msgpack`
 
 ## Installation
 
