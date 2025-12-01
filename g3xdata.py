@@ -190,6 +190,7 @@ def _get_default_device_system_serial(aircraft_data: list, output_path: Optional
 
     # First pass: try to find device matching hint (if found)
     if device_id_hint is not None:
+        found_serials = []
         for aircraft in aircraft_data:
             for device in aircraft['devices']:
                 # Use 'serial' field (decimal int) for comparison
@@ -199,12 +200,16 @@ def _get_default_device_system_serial(aircraft_data: list, output_path: Optional
 
                 # Extract lower 32 bits and compare
                 system_serial_lower32 = system_serial_full & 0xFFFFFFFF
+                found_serials.append(system_serial_lower32)
 
                 if system_serial_lower32 == device_id_hint:
                     return str(device['displaySerial'])
 
-        # Device ID hint provided but no match found
-        raise ValueError(f"No device found with device ID {device_id_hint:#x} (from GarminDevice.xml)")
+        # Device ID hint provided but no match found - warn and fall through to use first device
+        found_list = ', '.join(f'{s:#010x}' for s in found_serials)
+        print(f"Warning: No device found with device ID {device_id_hint:#010x} (from GarminDevice.xml), "
+              f"found {found_list}. Using first device {found_serials[0]:#010x}",
+              file=sys.stderr)
 
     # No hint provided - return first device's displaySerial
     for aircraft in aircraft_data:
