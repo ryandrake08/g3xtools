@@ -607,6 +607,7 @@ def main() -> None:
 
     # Debug only
     parser.add_argument('-I', '--include-series', action='append', nargs=2, metavar=('SERIES_ID', 'ISSUE_NAME'), help='Add specific series ID and issue name to output (can be specified multiple times, e.g., -I 2054 2509 -I 2056 25D4)')
+    parser.add_argument('-E', '--exclude-series', action='append', nargs=2, metavar=('SERIES_ID', 'ISSUE_NAME'), help='Exclude specific series ID and issue name from output (can be specified multiple times, e.g., -E 2054 2509 -E 2056 25D4)')
     parser.add_argument('-W', '--include-taw', action='append', metavar='TAW_FILE', help='Include specific TAW file for extraction (can be specified multiple times, e.g., -W /path/to/file.taw -W /path/to/other.taw)')
 
     # Parse arguments
@@ -655,6 +656,11 @@ def main() -> None:
         for series_id_str, issue_name in args.include_series:
             series_id = int(series_id_str)
             databases.append((series_id, issue_name))
+
+    # Remove manually excluded series/issue pairs
+    if args.exclude_series:
+        exclude_set = {(int(series_id_str), issue_name) for series_id_str, issue_name in args.exclude_series}
+        databases = [(s, i) for s, i in databases if (s, i) not in exclude_set]
 
     # File downloading
 
