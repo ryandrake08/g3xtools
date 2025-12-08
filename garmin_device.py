@@ -6,7 +6,7 @@ This module provides support for reading GarminDevice.xml files that describe
 Garmin avionics device capabilities and installed software/databases.
 
 Quick Start - Reading:
-    >>> from g3xdevice import read_device
+    >>> from garmin_device import read_device
     >>> device = read_device("GarminDevice.xml")
     >>> print(f"Device: {device.model.description}")
     >>> print(f"Part Number: {device.model.part_number}")
@@ -42,11 +42,11 @@ Data Model:
     └── files: List[FileSpec] (supported file specifications)
 
 Usage:
-    python3 g3xdevice.py                               # Auto-detect SD card and read GarminDevice.xml
-    python3 g3xdevice.py GarminDevice.xml              # Show device summary
-    python3 g3xdevice.py GarminDevice.xml --updates    # List installed updates
-    python3 g3xdevice.py GarminDevice.xml --data-types # List supported data types
-    python3 g3xdevice.py GarminDevice.xml --verbose    # Show all details
+    python3 garmin_device.py                               # Auto-detect SD card and read GarminDevice.xml
+    python3 garmin_device.py GarminDevice.xml              # Show device summary
+    python3 garmin_device.py GarminDevice.xml --updates    # List installed updates
+    python3 garmin_device.py GarminDevice.xml --data-types # List supported data types
+    python3 garmin_device.py GarminDevice.xml --verbose    # Show all details
 """
 
 import argparse

@@ -75,7 +75,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["g3xlog", "g3xheaders", "g3xchecklist", "g3xdata", "garmin_login", "garmin_api", "taw", "featunlk", "sdcard", "fpl", "nasr", "g3xfplan", "cache", "g3xdevice"]
+py-modules = ["g3xlog", "g3xheaders", "g3xchecklist", "g3xdata", "garmin_login", "garmin_api", "taw", "featunlk", "sdcard", "fpl", "nasr", "g3xfplan", "cache", "garmin_device"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

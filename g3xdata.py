@@ -42,8 +42,8 @@ from tqdm import tqdm
 
 import cache
 import featunlk
-import g3xdevice
 import garmin_api
+import garmin_device
 import garmin_login
 import sdcard
 import taw
@@ -186,7 +186,7 @@ def _get_default_device_system_serial(aircraft_data: list, output_path: Optional
     if output_path and output_path.exists():
         device_xml_path = output_path / "Garmin" / "GarminDevice.xml"
         if device_xml_path.exists():
-            device_id_hint = g3xdevice.get_system_serial(device_xml_path)
+            device_id_hint = garmin_device.get_system_serial(device_xml_path)
 
     # First pass: try to find device matching hint (if found)
     if device_id_hint is not None:

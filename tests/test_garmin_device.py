@@ -1,5 +1,5 @@
 """
-Tests for g3xdevice.py - Garmin device XML parsing.
+Tests for garmin_device.py - Garmin device XML parsing.
 
 Tests cover XML parsing, dataclass creation, and device information extraction.
 """
@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-# Import the g3xdevice module
+# Import the garmin_device module
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import g3xdevice
+import garmin_device
 
 
 def create_minimal_device_xml() -> str:
@@ -98,7 +98,7 @@ def test_read_device_minimal(tmp_path):
     xml_file = tmp_path / "GarminDevice.xml"
     xml_file.write_text(create_minimal_device_xml())
 
-    device = g3xdevice.read_device(xml_file)
+    device = garmin_device.read_device(xml_file)
 
     assert device.model.part_number == "006-B1234-00"
     assert device.model.software_version == 1020
@@ -113,7 +113,7 @@ def test_read_device_full(tmp_path):
     xml_file = tmp_path / "GarminDevice.xml"
     xml_file.write_text(create_full_device_xml())
 
-    device = g3xdevice.read_device(xml_file)
+    device = garmin_device.read_device(xml_file)
 
     # Model
     assert device.model.part_number == "006-B1727-3B"
@@ -165,7 +165,7 @@ def test_read_device_missing_model(tmp_path):
 """)
 
     with pytest.raises(ValueError, match="missing required Model element"):
-        g3xdevice.read_device(xml_file)
+        garmin_device.read_device(xml_file)
 
 
 def test_read_device_missing_id(tmp_path):
@@ -182,7 +182,7 @@ def test_read_device_missing_id(tmp_path):
 """)
 
     with pytest.raises(ValueError, match="missing required Id element"):
-        g3xdevice.read_device(xml_file)
+        garmin_device.read_device(xml_file)
 
 
 def test_read_device_malformed_xml(tmp_path):
@@ -191,7 +191,7 @@ def test_read_device_malformed_xml(tmp_path):
     xml_file.write_text("<Device><unclosed>")
 
     with pytest.raises(ET.ParseError):
-        g3xdevice.read_device(xml_file)
+        garmin_device.read_device(xml_file)
 
 
 def test_read_device_nonexistent_file(tmp_path):
@@ -199,12 +199,12 @@ def test_read_device_nonexistent_file(tmp_path):
     xml_file = tmp_path / "does_not_exist.xml"
 
     with pytest.raises(FileNotFoundError):
-        g3xdevice.read_device(xml_file)
+        garmin_device.read_device(xml_file)
 
 
 def test_model_dataclass():
     """Verify Model dataclass structure."""
-    model = g3xdevice.Model(
+    model = garmin_device.Model(
         part_number="006-B1234-00",
         software_version=1020,
         description="Test Device"
@@ -217,9 +217,9 @@ def test_model_dataclass():
 
 def test_update_file_dataclass():
     """Verify UpdateFile dataclass structure."""
-    update = g3xdevice.UpdateFile(
+    update = garmin_device.UpdateFile(
         part_number="006-D1234-10",
-        version=g3xdevice.Version(25, 10),
+        version=garmin_device.Version(25, 10),
         description="Test Database",
         path=".System",
         file_name="test.dat"
@@ -235,9 +235,9 @@ def test_update_file_dataclass():
 
 def test_update_file_optional_fields():
     """Verify UpdateFile optional fields default to None."""
-    update = g3xdevice.UpdateFile(
+    update = garmin_device.UpdateFile(
         part_number="006-D1234-10",
-        version=g3xdevice.Version(1, 0)
+        version=garmin_device.Version(1, 0)
     )
 
     assert update.description is None
@@ -247,7 +247,7 @@ def test_update_file_optional_fields():
 
 def test_specification_dataclass():
     """Verify Specification dataclass structure."""
-    spec = g3xdevice.Specification(
+    spec = garmin_device.Specification(
         identifier="http://example.com/spec",
         documentation="http://example.com/docs"
     )
@@ -258,7 +258,7 @@ def test_specification_dataclass():
 
 def test_location_dataclass():
     """Verify Location dataclass structure."""
-    location = g3xdevice.Location(
+    location = garmin_device.Location(
         file_extension="gpx",
         path="GPX",
         base_name="waypoints"
@@ -271,10 +271,10 @@ def test_location_dataclass():
 
 def test_file_spec_dataclass():
     """Verify FileSpec dataclass structure."""
-    spec = g3xdevice.Specification(identifier="GPX")
-    location = g3xdevice.Location(file_extension="gpx", path="GPX")
+    spec = garmin_device.Specification(identifier="GPX")
+    location = garmin_device.Location(file_extension="gpx", path="GPX")
 
-    file_spec = g3xdevice.FileSpec(
+    file_spec = garmin_device.FileSpec(
         specification=spec,
         location=location,
         transfer_direction="InputToUnit"
@@ -287,11 +287,11 @@ def test_file_spec_dataclass():
 
 def test_data_type_dataclass():
     """Verify DataType dataclass structure."""
-    spec = g3xdevice.Specification(identifier="GPX")
-    location = g3xdevice.Location(file_extension="gpx", path="GPX")
-    file_spec = g3xdevice.FileSpec(spec, location, "InputToUnit")
+    spec = garmin_device.Specification(identifier="GPX")
+    location = garmin_device.Location(file_extension="gpx", path="GPX")
+    file_spec = garmin_device.FileSpec(spec, location, "InputToUnit")
 
-    data_type = g3xdevice.DataType(
+    data_type = garmin_device.DataType(
         name="GPSData",
         files=[file_spec]
     )
@@ -303,8 +303,8 @@ def test_data_type_dataclass():
 
 def test_device_dataclass():
     """Verify Device dataclass structure."""
-    model = g3xdevice.Model("006-B1234-00", 1020, "Test")
-    device = g3xdevice.Device(
+    model = garmin_device.Model("006-B1234-00", 1020, "Test")
+    device = garmin_device.Device(
         model=model,
         device_id=3221290672,
         data_types=[],
@@ -338,7 +338,7 @@ def test_parse_update_file_without_version(tmp_path):
 """)
 
     with pytest.raises(ValueError, match="missing required Version element"):
-        g3xdevice.read_device(xml_file)
+        garmin_device.read_device(xml_file)
 
 
 def test_parse_empty_text_elements(tmp_path):
@@ -357,7 +357,7 @@ def test_parse_empty_text_elements(tmp_path):
 
     # Empty PartNumber should trigger validation error
     with pytest.raises(ValueError, match="missing required PartNumber element"):
-        g3xdevice.read_device(xml_file)
+        garmin_device.read_device(xml_file)
 
 
 def test_parse_multiple_data_types(tmp_path):
@@ -404,7 +404,7 @@ def test_parse_multiple_data_types(tmp_path):
 </Device>
 """)
 
-    device = g3xdevice.read_device(xml_file)
+    device = garmin_device.read_device(xml_file)
 
     assert len(device.data_types) == 3
     assert device.data_types[0].name == "GPSData"
@@ -445,7 +445,7 @@ def test_parse_multiple_files_per_data_type(tmp_path):
 </Device>
 """)
 
-    device = g3xdevice.read_device(xml_file)
+    device = garmin_device.read_device(xml_file)
 
     assert len(device.data_types) == 1
     maps = device.data_types[0]
@@ -499,7 +499,7 @@ def test_transfer_directions(tmp_path):
 </Device>
 """)
 
-    device = g3xdevice.read_device(xml_file)
+    device = garmin_device.read_device(xml_file)
 
     assert device.data_types[0].files[0].transfer_direction == "InputToUnit"
     assert device.data_types[1].files[0].transfer_direction == "OutputFromUnit"
