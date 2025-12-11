@@ -138,12 +138,6 @@ python3 g3xdata.py
 
 # Force use of latest issues regardless of effective date (e.g., to get upcoming charts before effective date)
 python3 g3xdata.py -U -s 60001A2345BC0 -N 1234ABCD
-
-# (DEBUG only) Include specific series/issue combinations
-python3 g3xdata.py -I 2054 2509 -I 2056 25D4
-
-# (DEBUG only) Include custom TAW files
-python3 g3xdata.py -W /path/to/custom.taw -W /path/to/other.taw
 ```
 
 **Automatic Device Detection:**
@@ -174,7 +168,6 @@ By default, g3xdata.py selects the most appropriate database issue for each seri
 - Automatically refreshes aircraft data when any device's `nextExpectedAvdbAvailability` date has passed
 - Use `-U/--force-use-latest-issues` to override and always select the latest issue regardless of effective date
 - Use `-A/--force-refresh-aircraft` to manually force a refresh of aircraft data from Garmin's servers
-```
 
 ### g3xfplan.py - Flight Route Planner
 Generates flight plans using A* pathfinding with configurable routing preferences.
