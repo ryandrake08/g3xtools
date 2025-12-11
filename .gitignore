@@ -12,3 +12,4 @@ tests/.coverage_html
 .ruff_cache
 *.pstats
 .cache
+g3xtools.egg-info
