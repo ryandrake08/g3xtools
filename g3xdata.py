@@ -37,8 +37,17 @@ import sys
 import urllib.parse
 from typing import Any, Optional
 
-import requests
-from tqdm import tqdm
+try:
+    import requests
+except ImportError:
+    print("Error: requests is required. Install with: pip install 'g3xtools[data]'", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    print("Error: tqdm is required. Install with: pip install 'g3xtools[data]'", file=sys.stderr)
+    sys.exit(1)
 
 import cache
 import featunlk

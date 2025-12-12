@@ -31,13 +31,18 @@ import http.server
 import json
 import shutil
 import socketserver
+import sys
 import urllib.parse
 import webbrowser
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
-import requests
+try:
+    import requests
+except ImportError:
+    print("Error: requests is required. Install with: pip install 'g3xtools[data]'", file=sys.stderr)
+    sys.exit(1)
 
 # Public API
 __all__ = [

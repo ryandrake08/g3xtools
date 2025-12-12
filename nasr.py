@@ -52,6 +52,7 @@ import io
 import os
 import pathlib
 import re
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -59,8 +60,17 @@ import urllib.request
 import zipfile
 from typing import Any, Optional, Union
 
-import bs4
-import msgpack
+try:
+    import bs4
+except ImportError:
+    print("Error: beautifulsoup4 is required. Install with: pip install 'g3xtools[nasr]'", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    import msgpack
+except ImportError:
+    print("Error: msgpack is required. Install with: pip install 'g3xtools[nasr]'", file=sys.stderr)
+    sys.exit(1)
 
 import cache
 

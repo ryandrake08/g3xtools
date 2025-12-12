@@ -34,7 +34,11 @@ import argparse
 import json
 import sys
 
-import requests
+try:
+    import requests
+except ImportError:
+    print("Error: requests is required. Install with: pip install 'g3xtools[data]'", file=sys.stderr)
+    sys.exit(1)
 
 # Public API
 __all__ = [

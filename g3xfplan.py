@@ -9,8 +9,17 @@ import urllib.parse
 import webbrowser
 from typing import Optional, Union
 
-import astar
-import rtree
+try:
+    import astar
+except ImportError:
+    print("Error: astar is required. Install with: pip install 'g3xtools[fplan]'", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    import rtree
+except ImportError:
+    print("Error: rtree is required. Install with: pip install 'g3xtools[fplan]'", file=sys.stderr)
+    sys.exit(1)
 
 import fpl
 import nasr

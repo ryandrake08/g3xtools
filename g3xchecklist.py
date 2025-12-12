@@ -41,7 +41,7 @@ from typing import Any, Union
 try:
     import yaml
 except ImportError:
-    print("Error: PyYAML is required. Install with: pip install pyyaml", file=sys.stderr)
+    print("Error: PyYAML is required. Install with: pip install 'g3xtools[checklist]'", file=sys.stderr)
     sys.exit(1)
 
 # Public API

@@ -501,41 +501,51 @@ source env/bin/activate  # Unix/Mac
 # OR
 env\Scripts\activate     # Windows
 
-# Install the project with required dependencies
+# Install the project
 pip install -e .
 
-# Optional: Install with SD card detection support
-pip install -e ".[sdcard]"
+# Install tool-specific dependencies as needed:
+pip install -e ".[checklist]"  # g3xchecklist.py - PyYAML
+pip install -e ".[data]"       # g3xdata.py - requests
+pip install -e ".[nasr]"       # nasr.py - beautifulsoup4, msgpack
+pip install -e ".[fplan]"      # g3xfplan.py - astar, rtree
 
-# Optional: Install with all optional dependencies for development
+# Install platform-specific dependencies:
+pip install -e ".[sdcard]"     # SD card auto-detection - psutil
+pip install -e ".[serial]"     # g3xtext.py serial mode - pyserial
+pip install -e ".[windows]"    # Windows VSN reading - pywin32
+
+# Install everything:
+pip install -e ".[all]"
+
+# Install for development (includes all dependencies + test/lint tools):
 pip install -e ".[dev]"
 ```
 
-### Alternative: Install Dependencies Manually
+### Tools Without Dependencies
 
-If you prefer not to install the project as a package, you can install dependencies directly:
-
-```bash
-pip install pyyaml requests platformdirs
-
-# Optional: For automatic SD card detection
-pip install psutil
-```
+Several tools work with no external dependencies:
+- **g3xlog.py** - Flight data log processor
+- **g3xheaders.py** - Log structure analyzer
+- **g3xtext.py** - RS-232 Text Out parser (file mode only; serial mode requires pyserial)
+- **taw.py** - TAW archive extractor
+- **featunlk.py** - Feature unlock file generator
+- **fpl.py** - Flight plan file reader/writer
+- **garmin_device.py** - GarminDevice.xml parser
 
 ### Dependencies
 
 - Python 3.9+ required
-- **Required:**
-  - PyYAML (for g3xchecklist.py)
-  - requests (for g3xdata.py)
-  - platformdirs (for cross-platform cache directories)
-  - beautifulsoup4 (for nasr.py web scraping)
-  - astar (for plan.py pathfinding)
-  - rtree (for plan.py spatial indexing)
-  - msgpack (for nasr.py database serialization)
-- **Optional:**
-  - **psutil** - Enables automatic SD card detection in g3xdata.py. Without psutil, you must manually specify the output path using `-o` or `G3X_SDCARD_PATH` environment variable.
-  - **pywin32** - Required for volume serial number reading on Windows systems
+- **No required dependencies** - base installation has zero external requirements
+- **Tool-specific dependencies (installed as needed):**
+  - **PyYAML** - g3xchecklist.py (`pip install 'g3xtools[checklist]'`)
+  - **requests, tqdm** - g3xdata.py, garmin_login.py, garmin_api.py (`pip install 'g3xtools[data]'`)
+  - **beautifulsoup4, msgpack** - nasr.py (`pip install 'g3xtools[nasr]'`)
+  - **astar, rtree** - g3xfplan.py (`pip install 'g3xtools[fplan]'`)
+- **Platform-specific dependencies:**
+  - **psutil** - SD card auto-detection (`pip install 'g3xtools[sdcard]'`)
+  - **pyserial** - g3xtext.py serial mode (`pip install 'g3xtools[serial]'`)
+  - **pywin32** - Windows volume serial number reading (`pip install 'g3xtools[windows]'`)
 - Standard library modules: csv, struct, zlib, argparse, pathlib, datetime, json, xml
 
 ### Using Installed Commands
