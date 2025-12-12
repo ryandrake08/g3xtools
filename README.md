@@ -51,6 +51,46 @@ export G3X_LOG_PATH=/path/to/logs
 python3 g3xheaders.py
 ```
 
+### g3xtext.py - RS-232 Text Out Parser
+Parses RS-232 "Text Out" serial data from Garmin G3X/G3X Touch displays as defined in Appendix C of the G3X Installation Manual.
+
+**Features:**
+- Real-time serial port reading at 115200 baud (8N1)
+- File input mode for testing and log analysis
+- Protocol-based handler architecture for custom data processing
+- Parses all message types: Attitude, Engine, GPS, EIS, and CNI data
+- Checksum validation with detailed error reporting
+- Message filtering by type
+
+**Usage:**
+```bash
+# Read from serial port (requires pyserial)
+python3 g3xtext.py /dev/ttyUSB0
+
+# Read from file
+python3 g3xtext.py --file g3x_flight.log
+
+# Verbose output with all parsed fields
+python3 g3xtext.py -v /dev/ttyUSB0
+
+# Filter specific message types
+python3 g3xtext.py --filter attitude,engine /dev/ttyUSB0
+
+# Show message counts only (no verbose output)
+python3 g3xtext.py --file g3x_flight.log
+```
+
+**Message Types:**
+- **attitude**: Attitude and air data (pitch, roll, heading, airspeed, altitude)
+- **attitude2**: Extended attitude data (TAS, density altitude, bugs)
+- **engine**: Engine parameters (RPM, oil, fuel flow, CHT, EGT, trim)
+- **gps**: GPS position, velocity, and status
+- **eis**: Engine Information System parameter definitions and values
+- **cni**: Communication/Navigation/Identification (COM/NAV frequencies, transponder)
+
+**Dependencies:**
+- **pyserial** (optional): Required only for serial port mode. Install with `pip install -e ".[serial]"` or `pip install pyserial`.
+
 ### g3xchecklist.py - Aviation Checklist Converter
 Converts Garmin G3X aviation checklist files between binary (.ace) and human-readable YAML formats.
 
@@ -1134,6 +1174,7 @@ g3xtools/
 ├── g3xfplan.py               # Flight route planner
 ├── g3xheaders.py             # Log structure analyzer
 ├── g3xlog.py                 # Flight data log processor
+├── g3xtext.py                # RS-232 Text Out serial data parser
 ├── fpl.py                    # Flight plan file reader/writer (FPL v1 XML)
 ├── featunlk.py               # Feature unlock file generator
 ├── garmin_login.py           # OAuth authentication module

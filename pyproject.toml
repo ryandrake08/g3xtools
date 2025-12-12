@@ -23,6 +23,9 @@ dependencies = [
 sdcard = [
     "psutil>=5.9.0",
 ]
+serial = [
+    "pyserial>=3.5",
+]
 windows = [
     "pywin32>=304; sys_platform == 'win32'",
 ]
@@ -65,6 +68,7 @@ featunlk = "featunlk:main"
 sdcard = "sdcard:main"
 nasr = "nasr:main"
 g3xfplan = "g3xfplan:main"
+g3xtext = "g3xtext:main"
 
 [project.urls]
 Homepage = "https://github.com/ryandrake08/g3xtools"
@@ -75,7 +79,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["g3xlog", "g3xheaders", "g3xchecklist", "g3xdata", "garmin_login", "garmin_api", "taw", "featunlk", "sdcard", "fpl", "nasr", "g3xfplan", "cache", "garmin_device"]
+py-modules = ["g3xlog", "g3xheaders", "g3xchecklist", "g3xdata", "garmin_login", "garmin_api", "taw", "featunlk", "sdcard", "fpl", "nasr", "g3xfplan", "cache", "garmin_device", "g3xtext"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
