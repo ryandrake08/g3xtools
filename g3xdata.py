@@ -75,17 +75,19 @@ def _cache_json_data(cache_filename: str, fetch_function, force: bool = False) -
     """
     cache_path = _CACHE_PATH / cache_filename
 
-    if force:
-        cache_path.unlink(missing_ok=True)
+    # When force=True, skip reading cache and fetch directly
+    if not force:
+        try:
+            with open(cache_path, encoding="utf-8") as fd:
+                return json.load(fd)
+        except FileNotFoundError:
+            pass  # Cache miss, fetch below
 
-    try:
-        with open(cache_path, encoding="utf-8") as fd:
-            return json.load(fd)
-    except FileNotFoundError:
-        data = fetch_function()
-        with open(cache_path, "w", encoding="utf-8") as fd:
-            json.dump(data, fd, indent=2)
-        return data
+    # Fetch fresh data and update cache
+    data = fetch_function()
+    with open(cache_path, "w", encoding="utf-8") as fd:
+        json.dump(data, fd, indent=2)
+    return data
 
 def _get_access_token(force: bool = False) -> str:
     """Obtain OAuth access token with caching support.
