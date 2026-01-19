@@ -536,13 +536,50 @@ def _count_extraction_operations(databases: list[tuple[int, str]], manual_taw_fi
 
     return total
 
-def _installable_databases(aircraft_data: list, device_id: int, force_latest: bool = False) -> list[tuple[int, str]]:
+def _parse_iso_datetime(iso_string: str) -> datetime.datetime:
+    """Parse ISO datetime string to timezone-aware datetime."""
+    return datetime.datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
+
+def _select_issue(issues: list[dict], now: datetime.datetime, validity_window: bool) -> Optional[dict]:
+    """Select the appropriate issue from a list of installable issues.
+
+    Args:
+        issues: List of issue dictionaries with effectiveAt/invalidAt dates
+        now: Current datetime for validity window comparison
+        validity_window: If True, only select issues within effectiveAt/invalidAt window
+
+    Returns:
+        Selected issue dictionary, or None if no valid issue found
+    """
+    if not issues:
+        return None
+
+    if validity_window:
+        for issue in issues:
+            effective_at = _parse_iso_datetime(issue['effectiveAt'])
+            invalid_at = _parse_iso_datetime(issue['invalidAt']) if issue['invalidAt'] else None
+            if effective_at <= now and (invalid_at is None or now < invalid_at):
+                return issue
+        return None
+
+    return max(issues, key=lambda i: _parse_iso_datetime(i['effectiveAt']))
+
+def _iter_device_series(aircraft_data: list, device_id: int):
+    """Generate (avdb, series) tuples for a specific device."""
+    for aircraft in aircraft_data:
+        for device in aircraft['devices']:
+            if device['id'] == device_id:
+                for avdb in device['avdbTypes']:
+                    for series in avdb['series']:
+                        yield avdb, series
+
+def _installable_databases(aircraft_data: list, device_id: int, validity_window: bool = False) -> list[tuple[int, str]]:
     """Get all installable series/issue combinations for a specific device.
 
     Args:
         aircraft_data: List of aircraft dictionaries from flygarmin API
         device_id: Device ID to get databases for
-        force_latest: If True, select issue with latest effectiveAt date regardless of validity window
+        validity_window: If True, only select issues within effectiveAt/invalidAt window
 
     Returns:
         List of (series_id, issue_name) tuples for each valid dataset
@@ -550,41 +587,12 @@ def _installable_databases(aircraft_data: list, device_id: int, force_latest: bo
     databases = []
     now = datetime.datetime.now().astimezone()
 
-    # Generate all installable series/issue combinations for the specified device
-    for aircraft in aircraft_data:
-        for device in aircraft['devices']:
-            if device_id == device['id']:
-                for avdb in device['avdbTypes']:
-                    for series in avdb['series']:
-                        selected_issue = None
-
-                        if force_latest:
-                            # Select the issue with the latest effectiveAt date
-                            latest_issue = None
-                            latest_effective_at = None
-                            for issue in series['installableIssues']:
-                                effective_at = datetime.datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
-                                if latest_effective_at is None or effective_at > latest_effective_at:
-                                    latest_issue = issue
-                                    latest_effective_at = effective_at
-                            selected_issue = latest_issue
-                        else:
-                            # Find the first issue where now is within the effective window
-                            for issue in series['installableIssues']:
-                                effective_at = datetime.datetime.fromisoformat(issue['effectiveAt'].replace('Z', '+00:00'))
-                                invalid_at = None if issue['invalidAt'] is None else datetime.datetime.fromisoformat(issue['invalidAt'].replace('Z', '+00:00'))
-
-                                # Check if now is within the effective window
-                                if effective_at <= now and (invalid_at is None or now < invalid_at):
-                                    selected_issue = issue
-                                    break
-
-                        # If we found a valid issue, add it to the list
-                        if selected_issue:
-                            databases.append((series['id'], selected_issue['name']))
-                        else:
-                            # No valid issue found, warn the user
-                            print(f"Warning: No available download, possibly no longer subscribed: {avdb['name']}, series: {series['region']['name']} ({series['id']})", file=sys.stderr)
+    for avdb, series in _iter_device_series(aircraft_data, device_id):
+        issue = _select_issue(series['installableIssues'], now, validity_window)
+        if issue:
+            databases.append((series['id'], issue['name']))
+        else:
+            print(f"Warning: No available download, possibly no longer subscribed: {avdb['name']}, series: {series['region']['name']} ({series['id']})", file=sys.stderr)
 
     return databases
 
@@ -614,7 +622,7 @@ def main() -> None:
     parser.add_argument('-D', '--force-refresh-datasets', action='store_true', help='Force a refresh of the dataset data')
     parser.add_argument('-F', '--force-file-download', action='store_true', help='Force a re-download of the actual data files')
     parser.add_argument('-C', '--force-file-copy', action='store_true', help='Force copying files even if destination exists with same size')
-    parser.add_argument('-U', '--force-use-latest-issues', action='store_true', help='Force use of latest issues regardless of effective date window')
+    parser.add_argument('-V', '--validity-window', action='store_true', help='Only select issues within effectiveAt/invalidAt date window (default: use latest available)')
 
     # Debug only
     parser.add_argument('-I', '--include-series', action='append', nargs=2, metavar=('SERIES_ID', 'ISSUE_NAME'), help='Add specific series ID and issue name to output (can be specified multiple times, e.g., -I 2054 2509 -I 2056 25D4)')
@@ -684,7 +692,7 @@ def main() -> None:
     device_id, system_serial = _get_device_info(aircraft_data, system_serial_arg)
 
     # List the installable databases
-    databases = _installable_databases(aircraft_data, device_id, args.force_use_latest_issues)
+    databases = _installable_databases(aircraft_data, device_id, args.validity_window)
 
     # Add manually specified series/issue pairs
     if args.include_series:

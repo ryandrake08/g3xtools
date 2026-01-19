@@ -176,8 +176,8 @@ python3 g3xdata.py
 
 # NOTE: Exactly one of: sdcard serial number -N or the sdcard block device -d must be specified. If neither are specified, data will be copied but not installable on G3X device
 
-# Force use of latest issues regardless of effective date (e.g., to get upcoming charts before effective date)
-python3 g3xdata.py -U -s 60001A2345BC0 -N 1234ABCD
+# Only select issues within the validity window (effectiveAt ≤ now < invalidAt)
+python3 g3xdata.py -V -s 60001A2345BC0 -N 1234ABCD
 ```
 
 **Automatic Device Detection:**
@@ -203,10 +203,10 @@ The tool will:
 **Note**: If you have multiple G3X devices in your account or want to override the auto-detected serial, you can still specify `-s SERIAL` explicitly.
 
 **Issue Selection:**
-By default, g3xdata.py selects the most appropriate database issue for each series based on the current date:
-- Selects the first issue where today's date falls within the effective window (effectiveAt ≤ now < invalidAt)
+By default, g3xdata.py selects the latest available database issue for each series:
+- Selects the issue with the latest `effectiveAt` date (e.g., to get upcoming charts before their effective date)
 - Automatically refreshes aircraft data when any device's `nextExpectedAvdbAvailability` date has passed
-- Use `-U/--force-use-latest-issues` to override and always select the latest issue regardless of effective date
+- Use `-V/--validity-window` to only select issues within the validity window (effectiveAt ≤ now < invalidAt)
 - Use `-A/--force-refresh-aircraft` to manually force a refresh of aircraft data from Garmin's servers
 
 ### g3xfplan.py - Flight Route Planner
