@@ -642,10 +642,34 @@ def main() -> None:
     card_serial = sdcard.get_vsn(vsn_arg, output_arg, args.verbose)
 
     # Get access token: command line > environment > auth cache > flygarmin login
-    access_token = args.access_token or os.getenv('G3X_GARMIN_ACCESS_TOKEN') or _get_access_token(args.force_login)
+    # Track source for error handling on 401
+    token_source: str
+    env_token = os.getenv('G3X_GARMIN_ACCESS_TOKEN')
+    if args.access_token:
+        access_token = args.access_token
+        token_source = "command line"
+    elif env_token:
+        access_token = env_token
+        token_source = "G3X_GARMIN_ACCESS_TOKEN environment variable"
+    else:
+        access_token = _get_access_token(args.force_login)
+        token_source = "cache"
 
     # Get aircraft data either from aircraft_json or from flygarmin
-    aircraft_data = _get_aircraft_data(access_token, args.force_refresh_aircraft)
+    try:
+        aircraft_data = _get_aircraft_data(access_token, args.force_refresh_aircraft)
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 401:
+            print("[flygarmin] Warning: access token was not accepted (401 Unauthorized)", file=sys.stderr)
+            if token_source == "cache":
+                print("[flygarmin] Refreshing access token...", file=sys.stderr)
+                access_token = _get_access_token(force=True)
+                aircraft_data = _get_aircraft_data(access_token, args.force_refresh_aircraft)
+            else:
+                print(f"[flygarmin] Error: access token from {token_source} is invalid and needs to be refreshed", file=sys.stderr)
+                sys.exit(1)
+        else:
+            raise
 
     # List the aircraft and devices and exit
     args.list_devices and _list_aircraft_devices(aircraft_data) # type: ignore
