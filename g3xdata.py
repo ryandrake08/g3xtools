@@ -494,19 +494,19 @@ def _copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) 
 
     return output_file_path
 
-def _count_total_files(databases: list[tuple[int, str]], force_refresh_datasets: bool = False) -> int:
+def _count_total_files(databases: list[tuple[int, str]], refresh_datasets: bool = True) -> int:
     """Count total number of files to download across all databases.
 
     Args:
         databases: List of (series_id, issue_name) tuples
-        force_refresh_datasets: If True, force refresh of dataset metadata
+        refresh_datasets: If True, refresh dataset metadata from API
 
     Returns:
         Total number of files (main + auxiliary) across all datasets
     """
     total = 0
     for series_id, issue_name in databases:
-        files_data = _get_dataset_files(series_id, issue_name, force_refresh_datasets)
+        files_data = _get_dataset_files(series_id, issue_name, refresh_datasets)
         total += len(files_data.get('mainFiles', []))
         total += len(files_data.get('auxiliaryFiles', []))
     return total
@@ -618,8 +618,8 @@ def main() -> None:
     # FlyGarmin authenitcation, query, and download overrides
     parser.add_argument('-T', '--access-token', help='Specify flygarmin access token. If not specified, use G3X_GARMIN_ACCESS_TOKEN environment variable or cached token')
     parser.add_argument('-L', '--force-login', action='store_true', help='Force a refresh of the flygarmin access token')
-    parser.add_argument('-A', '--force-refresh-aircraft', action='store_true', help='Force a refresh of the aircraft data')
-    parser.add_argument('-D', '--force-refresh-datasets', action='store_true', help='Force a refresh of the dataset data')
+    parser.add_argument('-A', '--no-refresh-aircraft', action='store_true', help='Use cached aircraft data instead of refreshing')
+    parser.add_argument('-D', '--no-refresh-datasets', action='store_true', help='Use cached dataset metadata instead of refreshing')
     parser.add_argument('-F', '--force-file-download', action='store_true', help='Force a re-download of the actual data files')
     parser.add_argument('-C', '--force-file-copy', action='store_true', help='Force copying files even if destination exists with same size')
     parser.add_argument('-V', '--validity-window', action='store_true', help='Only select issues within effectiveAt/invalidAt date window (default: use latest available)')
@@ -664,15 +664,16 @@ def main() -> None:
         token_source = "cache"
 
     # Get aircraft data either from aircraft_json or from flygarmin
+    refresh_aircraft = not args.no_refresh_aircraft
     try:
-        aircraft_data = _get_aircraft_data(access_token, args.force_refresh_aircraft)
+        aircraft_data = _get_aircraft_data(access_token, refresh_aircraft)
     except requests.exceptions.HTTPError as e:
         if e.response is not None and e.response.status_code == 401:
             print("[flygarmin] Warning: access token was not accepted (401 Unauthorized)", file=sys.stderr)
             if token_source == "cache":
                 print("[flygarmin] Refreshing access token...", file=sys.stderr)
                 access_token = _get_access_token(force=True)
-                aircraft_data = _get_aircraft_data(access_token, args.force_refresh_aircraft)
+                aircraft_data = _get_aircraft_data(access_token, refresh_aircraft)
             else:
                 print(f"[flygarmin] Error: access token from {token_source} is invalid and needs to be refreshed", file=sys.stderr)
                 sys.exit(1)
@@ -706,15 +707,16 @@ def main() -> None:
         databases = [(s, i) for s, i in databases if (s, i) not in exclude_set]
 
     # File downloading
+    refresh_datasets = not args.no_refresh_datasets
 
     # Count total files and create progress bar
-    total_files = _count_total_files(databases, args.force_refresh_datasets) if args.progress else 0
+    total_files = _count_total_files(databases, refresh_datasets) if args.progress else 0
     pbar = tqdm(total=total_files, desc="Downloading", disable=not args.progress, unit="file", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
 
     try:
         for series_id, issue_name in databases:
             # Get the dataset descriptor for this series/issue
-            files_data = _get_dataset_files(series_id, issue_name, args.force_refresh_datasets)
+            files_data = _get_dataset_files(series_id, issue_name, refresh_datasets)
 
             # Download all files (main and auxiliary)
             for file_info in files_data.get('mainFiles', []) + files_data.get('auxiliaryFiles', []):

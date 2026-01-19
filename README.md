@@ -205,9 +205,9 @@ The tool will:
 **Issue Selection:**
 By default, g3xdata.py selects the latest available database issue for each series:
 - Selects the issue with the latest `effectiveAt` date (e.g., to get upcoming charts before their effective date)
-- Automatically refreshes aircraft data when any device's `nextExpectedAvdbAvailability` date has passed
+- Refreshes aircraft and dataset metadata from Garmin's servers on each run
 - Use `-V/--validity-window` to only select issues within the validity window (effectiveAt ≤ now < invalidAt)
-- Use `-A/--force-refresh-aircraft` to manually force a refresh of aircraft data from Garmin's servers
+- Use `-A/--no-refresh-aircraft` or `-D/--no-refresh-datasets` to use cached metadata instead of refreshing
 
 ### g3xfplan.py - Flight Route Planner
 Generates flight plans using A* pathfinding with configurable routing preferences.
