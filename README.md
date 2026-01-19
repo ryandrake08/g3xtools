@@ -116,6 +116,7 @@ Downloads current aviation database updates from Garmin's fly.garmin.com service
 - OAuth authentication with automatic token caching using platformdirs
 - URL-based file caching with organized directory structure
 - Conditional downloads (skip if file already cached)
+- Smart file copying (skip if destination has same size and mtime)
 - Optional progress bars for download and extraction phases
 - TAW archive extraction
 - Cross-platform volume serial number reading and SD card auto-detection

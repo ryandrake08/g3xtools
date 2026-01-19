@@ -463,7 +463,7 @@ def _copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) 
     Args:
         file_info: Dictionary containing 'url' and 'destination' keys
         output_path: Base output directory path
-        force: If True, copy unconditionally. If False, skip if destination exists and same size
+        force: If True, copy unconditionally. If False, skip if destination exists with same size and mtime
 
     Returns:
         Path to the copied file
@@ -488,8 +488,14 @@ def _copy_file(file_info: dict, output_path: pathlib.Path, force: bool = False) 
 
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Only if destination is missing or has different size size
-    if force or not output_file_path.exists() or cached_path.stat().st_size != output_file_path.stat().st_size:
+    # Copy if destination missing, different size, or source is newer
+    needs_copy = force or not output_file_path.exists()
+    if not needs_copy:
+        src_stat = cached_path.stat()
+        dst_stat = output_file_path.stat()
+        needs_copy = src_stat.st_size != dst_stat.st_size or src_stat.st_mtime > dst_stat.st_mtime
+
+    if needs_copy:
         shutil.copy2(cached_path, output_file_path)
 
     return output_file_path
@@ -621,7 +627,7 @@ def main() -> None:
     parser.add_argument('-A', '--no-refresh-aircraft', action='store_true', help='Use cached aircraft data instead of refreshing')
     parser.add_argument('-D', '--no-refresh-datasets', action='store_true', help='Use cached dataset metadata instead of refreshing')
     parser.add_argument('-F', '--force-file-download', action='store_true', help='Force a re-download of the actual data files')
-    parser.add_argument('-C', '--force-file-copy', action='store_true', help='Force copying files even if destination exists with same size')
+    parser.add_argument('-C', '--force-file-copy', action='store_true', help='Force copying files even if destination exists with same size and mtime')
     parser.add_argument('-V', '--validity-window', action='store_true', help='Only select issues within effectiveAt/invalidAt date window (default: use latest available)')
 
     # Debug only
