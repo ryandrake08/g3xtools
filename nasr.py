@@ -503,170 +503,172 @@ def write_sqlite_file(csvzip_path: pathlib.Path, db_path: pathlib.Path, spatiali
 
     # Create a connection to the SQLite database
     conn = sqlite3.connect(db_path)
-    c = conn.cursor()
+    try:
+        c = conn.cursor()
 
-    # Open archive
-    with CsvZip(csvzip_path) as csv_archive:
-        # Create a dictionary to hold the table structures
-        table_structures = collections.defaultdict(list)
+        # Open archive
+        with CsvZip(csvzip_path) as csv_archive:
+            # Create a dictionary to hold the table structures
+            table_structures = collections.defaultdict(list)
 
-        # Find all .csv files in the archive
-        csv_files = [name for name in csv_archive.namelist() if name.endswith('.csv')]
+            # Find all .csv files in the archive
+            csv_files = [name for name in csv_archive.namelist() if name.endswith('.csv')]
 
-        # Read the structure files in order to create the tables
-        for csv_filename in [name for name in csv_files if name.endswith('_CSV_DATA_STRUCTURE.csv')]:
-            # Open the structure file
-            with csv_archive.open(csv_filename) as csv_file:
-                csv_reader = csv.DictReader(io.TextIOWrapper(csv_file, encoding='us-ascii', errors='strict'))
+            # Read the structure files in order to create the tables
+            for csv_filename in [name for name in csv_files if name.endswith('_CSV_DATA_STRUCTURE.csv')]:
+                # Open the structure file
+                with csv_archive.open(csv_filename) as csv_file:
+                    csv_reader = csv.DictReader(io.TextIOWrapper(csv_file, encoding='us-ascii', errors='strict'))
 
-                # Populate the table structures dictionary
-                for row in csv_reader:
-                    csv_table_name = row['CSV File']
-                    column_name = row['Column Name']
-                    max_length = row['Max Length']
-                    data_type = row['Data Type']
-                    nullable = row['Nullable']
+                    # Populate the table structures dictionary
+                    for row in csv_reader:
+                        csv_table_name = row['CSV File']
+                        column_name = row['Column Name']
+                        max_length = row['Max Length']
+                        data_type = row['Data Type']
+                        nullable = row['Nullable']
 
-                    # Determine the SQLite data type
-                    if data_type == 'VARCHAR':
-                        sqlite_type = f'VARCHAR({max_length})'
-                    elif data_type == 'NUMBER':
-                        # SQLite does not have NUMERIC(p,s) so we have to determine if it is an INTEGER or REAL
-                        sqlite_type = 'INTEGER' if ',0)' in max_length else 'REAL'
-                    else:
-                        raise ValueError(f"Unknown data type: {data_type}")
+                        # Determine the SQLite data type
+                        if data_type == 'VARCHAR':
+                            sqlite_type = f'VARCHAR({max_length})'
+                        elif data_type == 'NUMBER':
+                            # SQLite does not have NUMERIC(p,s) so we have to determine if it is an INTEGER or REAL
+                            sqlite_type = 'INTEGER' if ',0)' in max_length else 'REAL'
+                        else:
+                            raise ValueError(f"Unknown data type: {data_type}")
 
-                    # Determine if the column is nullable
-                    not_null = ' NOT NULL' if nullable == 'N' else ''
+                        # Determine if the column is nullable
+                        not_null = ' NOT NULL' if nullable == 'N' else ''
 
-                    # Append the column definition to the table structure
-                    table_structures[csv_table_name].append(f'{column_name} {sqlite_type}{not_null}')
+                        # Append the column definition to the table structure
+                        table_structures[csv_table_name].append(f'{column_name} {sqlite_type}{not_null}')
 
-        # Add the data to the tables
-        for csv_filename in [name for name in csv_files if not name.endswith('_CSV_DATA_STRUCTURE.csv')]:
-            # Determine the table name
-            csv_table_name = os.path.splitext(csv_filename)[0]
-            column_definition = table_structures[csv_table_name]
+            # Add the data to the tables
+            for csv_filename in [name for name in csv_files if not name.endswith('_CSV_DATA_STRUCTURE.csv')]:
+                # Determine the table name
+                csv_table_name = os.path.splitext(csv_filename)[0]
+                column_definition = table_structures[csv_table_name]
 
-            # Validate table name for SQL injection prevention
-            safe_table_name = validate_sql_identifier(csv_table_name)
+                # Validate table name for SQL injection prevention
+                safe_table_name = validate_sql_identifier(csv_table_name)
 
-            # Create the table
-            c.execute(f'CREATE TABLE IF NOT EXISTS {safe_table_name} ({", ".join(column_definition)})')
+                # Create the table
+                c.execute(f'CREATE TABLE IF NOT EXISTS {safe_table_name} ({", ".join(column_definition)})')
 
-            # File encoding is usually iso-8859-1
-            file_encodings = { 'CDR': 'utf-8' }
-            file_encoding = file_encodings.get(csv_table_name, 'iso-8859-1')
+                # File encoding is usually iso-8859-1
+                file_encodings = { 'CDR': 'utf-8' }
+                file_encoding = file_encodings.get(csv_table_name, 'iso-8859-1')
 
-            # Open the data file
-            with csv_archive.open(csv_filename) as csv_file:
-                csv_reader = csv.DictReader(io.TextIOWrapper(csv_file, encoding=file_encoding, errors='strict'))
-                for row in csv_reader:
-                    # Insert the data
-                    placeholders = ', '.join(['?'] * len(row))
-                    c.execute(f'INSERT INTO {safe_table_name} VALUES ({placeholders})', tuple(row.values()))
+                # Open the data file
+                with csv_archive.open(csv_filename) as csv_file:
+                    csv_reader = csv.DictReader(io.TextIOWrapper(csv_file, encoding=file_encoding, errors='strict'))
+                    for row in csv_reader:
+                        # Insert the data
+                        placeholders = ', '.join(['?'] * len(row))
+                        c.execute(f'INSERT INTO {safe_table_name} VALUES ({placeholders})', tuple(row.values()))
 
-    # Run post-processing SQL to add helpful columns not included in the NASR data
-    sql_path = pathlib.Path(__file__).parent / 'post_process_nasr.sql'
-    with open(sql_path, encoding='us-ascii') as f:
-        c.executescript(f.read())
+        # Run post-processing SQL to add helpful columns not included in the NASR data
+        sql_path = pathlib.Path(__file__).parent / 'post_process_nasr.sql'
+        with open(sql_path, encoding='us-ascii') as f:
+            c.executescript(f.read())
 
-    conn.commit()
-
-    if spatialite:
-        try:
-            # Load spatialite extension
-            conn.enable_load_extension(True)
-            conn.load_extension('mod_spatialite')
-        except sqlite3.OperationalError as e:
-            # Exit early on failure. The rest of the script just adds geometry columns.
-            print('Error loading mod_spatialite:', e, 'Spatialite support will not be available.')
-            conn.close()
-            exit(0)
-
-        # Create the spatialite metadata
-        c.execute('SELECT InitSpatialMetadata(1)')
-
-        # Add geometry columns for tables that have point geometries
-        def add_geometry_column(table, geom_column, geometry_type):
-            c.execute(f'SELECT AddGeometryColumn("{table}", "{geom_column}", 4269, "{geometry_type}", "XY")')
-            c.execute(f'SELECT CreateSpatialIndex("{table}", "{geom_column}")')
-
-        def add_point_geometry(table, geom_column, latitude_column, longitude_column):
-            c.execute(f'UPDATE {table} SET {geom_column} = MakePoint({longitude_column}, {latitude_column}, 4269)')
-
-        tables = [
-            ['APT_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['APT_RWY_END', 'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['APT_RWY_END', 'GEOMETRY_DISPLACED_THR', 'LAT_DISPLACED_THR_DECIMAL', 'LONG_DISPLACED_THR_DECIMAL'],
-            ['APT_RWY_END', 'GEOMETRY_LAHSO',         'LAT_LAHSO_DECIMAL',         'LONG_LAHSO_DECIMAL'],
-            ['ARB_BASE',    'GEOMETRY_REFERENCE',     'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['ARB_SEG',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['AWOS',        'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['AWY_SEG_ALT', 'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['COM',         'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['DP_RTE',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['FIX_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['FRQ',         'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['FSS_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['ILS_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['ILS_DME',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['ILS_GS',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['ILS_MKR',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['MAA_BASE',    'GEOMETRY_REFERENCE',     'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['MAA_SHP',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['MTR_PT',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['NAV_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['NAV_BASE',    'GEOMETRY_TACAN_DME',     'TACAN_DME_LAT_DECIMAL',     'TACAN_DME_LONG_DECIMAL'],
-            ['PJA_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['STAR_RTE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-            ['WXL_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL']
-        ]
-
-        for table, geom_column, lat_column, long_column in tables:
-            add_geometry_column(table, geom_column, 'POINT')
-            add_point_geometry(table, geom_column, lat_column, long_column)
-            conn.commit()
-
-        # Add multipoint geometries for AWY, DP, MTR, STAR
-        def add_multipoint_geometry(table, geom_column, point_table, point_geom_column, identifying_columns):
-            where_clause = ' AND '.join([f'{table}.{col} = {point_table}.{col}' for col in identifying_columns])
-            c.execute(f'UPDATE {table} SET {geom_column} = (SELECT CastToMultipoint(Collect({point_geom_column})) FROM {point_table} WHERE {where_clause})')
-
-        multipoint_tables: list[tuple[str, str, str, str, list[str]]] = [
-            ('AWY_LINES', 'GEOMETRY', 'AWY_SEG_ALT', 'GEOMETRY', ['AWY_LOCATION', 'AWY_ID', 'LINE_SEQ']),
-            ('DP_LINES',  'GEOMETRY', 'DP_RTE',      'GEOMETRY', ['DP_COMPUTER_CODE', 'ROUTE_NAME', 'BODY_SEQ']),
-            ('MTR_LINES', 'GEOMETRY', 'MTR_PT',      'GEOMETRY', ['ROUTE_TYPE_CODE', 'ROUTE_ID']),
-            ('STAR_LINES','GEOMETRY', 'STAR_RTE',    'GEOMETRY', ['STAR_COMPUTER_CODE', 'ROUTE_NAME', 'BODY_SEQ'])
-        ]
-
-        for table, geom_column, point_table, point_geom_column, identifying_columns in multipoint_tables:
-            add_geometry_column(table, geom_column, 'MULTIPOINT')
-            add_multipoint_geometry(table, geom_column, point_table, point_geom_column, identifying_columns)
-            conn.commit()
-
-        # TODO: Add multipoint geometries for PFRs. These are complicated in that they can be comprised of:
-        # NAVAID, FIX, DP, STAR, AIRWAY, a RADIAL from a NAVAID, or a FRD (FIX RADIAL DISTANCE)
-
-        # TODO: Add multipoint geometries for CDRs. These are poorly represented in the data, and require
-        # more parsing logic.
-
-        # Add polygon geometries for: MAA_SHP
-        def add_polygon_geometry(table, geom_column, point_table, point_geom_column, identifying_columns):
-            where_clause = ' AND '.join([f'{table}.{col} = {point_table}.{col}' for col in identifying_columns])
-            c.execute(f'UPDATE {table} SET {geom_column} = (SELECT MakePolygon({point_geom_column}) FROM {point_table} WHERE {where_clause})')
-
-        add_geometry_column('MAA_BASE', 'GEOMETRY', 'POLYGON')
-        add_polygon_geometry('MAA_BASE', 'GEOMETRY', 'MAA_SHP', 'GEOMETRY', ['MAA_ID'])
         conn.commit()
 
-        # TODO: Add polygon geometries for ARB_SEG. These are complicated, too.
-        #    Some of the ARTCC boundaries defined by the ARTCC facility are composed of
-        #    more than a single closed shape. Due to the format constraints and naming
-        #    conventions of the legacy ARB file it is not possible to publish each
-        #    shape separately. In these cases it is necessary to read the point
-        #    description text for the key phrase "TO POINT OF BEGINNING" to identify
-        #    where the shape returns to the beginning and forms a closed shape.
+        if spatialite:
+            try:
+                # Load spatialite extension
+                conn.enable_load_extension(True)
+                conn.load_extension('mod_spatialite')
+            except sqlite3.OperationalError as e:
+                # Exit early on failure. The rest of the script just adds geometry columns.
+                print('Error loading mod_spatialite:', e, 'Spatialite support will not be available.')
+                return
+
+            # Create the spatialite metadata
+            c.execute('SELECT InitSpatialMetadata(1)')
+
+            # Add geometry columns for tables that have point geometries
+            def add_geometry_column(table, geom_column, geometry_type):
+                c.execute(f'SELECT AddGeometryColumn("{table}", "{geom_column}", 4269, "{geometry_type}", "XY")')
+                c.execute(f'SELECT CreateSpatialIndex("{table}", "{geom_column}")')
+
+            def add_point_geometry(table, geom_column, latitude_column, longitude_column):
+                c.execute(f'UPDATE {table} SET {geom_column} = MakePoint({longitude_column}, {latitude_column}, 4269)')
+
+            tables = [
+                ['APT_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['APT_RWY_END', 'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['APT_RWY_END', 'GEOMETRY_DISPLACED_THR', 'LAT_DISPLACED_THR_DECIMAL', 'LONG_DISPLACED_THR_DECIMAL'],
+                ['APT_RWY_END', 'GEOMETRY_LAHSO',         'LAT_LAHSO_DECIMAL',         'LONG_LAHSO_DECIMAL'],
+                ['ARB_BASE',    'GEOMETRY_REFERENCE',     'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['ARB_SEG',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['AWOS',        'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['AWY_SEG_ALT', 'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['COM',         'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['DP_RTE',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['FIX_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['FRQ',         'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['FSS_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['ILS_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['ILS_DME',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['ILS_GS',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['ILS_MKR',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['MAA_BASE',    'GEOMETRY_REFERENCE',     'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['MAA_SHP',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['MTR_PT',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['NAV_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['NAV_BASE',    'GEOMETRY_TACAN_DME',     'TACAN_DME_LAT_DECIMAL',     'TACAN_DME_LONG_DECIMAL'],
+                ['PJA_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['STAR_RTE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['WXL_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL']
+            ]
+
+            for table, geom_column, lat_column, long_column in tables:
+                add_geometry_column(table, geom_column, 'POINT')
+                add_point_geometry(table, geom_column, lat_column, long_column)
+                conn.commit()
+
+            # Add multipoint geometries for AWY, DP, MTR, STAR
+            def add_multipoint_geometry(table, geom_column, point_table, point_geom_column, identifying_columns):
+                where_clause = ' AND '.join([f'{table}.{col} = {point_table}.{col}' for col in identifying_columns])
+                c.execute(f'UPDATE {table} SET {geom_column} = (SELECT CastToMultipoint(Collect({point_geom_column})) FROM {point_table} WHERE {where_clause})')
+
+            multipoint_tables: list[tuple[str, str, str, str, list[str]]] = [
+                ('AWY_LINES', 'GEOMETRY', 'AWY_SEG_ALT', 'GEOMETRY', ['AWY_LOCATION', 'AWY_ID', 'LINE_SEQ']),
+                ('DP_LINES',  'GEOMETRY', 'DP_RTE',      'GEOMETRY', ['DP_COMPUTER_CODE', 'ROUTE_NAME', 'BODY_SEQ']),
+                ('MTR_LINES', 'GEOMETRY', 'MTR_PT',      'GEOMETRY', ['ROUTE_TYPE_CODE', 'ROUTE_ID']),
+                ('STAR_LINES','GEOMETRY', 'STAR_RTE',    'GEOMETRY', ['STAR_COMPUTER_CODE', 'ROUTE_NAME', 'BODY_SEQ'])
+            ]
+
+            for table, geom_column, point_table, point_geom_column, identifying_columns in multipoint_tables:
+                add_geometry_column(table, geom_column, 'MULTIPOINT')
+                add_multipoint_geometry(table, geom_column, point_table, point_geom_column, identifying_columns)
+                conn.commit()
+
+            # TODO: Add multipoint geometries for PFRs. These are complicated in that they can be comprised of:
+            # NAVAID, FIX, DP, STAR, AIRWAY, a RADIAL from a NAVAID, or a FRD (FIX RADIAL DISTANCE)
+
+            # TODO: Add multipoint geometries for CDRs. These are poorly represented in the data, and require
+            # more parsing logic.
+
+            # Add polygon geometries for: MAA_SHP
+            def add_polygon_geometry(table, geom_column, point_table, point_geom_column, identifying_columns):
+                where_clause = ' AND '.join([f'{table}.{col} = {point_table}.{col}' for col in identifying_columns])
+                c.execute(f'UPDATE {table} SET {geom_column} = (SELECT MakePolygon({point_geom_column}) FROM {point_table} WHERE {where_clause})')
+
+            add_geometry_column('MAA_BASE', 'GEOMETRY', 'POLYGON')
+            add_polygon_geometry('MAA_BASE', 'GEOMETRY', 'MAA_SHP', 'GEOMETRY', ['MAA_ID'])
+            conn.commit()
+
+            # TODO: Add polygon geometries for ARB_SEG. These are complicated, too.
+            #    Some of the ARTCC boundaries defined by the ARTCC facility are composed of
+            #    more than a single closed shape. Due to the format constraints and naming
+            #    conventions of the legacy ARB file it is not possible to publish each
+            #    shape separately. In these cases it is necessary to read the point
+            #    description text for the key phrase "TO POINT OF BEGINNING" to identify
+            #    where the shape returns to the beginning and forms a closed shape.
+    finally:
+        conn.close()
 
 def main():
     """

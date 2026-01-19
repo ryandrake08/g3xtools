@@ -468,8 +468,7 @@ def test_write_sqlite_file_creates_database(tmp_path):
     # Create post_process_nasr.sql in same directory as nasr.py
     sql_path = Path(nasr.__file__).parent / 'post_process_nasr.sql'
     original_sql_exists = sql_path.exists()
-    if original_sql_exists:
-        original_sql_content = sql_path.read_text()
+    original_sql_content = sql_path.read_text() if original_sql_exists else ''
 
     # Write minimal test SQL file
     sql_path.write_text('-- Test SQL file\n')
@@ -484,23 +483,24 @@ def test_write_sqlite_file_creates_database(tmp_path):
 
         # Verify table structure and data
         conn = sqlite3.connect(sqlite_path)
-        c = conn.cursor()
+        try:
+            c = conn.cursor()
 
-        # Check table exists
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='TEST_BASE'")
-        assert c.fetchone() is not None
+            # Check table exists
+            c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='TEST_BASE'")
+            assert c.fetchone() is not None
 
-        # Check data was inserted
-        c.execute("SELECT COUNT(*) FROM TEST_BASE")
-        assert c.fetchone()[0] == 2
+            # Check data was inserted
+            c.execute("SELECT COUNT(*) FROM TEST_BASE")
+            assert c.fetchone()[0] == 2
 
-        # Check specific values
-        c.execute("SELECT TEST_ID, TEST_VALUE FROM TEST_BASE ORDER BY TEST_ID")
-        rows = c.fetchall()
-        assert rows[0] == ('ID1', 'Value1')
-        assert rows[1] == ('ID2', 'Value2')
-
-        conn.close()
+            # Check specific values
+            c.execute("SELECT TEST_ID, TEST_VALUE FROM TEST_BASE ORDER BY TEST_ID")
+            rows = c.fetchall()
+            assert rows[0] == ('ID1', 'Value1')
+            assert rows[1] == ('ID2', 'Value2')
+        finally:
+            conn.close()
     finally:
         # Restore original SQL file
         if original_sql_exists:
@@ -533,8 +533,7 @@ def test_write_sqlite_file_removes_existing(tmp_path):
     # Temporarily create SQL file
     sql_path = Path(nasr.__file__).parent / 'post_process_nasr.sql'
     original_sql_exists = sql_path.exists()
-    if original_sql_exists:
-        original_sql_content = sql_path.read_text()
+    original_sql_content = sql_path.read_text() if original_sql_exists else ''
     sql_path.write_text('-- Test\n')
 
     try:
@@ -543,14 +542,16 @@ def test_write_sqlite_file_removes_existing(tmp_path):
 
         # Verify new database was created (not old content)
         conn = sqlite3.connect(sqlite_path)
-        c = conn.cursor()
-        c.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = c.fetchall()
-        conn.close()
+        try:
+            c = conn.cursor()
+            c.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = c.fetchall()
 
-        # Should have at least the TEST table
-        table_names = [t[0] for t in tables]
-        assert 'TEST' in table_names
+            # Should have at least the TEST table
+            table_names = [t[0] for t in tables]
+            assert 'TEST' in table_names
+        finally:
+            conn.close()
     finally:
         if original_sql_exists:
             sql_path.write_text(original_sql_content)
@@ -578,8 +579,7 @@ def test_write_sqlite_file_validates_table_names(tmp_path):
     # Temporarily create SQL file
     sql_path = Path(nasr.__file__).parent / 'post_process_nasr.sql'
     original_sql_exists = sql_path.exists()
-    if original_sql_exists:
-        original_sql_content = sql_path.read_text()
+    original_sql_content = sql_path.read_text() if original_sql_exists else ''
     sql_path.write_text('-- Test\n')
 
     sqlite_path = tmp_path / 'test.db'
