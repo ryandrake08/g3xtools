@@ -5,7 +5,6 @@ Tests cover message parsing, checksum validation, and data conversion.
 All test data is synthetic based on the G3X Text Out specification.
 """
 
-
 import pytest
 
 import g3xtext

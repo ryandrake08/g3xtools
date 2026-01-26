@@ -23,6 +23,7 @@ __all__ = [
     'user_cache_path',
 ]
 
+
 def user_cache_path(appname: str, appauthor: str = '', ensure_exists: bool = True) -> pathlib.Path:
     """
     Get platform-specific user cache directory path.
@@ -47,6 +48,7 @@ def user_cache_path(appname: str, appauthor: str = '', ensure_exists: bool = Tru
     """
     try:
         from platformdirs import user_cache_path as _platformdirs_cache
+
         return cast(pathlib.Path, _platformdirs_cache(appname, appauthor, ensure_exists=ensure_exists))
     except ImportError:
         # Fallback implementation for manual platform detection

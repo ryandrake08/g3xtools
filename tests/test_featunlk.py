@@ -186,6 +186,7 @@ def test_dump_feature_unlock_invalid_feature():
     """dump_feature_unlock should return 1 for invalid feature name."""
     # Create a minimal feat_unlk.dat file (all zeros)
     import tempfile
+
     with tempfile.NamedTemporaryFile(suffix=".dat", delete=False) as f:
         f.write(b"\x00" * 18000)
         tmp_file = Path(f.name)
@@ -213,6 +214,7 @@ def test_dump_feature_unlock_empty_content(tmp_path, capsys):
 def test_dump_feature_unlock_feature_by_filename():
     """dump_feature_unlock should accept filename as feature identifier."""
     import tempfile
+
     with tempfile.NamedTemporaryFile(suffix=".dat", delete=False) as f:
         f.write(b"\x00" * 18000)
         tmp_file = Path(f.name)
@@ -282,7 +284,7 @@ def test_dump_feature_unlock_valid_content(tmp_path, capsys):
 
     # Create file with zeros, then write content at correct offset
     data = bytearray(18000)
-    data[feature.offset:feature.offset + len(content)] = content
+    data[feature.offset : feature.offset + len(content)] = content
     feat_unlk_file.write_bytes(bytes(data))
 
     result = featunlk.dump_feature_unlock(feat_unlk_file, "TERRAIN")

@@ -82,11 +82,17 @@ _TAW_REGION_PATHS = {
     0x4F: "air_sport.gpi",
 }
 
-def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bool = False, skip_unknown_regions: bool = False, verbose: bool = False) -> Generator[tuple[Optional[str], pathlib.Path], None, None]:
+
+def extract_taw(
+    input_path: pathlib.Path,
+    dest_path: pathlib.Path,
+    info_only: bool = False,
+    skip_unknown_regions: bool = False,
+    verbose: bool = False,
+) -> Generator[tuple[Optional[str], pathlib.Path], None, None]:
     debug = print if verbose else lambda *_: None
 
     with open(input_path, 'rb') as fd:
-
         # Read header
 
         magic = fd.read(5)
@@ -144,9 +150,9 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
             if len(parts) != 3:
                 raise ValueError(f"Unexpected metadata: {metadata!r}")
 
-            avionics=parts[0].decode()
-            coverage=parts[1].decode()
-            taw_type=parts[2].decode()
+            avionics = parts[0].decode()
+            coverage = parts[1].decode()
+            taw_type = parts[2].decode()
 
             if info_only:
                 debug()
@@ -228,12 +234,15 @@ def extract_taw(input_path: pathlib.Path, dest_path: pathlib.Path, info_only: bo
         tail = fd.read()
         debug(f"Tail: {tail!r}")
 
+
 def main() -> None:
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Test Garmin API functions')
     parser.add_argument('input_file', nargs='?', help='Input .taw file')
     parser.add_argument('-o', '--output-path', default='.', help='Base output path')
-    parser.add_argument('-i', '--info-only', action='store_true', help='Only output descriptive information, do not extract')
+    parser.add_argument(
+        '-i', '--info-only', action='store_true', help='Only output descriptive information, do not extract'
+    )
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose debug output')
     args = parser.parse_args()
 
@@ -258,6 +267,7 @@ def main() -> None:
     # Consume generator to trigger extraction (don't need to store results)
     for _ in extract_taw(input_path, output_path, info_only=args.info_only, verbose=args.verbose):
         pass
+
 
 if __name__ == "__main__":
     main()

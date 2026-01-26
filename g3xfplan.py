@@ -30,6 +30,7 @@ EARTH_RADIUS_METERS = 6371000  # Mean radius of Earth in meters
 # Flight planning defaults
 DEFAULT_MAX_LEG_LENGTH_NM = 80  # Default maximum leg length for VFR routing
 
+
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
     Calculate the great-circle distance between two points on the Earth's surface using the Haversine formula.
@@ -56,6 +57,7 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     # Convert from angular distance to meters
     return d * EARTH_RADIUS_METERS
 
+
 def bounding_box(lat1: float, lon1: float, distance: float) -> tuple[float, float, float, float]:
     """
     Calculate the bounding box coordinates (northeast and southwest corners)
@@ -81,7 +83,7 @@ def bounding_box(lat1: float, lon1: float, distance: float) -> tuple[float, floa
     d = distance / EARTH_RADIUS_METERS
 
     # Shortcut for 45 and 225 degree bearings
-    root1_2 = 0.7071067811865476 # sqrt(0.5)
+    root1_2 = 0.7071067811865476  # sqrt(0.5)
 
     # Northeast bearing
     lat2 = math.asin(math.sin(lat1) * math.cos(d) + math.cos(lat1) * math.sin(d) * root1_2)
@@ -95,6 +97,7 @@ def bounding_box(lat1: float, lon1: float, distance: float) -> tuple[float, floa
 
     # Convert latitude and longitude back to degrees
     return (math.degrees(lat2), math.degrees(lon2), math.degrees(lat3), math.degrees(lon3))
+
 
 class Router(astar.AStar):
     '''
@@ -154,7 +157,7 @@ class Router(astar.AStar):
         self.max_leg_length = max_leg_length
 
         # Set costs for each route preference
-        self.costs = { 'PREFER': 0.8, 'INCLUDE': 1.0, 'AVOID': 1.25, 'REJECT': 1000.0 }
+        self.costs = {'PREFER': 0.8, 'INCLUDE': 1.0, 'AVOID': 1.25, 'REJECT': 1000.0}
 
         # Cache for bounding box calculations keyed by waypoint index
         self._bounding_box_cache = {}
@@ -164,6 +167,7 @@ class Router(astar.AStar):
             for waypoint_id, waypoint in enumerate(self.waypoints):
                 if waypoint_preferences[waypoint[1]] != 'REJECT':
                     yield (waypoint_id, (waypoint[3], waypoint[2], waypoint[3], waypoint[2]), None)
+
         self.waypoints_idx = rtree.index.Index(generator_function())
 
     def _get_cached_bounding_box(self, waypoint_index):
@@ -256,7 +260,9 @@ class Router(astar.AStar):
         type2 = self.waypoints[n2][1]
 
         # The cost associated with the route preferences of the two nodes
-        nodes_cost_modifier = self.costs[self.waypoint_preferences[type1]] * self.costs[self.waypoint_preferences[type2]]
+        nodes_cost_modifier = (
+            self.costs[self.waypoint_preferences[type1]] * self.costs[self.waypoint_preferences[type2]]
+        )
 
         # The cost modifier for distnaces greater than the max_leg_length
         distance_cost_modifier = self.costs['REJECT'] if distance > self.max_leg_length else 1.0
@@ -298,6 +304,7 @@ class Router(astar.AStar):
         cost = self.costs['PREFER'] * self.costs['PREFER']
         return distance * cost
 
+
 def main() -> None:
     """
     Main function to generate a flight plan from origin to destination, via an optional list of waypoints.
@@ -307,50 +314,157 @@ def main() -> None:
     route_choices = ['PREFER', 'INCLUDE', 'AVOID', 'REJECT']
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Generate a flight plan from origin to destination, via an optional list of waypoints.')
+    parser = argparse.ArgumentParser(
+        description='Generate a flight plan from origin to destination, via an optional list of waypoints.'
+    )
 
     # Required origin and destination
     parser.add_argument('origin', help='Origin airport code')
     parser.add_argument('destination', help='Destination airport code')
 
     # Optional via waypoints
-    parser.add_argument('--via', action='extend', nargs='+', help='Generated route must include these waypoints (airport, VOR, NDB, VFR waypoint, etc.). Multiple waypoints can be specified in one --via or use --via multiple times. Route planner will determine the shortest route between each via.', default=[])
+    parser.add_argument(
+        '--via',
+        action='extend',
+        nargs='+',
+        help='Generated route must include these waypoints (airport, VOR, NDB, VFR waypoint, etc.). Multiple waypoints can be specified in one --via or use --via multiple times. Route planner will determine the shortest route between each via.',
+        default=[],
+    )
 
     # Optional user waypoints
-    parser.add_argument('--waypoint', action='extend', nargs='+', help='Add user waypoints (format: ID,LAT,LON) that can be used during routing. Multiple waypoints can be specified in one --waypoint or use --waypoint multiple times. User waypoints are treated with PREFER preference by default (configurable with --route-user-waypoint).', default=[])
+    parser.add_argument(
+        '--waypoint',
+        action='extend',
+        nargs='+',
+        help='Add user waypoints (format: ID,LAT,LON) that can be used during routing. Multiple waypoints can be specified in one --waypoint or use --waypoint multiple times. User waypoints are treated with PREFER preference by default (configurable with --route-user-waypoint).',
+        default=[],
+    )
 
     # Output preferences
-    parser.add_argument('--output-minimal-airway', action='store_true', help='Output a condensed flight plan showing only airway entry and exit waypoints.')
-    parser.add_argument('--output-skyvector', action='store_true', help='Open a web browser with the route depicted by Skyvector.')
+    parser.add_argument(
+        '--output-minimal-airway',
+        action='store_true',
+        help='Output a condensed flight plan showing only airway entry and exit waypoints.',
+    )
+    parser.add_argument(
+        '--output-skyvector', action='store_true', help='Open a web browser with the route depicted by Skyvector.'
+    )
     parser.add_argument('--output-fpl', type=str, metavar='FILE', help='Output route as a Garmin FPL v1 XML file.')
 
     # Route generation preferences
-    parser.add_argument('--direct', action='store_true', help='Generate a shortest-path direct flight plan between origin and destination, via any optional vias and exit. No intermediate legs are calculated.')
-    parser.add_argument('--airway', action='store_true', help='Generate a flight plan between origin and destination, via any optional vias, considering airways as well as waypoint-to-waypoint legs.')
-    parser.add_argument('--max-leg-length', type=float, default=DEFAULT_MAX_LEG_LENGTH_NM, help='Specify the maximum leg length for direct neighbors, in nautical miles.')
+    parser.add_argument(
+        '--direct',
+        action='store_true',
+        help='Generate a shortest-path direct flight plan between origin and destination, via any optional vias and exit. No intermediate legs are calculated.',
+    )
+    parser.add_argument(
+        '--airway',
+        action='store_true',
+        help='Generate a flight plan between origin and destination, via any optional vias, considering airways as well as waypoint-to-waypoint legs.',
+    )
+    parser.add_argument(
+        '--max-leg-length',
+        type=float,
+        default=DEFAULT_MAX_LEG_LENGTH_NM,
+        help='Specify the maximum leg length for direct neighbors, in nautical miles.',
+    )
 
     # Waypoint preferences
-    parser.add_argument('--route-airport',       choices=route_choices, default='INCLUDE', help='Specify how to handle airports in the route.')
-    parser.add_argument('--route-balloonport',   choices=route_choices, default='REJECT',  help='Specify how to handle balloonports in the route.')
-    parser.add_argument('--route-seaplane-base', choices=route_choices, default='REJECT',  help='Specify how to handle seaplane bases in the route.')
-    parser.add_argument('--route-gliderport',    choices=route_choices, default='REJECT',  help='Specify how to handle gliderports in the route.')
-    parser.add_argument('--route-heliport',      choices=route_choices, default='REJECT',  help='Specify how to handle heliports in the route.')
-    parser.add_argument('--route-ultralight',    choices=route_choices, default='REJECT',  help='Specify how to handle ultralight aerodromes in the route.')
-    parser.add_argument('--route-user-waypoint', choices=route_choices, default='PREFER',  help='Specify how to handle user-defined waypoints in the route.')
-    parser.add_argument('--route-vfr-waypoint',  choices=route_choices, default='INCLUDE', help='Specify how to handle VFR waypoints in the route.')
-    parser.add_argument('--route-dme',           choices=route_choices, default='REJECT',  help='Specify how to handle DMEs in the route.')
-    parser.add_argument('--route-ndb',           choices=route_choices, default='REJECT',  help='Specify how to handle NDBs in the route.')
-    parser.add_argument('--route-ndbdme',        choices=route_choices, default='REJECT',  help='Specify how to handle NDB/DMEs in the route.')
-    parser.add_argument('--route-vor',           choices=route_choices, default='REJECT',  help='Specify how to handle VORs in the route.')
-    parser.add_argument('--route-vortac',        choices=route_choices, default='REJECT',  help='Specify how to handle VORTACs in the route.')
-    parser.add_argument('--route-vordme',        choices=route_choices, default='REJECT',  help='Specify how to handle VORs in the route.')
+    parser.add_argument(
+        '--route-airport', choices=route_choices, default='INCLUDE', help='Specify how to handle airports in the route.'
+    )
+    parser.add_argument(
+        '--route-balloonport',
+        choices=route_choices,
+        default='REJECT',
+        help='Specify how to handle balloonports in the route.',
+    )
+    parser.add_argument(
+        '--route-seaplane-base',
+        choices=route_choices,
+        default='REJECT',
+        help='Specify how to handle seaplane bases in the route.',
+    )
+    parser.add_argument(
+        '--route-gliderport',
+        choices=route_choices,
+        default='REJECT',
+        help='Specify how to handle gliderports in the route.',
+    )
+    parser.add_argument(
+        '--route-heliport',
+        choices=route_choices,
+        default='REJECT',
+        help='Specify how to handle heliports in the route.',
+    )
+    parser.add_argument(
+        '--route-ultralight',
+        choices=route_choices,
+        default='REJECT',
+        help='Specify how to handle ultralight aerodromes in the route.',
+    )
+    parser.add_argument(
+        '--route-user-waypoint',
+        choices=route_choices,
+        default='PREFER',
+        help='Specify how to handle user-defined waypoints in the route.',
+    )
+    parser.add_argument(
+        '--route-vfr-waypoint',
+        choices=route_choices,
+        default='INCLUDE',
+        help='Specify how to handle VFR waypoints in the route.',
+    )
+    parser.add_argument(
+        '--route-dme', choices=route_choices, default='REJECT', help='Specify how to handle DMEs in the route.'
+    )
+    parser.add_argument(
+        '--route-ndb', choices=route_choices, default='REJECT', help='Specify how to handle NDBs in the route.'
+    )
+    parser.add_argument(
+        '--route-ndbdme', choices=route_choices, default='REJECT', help='Specify how to handle NDB/DMEs in the route.'
+    )
+    parser.add_argument(
+        '--route-vor', choices=route_choices, default='REJECT', help='Specify how to handle VORs in the route.'
+    )
+    parser.add_argument(
+        '--route-vortac', choices=route_choices, default='REJECT', help='Specify how to handle VORTACs in the route.'
+    )
+    parser.add_argument(
+        '--route-vordme', choices=route_choices, default='REJECT', help='Specify how to handle VORs in the route.'
+    )
 
     # Airway preferences
-    parser.add_argument('--route-airway-victor', choices=route_choices, default='PREFER',  help='Specify how to handle Victor airways in the route, if --airway is set.')
-    parser.add_argument('--route-airway-rnav',   choices=route_choices, default='INCLUDE', help='Specify how to handle RNAV (T and Q) airways in the route, if --airway is set.')
-    parser.add_argument('--route-airway-jet',    choices=route_choices, default='REJECT',  help='Specify how to handle Jet airways in the route, if --airway is set.')
-    parser.add_argument('--route-airway-color',  choices=route_choices, default='REJECT',  help='Specify how to handle colored airways in the route, if --airway is set.')
-    parser.add_argument('--route-airway-other',  choices=route_choices, default='REJECT',  help='Specify how to handle atlantic, bahama, pacific, and puerto rico airways in the route, if --airway is set.')
+    parser.add_argument(
+        '--route-airway-victor',
+        choices=route_choices,
+        default='PREFER',
+        help='Specify how to handle Victor airways in the route, if --airway is set.',
+    )
+    parser.add_argument(
+        '--route-airway-rnav',
+        choices=route_choices,
+        default='INCLUDE',
+        help='Specify how to handle RNAV (T and Q) airways in the route, if --airway is set.',
+    )
+    parser.add_argument(
+        '--route-airway-jet',
+        choices=route_choices,
+        default='REJECT',
+        help='Specify how to handle Jet airways in the route, if --airway is set.',
+    )
+    parser.add_argument(
+        '--route-airway-color',
+        choices=route_choices,
+        default='REJECT',
+        help='Specify how to handle colored airways in the route, if --airway is set.',
+    )
+    parser.add_argument(
+        '--route-airway-other',
+        choices=route_choices,
+        default='REJECT',
+        help='Specify how to handle atlantic, bahama, pacific, and puerto rico airways in the route, if --airway is set.',
+    )
 
     args = parser.parse_args()
 
@@ -377,32 +491,26 @@ def main() -> None:
         'G': args.route_gliderport,
         'H': args.route_heliport,
         'U': args.route_ultralight,
-
         # User waypoints can be configured
         'USER': args.route_user_waypoint,
-
         # VFR waypoints can be configured
         'VFR': args.route_vfr_waypoint,
-
         # These navaids can be configured individually or as a group with --airway
-        'DME':     'INCLUDE' if args.airway else args.route_dme,
-        'NDB':     'INCLUDE' if args.airway else args.route_ndb,
+        'DME': 'INCLUDE' if args.airway else args.route_dme,
+        'NDB': 'INCLUDE' if args.airway else args.route_ndb,
         'NDB/DME': 'INCLUDE' if args.airway else args.route_ndbdme,
-        'VOR':     'INCLUDE' if args.airway else args.route_vor,
-        'VORTAC':  'INCLUDE' if args.airway else args.route_vortac,
+        'VOR': 'INCLUDE' if args.airway else args.route_vor,
+        'VORTAC': 'INCLUDE' if args.airway else args.route_vortac,
         'VOR/DME': 'INCLUDE' if args.airway else args.route_vordme,
-
         # These fixes are only useful for airway routing and can be configured as a group with --airway
         'CN': 'INCLUDE' if args.airway else 'REJECT',
         'MR': 'INCLUDE' if args.airway else 'REJECT',
         'RP': 'INCLUDE' if args.airway else 'REJECT',
         'WP': 'INCLUDE' if args.airway else 'REJECT',
-
         # These fixes are not useful for routing
         'MW': 'REJECT',
         'NRS': 'REJECT',
         'RADAR': 'REJECT',
-
         # These navaids are not useful for routing
         'CONSOLAN': 'REJECT',
         'FAN MARKER': 'REJECT',
@@ -466,14 +574,26 @@ def main() -> None:
     # Find any waypoint by waypoint_id or icao_id
     def find_waypoint(waypoint_id):
         # First try to find non-airport waypoints (favor VOR, NDB, INT, etc.)
-        i = next((index for index, waypoint in enumerate(r.waypoints)
-                  if (waypoint[0] == waypoint_id or (len(waypoint) > 5 and waypoint[5] == waypoint_id))
-                  and waypoint[1] not in ('A', 'B', 'C', 'G', 'H', 'U')), None)
+        i = next(
+            (
+                index
+                for index, waypoint in enumerate(r.waypoints)
+                if (waypoint[0] == waypoint_id or (len(waypoint) > 5 and waypoint[5] == waypoint_id))
+                and waypoint[1] not in ('A', 'B', 'C', 'G', 'H', 'U')
+            ),
+            None,
+        )
 
         # If no non-airport waypoint found, search again including airports
         if i is None:
-            i = next((index for index, waypoint in enumerate(r.waypoints)
-                      if waypoint[0] == waypoint_id or (len(waypoint) > 5 and waypoint[5] == waypoint_id)), None)
+            i = next(
+                (
+                    index
+                    for index, waypoint in enumerate(r.waypoints)
+                    if waypoint[0] == waypoint_id or (len(waypoint) > 5 and waypoint[5] == waypoint_id)
+                ),
+                None,
+            )
 
         if i is None:
             parser.error(f'Waypoint "{waypoint_id}" not found')
@@ -481,7 +601,15 @@ def main() -> None:
 
     # Find airport by airport_id or icao_id
     def find_airport(airport_id):
-        i = next((index for index, waypoint in enumerate(r.waypoints) if (waypoint[0] == airport_id or (len(waypoint) > 5 and waypoint[5] == airport_id)) and waypoint[1] in ('A', 'B', 'C', 'G', 'H', 'U')), None)
+        i = next(
+            (
+                index
+                for index, waypoint in enumerate(r.waypoints)
+                if (waypoint[0] == airport_id or (len(waypoint) > 5 and waypoint[5] == airport_id))
+                and waypoint[1] in ('A', 'B', 'C', 'G', 'H', 'U')
+            ),
+            None,
+        )
         if i is None:
             parser.error(f'Airport "{airport_id}" not found')
         return i
@@ -504,7 +632,10 @@ def main() -> None:
     candidate_routes = [[origin_id] + list(perm) + [destination_id] for perm in itertools.permutations(via_ids)]
 
     # For each candidate route, calculate the total distance
-    routes_and_distances = [(route, sum(r.actual_distance_between(start, end) for start, end in zip(route, route[1:]))) for route in candidate_routes]
+    routes_and_distances = [
+        (route, sum(r.actual_distance_between(start, end) for start, end in zip(route, route[1:])))
+        for route in candidate_routes
+    ]
 
     # Pick the shortest direct route
     route, _ = min(routes_and_distances, key=lambda x: x[1])
@@ -516,7 +647,7 @@ def main() -> None:
             subroute = r.astar(start, end)
             # Insert the subroute into the main route
             if subroute:
-                route = route[:route.index(start)] + list(subroute) + route[route.index(end) + 1:]
+                route = route[: route.index(start)] + list(subroute) + route[route.index(end) + 1 :]
 
     # Build textual route
     route_text = ""
@@ -564,7 +695,7 @@ def main() -> None:
             if airway_idx is None:
                 # If no airway, just print the waypoint and continue
                 route_text += airport_name(waypoint_idx) + ' '
-            elif i==0 or (airway_idx != airway_segments[i-1]):
+            elif i == 0 or (airway_idx != airway_segments[i - 1]):
                 # If airway is different from previous, print the waypoint and new airway (if exists)
                 route_text += airport_name(waypoint_idx) + ' '
                 if airway_idx:
@@ -589,7 +720,7 @@ def main() -> None:
         # Map NASR waypoint types to FPL waypoint types
         waypoint_type_map = {
             'A': fpl.WAYPOINT_TYPE_AIRPORT,
-            'B': fpl.WAYPOINT_TYPE_AIRPORT, # unconfirmed
+            'B': fpl.WAYPOINT_TYPE_AIRPORT,  # unconfirmed
             'C': fpl.WAYPOINT_TYPE_AIRPORT,
             'G': fpl.WAYPOINT_TYPE_AIRPORT,
             'H': fpl.WAYPOINT_TYPE_AIRPORT,
@@ -601,7 +732,7 @@ def main() -> None:
             'VORTAC': fpl.WAYPOINT_TYPE_VOR,
             'VOR/DME': fpl.WAYPOINT_TYPE_VOR,
             'VFR': fpl.WAYPOINT_TYPE_INT,
-            'CN': fpl.WAYPOINT_TYPE_INT, # unconfirmed
+            'CN': fpl.WAYPOINT_TYPE_INT,  # unconfirmed
             'MR': fpl.WAYPOINT_TYPE_INT,
             'RP': fpl.WAYPOINT_TYPE_INT,
             'WP': fpl.WAYPOINT_TYPE_INT,
@@ -610,9 +741,9 @@ def main() -> None:
 
         # Map NASR country codes to FPL country codes
         country_code_map = {
-            'US': "K2", # With some exceptions, Garmin seems to use K2 for country code in the .fpl file
-            'CA': "CY", # Found on the Internet. Unconfirmed
-            '': '' # User waypoints are always blank country code
+            'US': "K2",  # With some exceptions, Garmin seems to use K2 for country code in the .fpl file
+            'CA': "CY",  # Found on the Internet. Unconfirmed
+            '': '',  # User waypoints are always blank country code
         }
 
         # Build route list: (identifier, lat, lon, waypoint_type, country_code)
@@ -632,6 +763,7 @@ def main() -> None:
         flight_plan = fpl.create_flight_plan_from_route_list(route_data, route_name)
         fpl.write_fpl(flight_plan, args.output_fpl)
         print(f"Flight plan written to {args.output_fpl}")
+
 
 if __name__ == '__main__':
     main()

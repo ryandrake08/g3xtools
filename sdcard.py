@@ -47,14 +47,16 @@ FAT32_SIGNATURE_OFFSET = 82  # "FAT32   " string location
 FAT32_SIGNATURE = b'FAT32   '  # Expected filesystem type string
 
 # SD card detection thresholds (per Garmin specifications)
-SD_CARD_MIN_SIZE_GB = 7.0   # Minimum size to consider as SD card
+SD_CARD_MIN_SIZE_GB = 7.0  # Minimum size to consider as SD card
 SD_CARD_MAX_SIZE_GB = 33.0  # Maximum size to consider as SD card
+
 
 # VSN cache file
 def _get_vsn_cache_path() -> pathlib.Path:
     """Get path to VSN cache file"""
     cache_dir = cache.user_cache_path('g3xtools', 'g3xtools')
     return cache_dir / 'vsn_cache.json'
+
 
 def _get_mount_point(device: str) -> str:
     """
@@ -71,12 +73,7 @@ def _get_mount_point(device: str) -> str:
     try:
         if sys.platform == 'darwin':
             # macOS: use diskutil info
-            result = subprocess.run(
-                ['diskutil', 'info', device],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            result = subprocess.run(['diskutil', 'info', device], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
                 for line in result.stdout.splitlines():
                     if 'Mount Point:' in line:
@@ -86,10 +83,7 @@ def _get_mount_point(device: str) -> str:
         elif sys.platform.startswith('linux'):
             # Linux: use findmnt
             result = subprocess.run(
-                ['findmnt', '-n', '-o', 'TARGET', device],
-                capture_output=True,
-                text=True,
-                timeout=5
+                ['findmnt', '-n', '-o', 'TARGET', device], capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
                 return result.stdout.strip()
@@ -109,6 +103,7 @@ def _get_mount_point(device: str) -> str:
 
     return ''
 
+
 def _get_volume_label(path: str) -> str:
     """
     Read volume label from mounted filesystem.
@@ -124,12 +119,7 @@ def _get_volume_label(path: str) -> str:
     try:
         if sys.platform == 'darwin':
             # macOS: use diskutil info
-            result = subprocess.run(
-                ['diskutil', 'info', path],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            result = subprocess.run(['diskutil', 'info', path], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
                 for line in result.stdout.splitlines():
                     if 'Volume Name:' in line:
@@ -139,22 +129,12 @@ def _get_volume_label(path: str) -> str:
         elif sys.platform.startswith('linux'):
             # Linux: use lsblk or findmnt
             # Try lsblk first (more reliable for labels)
-            result = subprocess.run(
-                ['lsblk', '-n', '-o', 'LABEL', path],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            result = subprocess.run(['lsblk', '-n', '-o', 'LABEL', path], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
                 return result.stdout.strip()
 
             # Fallback to findmnt
-            result = subprocess.run(
-                ['findmnt', '-n', '-o', 'LABEL', path],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            result = subprocess.run(['findmnt', '-n', '-o', 'LABEL', path], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
                 return result.stdout.strip()
 
@@ -172,7 +152,7 @@ def _get_volume_label(path: str) -> str:
                 ['wmic', 'volume', 'where', f'DriveLetter="{path[:-1]}"', 'get', 'Label'],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
             )
             if result.returncode == 0:
                 lines = result.stdout.strip().splitlines()
@@ -184,6 +164,7 @@ def _get_volume_label(path: str) -> str:
 
     return ''
 
+
 def _make_cache_key(label: str, size_bytes: int) -> str:
     """
     Create cache key from volume label and size.
@@ -193,6 +174,7 @@ def _make_cache_key(label: str, size_bytes: int) -> str:
     """
     size_gb = round(size_bytes / (1024**3), 1)
     return f"{label}:{size_gb}GB"
+
 
 def _get_cached_vsn(path: str) -> Optional[int]:
     """
@@ -227,6 +209,7 @@ def _get_cached_vsn(path: str) -> Optional[int]:
 
     return None
 
+
 def _cache_vsn(path: str, vsn: int) -> None:
     """
     Cache VSN for a volume.
@@ -259,6 +242,7 @@ def _cache_vsn(path: str, vsn: int) -> None:
         # Silently fail - caching is optional
         pass
 
+
 def _clear_vsn_cache() -> None:
     """Clear the VSN cache file"""
     try:
@@ -268,6 +252,7 @@ def _clear_vsn_cache() -> None:
     except OSError:
         pass
 
+
 def _unix_vsn(device_path: str) -> int:
     """Extract volume serial number from FAT32 device and return as integer."""
     try:
@@ -275,15 +260,19 @@ def _unix_vsn(device_path: str) -> int:
             buffer = fp.read(SECTOR_SIZE)
 
             if len(buffer) != SECTOR_SIZE:
-                raise ValueError(f"Short read from device: read {len(buffer)} bytes, expected {SECTOR_SIZE}. Device may not be a valid block device or may be corrupted.")
+                raise ValueError(
+                    f"Short read from device: read {len(buffer)} bytes, expected {SECTOR_SIZE}. Device may not be a valid block device or may be corrupted."
+                )
 
             # Validate FAT32 filesystem signature
-            signature = buffer[FAT32_SIGNATURE_OFFSET:FAT32_SIGNATURE_OFFSET + len(FAT32_SIGNATURE)]
+            signature = buffer[FAT32_SIGNATURE_OFFSET : FAT32_SIGNATURE_OFFSET + len(FAT32_SIGNATURE)]
             if signature != FAT32_SIGNATURE:
-                raise ValueError(f"Device {device_path} does not appear to be FAT32. Found signature: {signature!r}, expected: {FAT32_SIGNATURE!r}")
+                raise ValueError(
+                    f"Device {device_path} does not appear to be FAT32. Found signature: {signature!r}, expected: {FAT32_SIGNATURE!r}"
+                )
 
             # Extract 4 bytes at FAT32_VSN_OFFSET and convert to integer (little-endian order)
-            vsn_bytes = buffer[FAT32_VSN_OFFSET:FAT32_VSN_OFFSET + 4]
+            vsn_bytes = buffer[FAT32_VSN_OFFSET : FAT32_VSN_OFFSET + 4]
             vsn = int.from_bytes(vsn_bytes, byteorder='little')
 
             # Validate VSN is in valid 32-bit unsigned range
@@ -293,9 +282,12 @@ def _unix_vsn(device_path: str) -> int:
             return vsn
 
     except PermissionError as e:
-        raise OSError(f"Permission denied accessing {device_path}. Try running with sudo/administrator privileges.") from e
+        raise OSError(
+            f"Permission denied accessing {device_path}. Try running with sudo/administrator privileges."
+        ) from e
     except OSError as e:
         raise OSError(f"Error opening device {device_path}: {e}") from e
+
 
 def _windows_vsn(drive_letter: str) -> int:
     """Extract volume serial number from Windows drive and return as integer."""
@@ -323,6 +315,7 @@ def _windows_vsn(drive_letter: str) -> int:
     except OSError as e:
         raise OSError(f"Error accessing drive {drive_letter}: {e}") from e
 
+
 def _get_platform_device_example() -> str:
     """Get platform-specific device path example"""
     if sys.platform == 'darwin':
@@ -333,6 +326,7 @@ def _get_platform_device_example() -> str:
         return "D:"
     else:
         return "/dev/block_device"
+
 
 def detect_sd_card() -> str:
     """Detect and select SD card mount point.
@@ -375,10 +369,7 @@ def detect_sd_card() -> str:
 
             # Only accept SD cards within expected size range
             if SD_CARD_MIN_SIZE_GB <= size_gb <= SD_CARD_MAX_SIZE_GB:
-                candidates.append({
-                    'path': mountpoint,
-                    'size_gb': size_gb
-                })
+                candidates.append({'path': mountpoint, 'size_gb': size_gb})
         except (OSError, PermissionError):
             # Skip partitions we can't access
             continue
@@ -396,6 +387,7 @@ def detect_sd_card() -> str:
         path = str(candidates[0]['path'])
         print(f"Warning: Multiple SD card candidates found. Selecting smallest: {path}")
         return path
+
 
 def read_vsn(device: str) -> int:
     """Read volume serial number from device using appropriate platform-specific method.
@@ -415,6 +407,7 @@ def read_vsn(device: str) -> int:
         return _windows_vsn(device)
     else:
         return _unix_vsn(device)
+
 
 def get_vsn(vsn_arg: Optional[str], output_arg: Optional[str], verbose: bool = False) -> Optional[int]:
     """
@@ -471,15 +464,16 @@ def get_vsn(vsn_arg: Optional[str], output_arg: Optional[str], verbose: bool = F
 
     return None
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description='Read volume serial numbers from SD card block devices with caching support',
         epilog='Examples:\n'
-               '  sudo %(prog)s /dev/rdisk2s1         # Read VSN and cache (requires sudo)\n'
-               '  %(prog)s --cached /Volumes/GARMIN   # Check cached VSN (no sudo needed)\n'
-               '  %(prog)s --label /Volumes/GARMIN    # Show volume label\n'
-               '  %(prog)s --clear-cache              # Clear VSN cache',
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        '  sudo %(prog)s /dev/rdisk2s1         # Read VSN and cache (requires sudo)\n'
+        '  %(prog)s --cached /Volumes/GARMIN   # Check cached VSN (no sudo needed)\n'
+        '  %(prog)s --label /Volumes/GARMIN    # Show volume label\n'
+        '  %(prog)s --clear-cache              # Clear VSN cache',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     group = parser.add_mutually_exclusive_group(required=True)
@@ -530,6 +524,7 @@ def main() -> None:
     except (OSError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

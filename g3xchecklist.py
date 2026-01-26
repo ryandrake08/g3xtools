@@ -81,6 +81,7 @@ _JUSTIFICATION_TO_ACE = {
 
 _ACE_TO_JUSTIFICATION = {v: k for k, v in _JUSTIFICATION_TO_ACE.items()}
 
+
 @dataclass
 class ChecklistItem:
     """Represents a single checklist item.
@@ -91,10 +92,12 @@ class ChecklistItem:
         response: Response text (only for challenge_response type)
         justification: Text alignment (left, center, indent1, indent2, indent3)
     """
+
     type: str
     text: str = ""
     response: str = ""
     justification: str = "left"
+
 
 @dataclass
 class Checklist:
@@ -104,8 +107,10 @@ class Checklist:
         name: Name of the checklist
         items: List of checklist items
     """
+
     name: str
     items: list[ChecklistItem] = field(default_factory=list)
+
 
 @dataclass
 class Group:
@@ -115,8 +120,10 @@ class Group:
         name: Name of the group
         checklists: List of checklists in this group
     """
+
     name: str
     checklists: list[Checklist] = field(default_factory=list)
+
 
 @dataclass
 class AceFile:
@@ -134,6 +141,7 @@ class AceFile:
         default_checklist: Default checklist index
         groups: List of checklist groups
     """
+
     # Metadata
     name: str = ""
     aircraft_make_model: str = ""
@@ -150,13 +158,16 @@ class AceFile:
     # Content
     groups: list[Group] = field(default_factory=list)
 
+
 # ================================================================
 # ACE BINARY FORMAT FUNCTIONS
 # ================================================================
 
+
 def _calculate_crc32(data: bytes, crc: int = 0) -> int:
     """Calculate CRC32 checksum for ACE file validation."""
-    return zlib.crc32(data, crc) & 0xffffffff
+    return zlib.crc32(data, crc) & 0xFFFFFFFF
+
 
 def _read_ace_binary(file_path: pathlib.Path) -> AceFile:
     """Read and parse an ACE binary file."""
@@ -184,7 +195,7 @@ def _read_ace_binary(file_path: pathlib.Path) -> AceFile:
     # Validate CRC
     expected_crc = struct.unpack('<I', footer)[0]
     header_crc = _calculate_crc32(header)
-    calculated_crc = ~_calculate_crc32(content, header_crc) & 0xffffffff
+    calculated_crc = ~_calculate_crc32(content, header_crc) & 0xFFFFFFFF
 
     if expected_crc != calculated_crc:
         print(f"WARNING: CRC mismatch. Expected {expected_crc:08x}, got {calculated_crc:08x}")
@@ -217,7 +228,7 @@ def _read_ace_binary(file_path: pathlib.Path) -> AceFile:
         aircraft_make_model=lines[1],
         aircraft_information=lines[2],
         manufacturer_identification=lines[3],
-        copyright_information=lines[4]
+        copyright_information=lines[4],
     )
 
     # Parse content structure
@@ -267,7 +278,7 @@ def _read_ace_binary(file_path: pathlib.Path) -> AceFile:
                 type='challenge_response',
                 text=challenge,
                 response=response,
-                justification=_ACE_TO_JUSTIFICATION.get(just, 'left')
+                justification=_ACE_TO_JUSTIFICATION.get(just, 'left'),
             )
             current_checklist.items.append(item)
 
@@ -280,11 +291,12 @@ def _read_ace_binary(file_path: pathlib.Path) -> AceFile:
             item = ChecklistItem(
                 type=_ACE_TO_ITEM_TYPE.get(item_type, 'plain_text'),
                 text=text,
-                justification=_ACE_TO_JUSTIFICATION.get(just, 'left')
+                justification=_ACE_TO_JUSTIFICATION.get(just, 'left'),
             )
             current_checklist.items.append(item)
 
     return ace_file
+
 
 def _write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
     """Write an AceFile to binary ACE format."""
@@ -302,7 +314,7 @@ def _write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
         ace_file.aircraft_make_model,
         ace_file.aircraft_information,
         ace_file.manufacturer_identification,
-        ace_file.copyright_information
+        ace_file.copyright_information,
     ]
 
     # Convert structure to lines
@@ -344,7 +356,7 @@ def _write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
     # Calculate CRC
     header_bytes = bytes(header)
     header_crc = _calculate_crc32(header_bytes)
-    crc = ~_calculate_crc32(content, header_crc) & 0xffffffff
+    crc = ~_calculate_crc32(content, header_crc) & 0xFFFFFFFF
     footer = struct.pack('<I', crc)
 
     # Write file
@@ -353,9 +365,11 @@ def _write_ace_binary(ace_file: AceFile, file_path: pathlib.Path) -> None:
         f.write(content)
         f.write(footer)
 
+
 # ================================================================
 # YAML FORMAT FUNCTIONS
 # ================================================================
+
 
 def _ace_to_yaml_dict(ace_file: AceFile) -> dict:
     """Convert AceFile to YAML-compatible dictionary."""
@@ -382,16 +396,10 @@ def _ace_to_yaml_dict(ace_file: AceFile) -> dict:
 
                 items_list.append(item_dict)
 
-            checklist_dict = {
-                'name': checklist.name,
-                'items': items_list
-            }
+            checklist_dict = {'name': checklist.name, 'items': items_list}
             checklists_list.append(checklist_dict)
 
-        group_dict = {
-            'name': group.name,
-            'checklists': checklists_list
-        }
+        group_dict = {'name': group.name, 'checklists': checklists_list}
         groups_list.append(group_dict)
 
     yaml_dict = {
@@ -406,10 +414,11 @@ def _ace_to_yaml_dict(ace_file: AceFile) -> dict:
             'group': ace_file.default_group,
             'checklist': ace_file.default_checklist,
         },
-        'groups': groups_list
+        'groups': groups_list,
     }
 
     return yaml_dict
+
 
 def _yaml_dict_to_ace(yaml_dict: dict) -> AceFile:
     """Convert YAML dictionary to AceFile."""
@@ -442,7 +451,7 @@ def _yaml_dict_to_ace(yaml_dict: dict) -> AceFile:
                         type=item_type,
                         text=item_data.get('text', ''),
                         response=item_data.get('response', ''),
-                        justification=item_data.get('justification', 'left')
+                        justification=item_data.get('justification', 'left'),
                     )
 
                 checklist.items.append(item)
@@ -452,6 +461,7 @@ def _yaml_dict_to_ace(yaml_dict: dict) -> AceFile:
         ace_file.groups.append(group)
 
     return ace_file
+
 
 def _write_yaml_file(ace_file: AceFile, file_path: pathlib.Path) -> None:
     """Write AceFile to YAML format."""
@@ -463,8 +473,8 @@ def _write_yaml_file(ace_file: AceFile, file_path: pathlib.Path) -> None:
         f.write("# Generated by g3xchecklist.py\n")
         f.write("# Edit this file and convert back to .ace format for use with Garmin G3X\n\n")
 
-        yaml.dump(yaml_dict, f, default_flow_style=False, allow_unicode=True,
-                 sort_keys=False, indent=2)
+        yaml.dump(yaml_dict, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
+
 
 def _read_yaml_file(file_path: pathlib.Path) -> AceFile:
     """Read YAML file and convert to AceFile."""
@@ -476,9 +486,11 @@ def _read_yaml_file(file_path: pathlib.Path) -> AceFile:
 
     return _yaml_dict_to_ace(yaml_dict)
 
+
 # ================================================================
 # PUBLIC API - CONVERSION FUNCTIONS
 # ================================================================
+
 
 def ace_to_yaml(ace_path: Union[pathlib.Path, str], yaml_path: Union[pathlib.Path, str]) -> None:
     """
@@ -517,6 +529,7 @@ def ace_to_yaml(ace_path: Union[pathlib.Path, str], yaml_path: Union[pathlib.Pat
         print(f"Error converting ACE to YAML: {e}", file=sys.stderr)
         raise
 
+
 def yaml_to_ace(yaml_path: Union[pathlib.Path, str], ace_path: Union[pathlib.Path, str]) -> None:
     """
     Convert YAML file to ACE binary format.
@@ -554,14 +567,15 @@ def yaml_to_ace(yaml_path: Union[pathlib.Path, str], ace_path: Union[pathlib.Pat
         print(f"Error converting YAML to ACE: {e}", file=sys.stderr)
         raise
 
+
 def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         description='Convert Garmin G3X checklist files between binary (.ace) and YAML formats',
         epilog='Examples:\n'
-               '  %(prog)s -x checklist.ace -o checklist.yaml    # Extract ACE to YAML\n'
-               '  %(prog)s -c checklist.yaml -o checklist.ace   # Compile YAML to ACE',
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        '  %(prog)s -x checklist.ace -o checklist.yaml    # Extract ACE to YAML\n'
+        '  %(prog)s -c checklist.yaml -o checklist.ace   # Compile YAML to ACE',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     group = parser.add_mutually_exclusive_group(required=True)
@@ -596,6 +610,7 @@ def main() -> None:
             yaml_to_ace(input_file, output_file)
         except Exception:
             sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

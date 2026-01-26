@@ -48,7 +48,9 @@ class G3XLogFileData:
             raise ValueError(f"File {self.filename} is empty or has no CSV data") from e
 
         try:
-            self.airframe_info: dict[str, str] = {key: val.strip('\"') for key, val in dict(x.split('=') for x in airframe_infos[1:]).items()}
+            self.airframe_info: dict[str, str] = {
+                key: val.strip('"') for key, val in dict(x.split('=') for x in airframe_infos[1:]).items()
+            }
         except ValueError as e:
             raise ValueError(f"Invalid airframe metadata format in {self.filename}: {e}") from e
 
@@ -57,12 +59,15 @@ class G3XLogFileData:
             self.full_headers: list[str] = next(self.csv_reader)
             self.short_headers: list[str] = next(self.csv_reader)
         except StopIteration as e:
-            raise ValueError(f"File {self.filename} missing required header rows (expected 3 rows: metadata, full headers, stable keys)") from e
+            raise ValueError(
+                f"File {self.filename} missing required header rows (expected 3 rows: metadata, full headers, stable keys)"
+            ) from e
 
         return self
 
     def close(self) -> None:
         self.file.close()
+
 
 def _compare_headers(prev_file: G3XLogFileData, curr_file: G3XLogFileData) -> bool:
     """Compare headers between two G3X files and report changes"""
@@ -111,15 +116,21 @@ def _compare_headers(prev_file: G3XLogFileData, curr_file: G3XLogFileData) -> bo
             return True
     return False
 
+
 def main() -> None:
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Analyze Garmin G3X aircraft data logs looking for structure differences')
+    parser = argparse.ArgumentParser(
+        description='Analyze Garmin G3X aircraft data logs looking for structure differences'
+    )
     parser.add_argument('search_path', nargs='?', help='Path to search for log files')
     args = parser.parse_args()
 
     log_path_str = args.search_path or os.getenv('G3X_LOG_PATH')
     if not log_path_str:
-        print("Error: Logs path must be provided via G3X_LOG_PATH environment variable or command line argument", file=sys.stderr)
+        print(
+            "Error: Logs path must be provided via G3X_LOG_PATH environment variable or command line argument",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     log_path = pathlib.Path(log_path_str).resolve()
@@ -148,6 +159,7 @@ def main() -> None:
     for prev_filename, curr_filename in zip(src_logs, src_logs[1:]):
         with G3XLogFileData(prev_filename) as prev_file, G3XLogFileData(curr_filename) as curr_file:
             _compare_headers(prev_file, curr_file)
+
 
 if __name__ == "__main__":
     """ This is executed when run from the command line """

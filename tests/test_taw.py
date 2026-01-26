@@ -224,7 +224,7 @@ def test_extract_taw_skip_unknown_regions(tmp_path):
         section_size = 1 + 2 + 4 + 4 + len(region_data)
         f.write(section_size.to_bytes(4, 'little'))
         f.write(b'R')
-        f.write(b'\xFF\x00')  # Unknown region ID
+        f.write(b'\xff\x00')  # Unknown region ID
         f.write(b'\x00\x00\x00\x00')
         f.write(len(region_data).to_bytes(4, 'little'))
         f.write(region_data)
@@ -237,8 +237,7 @@ def test_extract_taw_skip_unknown_regions(tmp_path):
     output_path.mkdir()
 
     # Extract with skip_unknown_regions=True
-    results = list(taw.extract_taw(taw_file, output_path, info_only=False,
-                                    skip_unknown_regions=True, verbose=False))
+    results = list(taw.extract_taw(taw_file, output_path, info_only=False, skip_unknown_regions=True, verbose=False))
 
     # Should have no results (unknown region skipped)
     assert len(results) == 0
@@ -279,7 +278,7 @@ def test_extract_taw_include_unknown_regions(tmp_path):
         section_size = 1 + 2 + 4 + 4 + len(region_data)
         f.write(section_size.to_bytes(4, 'little'))
         f.write(b'R')
-        f.write(b'\xFF\x00')
+        f.write(b'\xff\x00')
         f.write(b'\x00\x00\x00\x00')
         f.write(len(region_data).to_bytes(4, 'little'))
         f.write(region_data)
@@ -292,8 +291,7 @@ def test_extract_taw_include_unknown_regions(tmp_path):
     output_path.mkdir()
 
     # Extract with skip_unknown_regions=False (default)
-    results = list(taw.extract_taw(taw_file, output_path, info_only=False,
-                                    skip_unknown_regions=False, verbose=False))
+    results = list(taw.extract_taw(taw_file, output_path, info_only=False, skip_unknown_regions=False, verbose=False))
 
     # Should have result with generated filename
     assert len(results) == 1

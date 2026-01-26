@@ -204,11 +204,7 @@ def test_read_device_nonexistent_file(tmp_path):
 
 def test_model_dataclass():
     """Verify Model dataclass structure."""
-    model = garmin_device.Model(
-        part_number="006-B1234-00",
-        software_version=1020,
-        description="Test Device"
-    )
+    model = garmin_device.Model(part_number="006-B1234-00", software_version=1020, description="Test Device")
 
     assert model.part_number == "006-B1234-00"
     assert model.software_version == 1020
@@ -222,7 +218,7 @@ def test_update_file_dataclass():
         version=garmin_device.Version(25, 10),
         description="Test Database",
         path=".System",
-        file_name="test.dat"
+        file_name="test.dat",
     )
 
     assert update.part_number == "006-D1234-10"
@@ -235,10 +231,7 @@ def test_update_file_dataclass():
 
 def test_update_file_optional_fields():
     """Verify UpdateFile optional fields default to None."""
-    update = garmin_device.UpdateFile(
-        part_number="006-D1234-10",
-        version=garmin_device.Version(1, 0)
-    )
+    update = garmin_device.UpdateFile(part_number="006-D1234-10", version=garmin_device.Version(1, 0))
 
     assert update.description is None
     assert update.path is None
@@ -247,10 +240,7 @@ def test_update_file_optional_fields():
 
 def test_specification_dataclass():
     """Verify Specification dataclass structure."""
-    spec = garmin_device.Specification(
-        identifier="http://example.com/spec",
-        documentation="http://example.com/docs"
-    )
+    spec = garmin_device.Specification(identifier="http://example.com/spec", documentation="http://example.com/docs")
 
     assert spec.identifier == "http://example.com/spec"
     assert spec.documentation == "http://example.com/docs"
@@ -258,11 +248,7 @@ def test_specification_dataclass():
 
 def test_location_dataclass():
     """Verify Location dataclass structure."""
-    location = garmin_device.Location(
-        file_extension="gpx",
-        path="GPX",
-        base_name="waypoints"
-    )
+    location = garmin_device.Location(file_extension="gpx", path="GPX", base_name="waypoints")
 
     assert location.path == "GPX"
     assert location.base_name == "waypoints"
@@ -274,11 +260,7 @@ def test_file_spec_dataclass():
     spec = garmin_device.Specification(identifier="GPX")
     location = garmin_device.Location(file_extension="gpx", path="GPX")
 
-    file_spec = garmin_device.FileSpec(
-        specification=spec,
-        location=location,
-        transfer_direction="InputToUnit"
-    )
+    file_spec = garmin_device.FileSpec(specification=spec, location=location, transfer_direction="InputToUnit")
 
     assert file_spec.specification.identifier == "GPX"
     assert file_spec.location.path == "GPX"
@@ -291,10 +273,7 @@ def test_data_type_dataclass():
     location = garmin_device.Location(file_extension="gpx", path="GPX")
     file_spec = garmin_device.FileSpec(spec, location, "InputToUnit")
 
-    data_type = garmin_device.DataType(
-        name="GPSData",
-        files=[file_spec]
-    )
+    data_type = garmin_device.DataType(name="GPSData", files=[file_spec])
 
     assert data_type.name == "GPSData"
     assert len(data_type.files) == 1
@@ -304,12 +283,7 @@ def test_data_type_dataclass():
 def test_device_dataclass():
     """Verify Device dataclass structure."""
     model = garmin_device.Model("006-B1234-00", 1020, "Test")
-    device = garmin_device.Device(
-        model=model,
-        device_id=3221290672,
-        data_types=[],
-        update_files=[]
-    )
+    device = garmin_device.Device(model=model, device_id=3221290672, data_types=[], update_files=[])
 
     assert device.model.part_number == "006-B1234-00"
     assert device.device_id == 3221290672

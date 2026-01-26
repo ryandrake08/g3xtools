@@ -1,55 +1,26 @@
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
 repos:
-  # Ruff - Fast Python linter
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.8.6
     hooks:
-      # Run the linter
       - id: ruff
         args: [--fix]
+      - id: ruff-format
 
-  # MyPy - Static type checking
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
+    rev: v1.14.1
     hooks:
       - id: mypy
-        files: ^(.*\.py)$
-        args: []
         additional_dependencies:
-          - types-PyYAML>=6.0.12
           - types-requests>=2.32.4
+          - types-PyYAML>=6.0.12
 
-  # Vermin - Python version compatibility checker
-  - repo: local
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.393
+    hooks:
+      - id: pyright
+
+  - repo: https://github.com/netromdk/vermin
+    rev: v1.6.0
     hooks:
       - id: vermin
-        name: vermin (Python 3.9+ compatibility)
-        entry: vermin
-        language: python
-        args:
-          - --target=3.9-
-          - --violations
-          - --eval-annotations
-          - --backport=argparse
-          - --backport=dataclasses
-          - --backport=enum
-          - --backport=typing
-          - --no-parse-comments
-        files: ^(.*\.py)$
-        exclude: ^tests/
-        additional_dependencies:
-          - vermin>=1.5
-
-  # General hooks for code quality
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-added-large-files
-        args: [--maxkb=1000]
-      - id: check-merge-conflict
-      - id: mixed-line-ending
-        args: [--fix=lf]
+        args: [--target=3.9-, --violations]

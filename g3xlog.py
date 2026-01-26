@@ -51,9 +51,16 @@ def _parse_log_metadata(log_path: pathlib.Path) -> dict[str, str]:
         ValueError: If file is not a valid G3X log or missing required metadata
     """
     required_keys = [
-        'log_version', 'log_content_version', 'product', 'aircraft_ident',
-        'unit_software_part_number', 'software_version', 'system_id', 'unit',
-        'airframe_hours', 'engine_hours'
+        'log_version',
+        'log_content_version',
+        'product',
+        'aircraft_ident',
+        'unit_software_part_number',
+        'software_version',
+        'system_id',
+        'unit',
+        'airframe_hours',
+        'engine_hours',
     ]
 
     with open(log_path) as file:
@@ -176,9 +183,7 @@ def _find_log_files(search_path: pathlib.Path) -> list[pathlib.Path]:
 
 
 def _process_logs(
-    search_path: pathlib.Path,
-    output_path: Optional[pathlib.Path] = None,
-    verbose: bool = False
+    search_path: pathlib.Path, output_path: Optional[pathlib.Path] = None, verbose: bool = False
 ) -> list[tuple[pathlib.Path, str, dict[str, str]]]:
     """
     Process all log files in search path and optionally copy to categorized directories.
@@ -217,7 +222,9 @@ def _process_logs(
 
         # Print out flight type
         if verbose:
-            print(f"{log.name}: {metadata['aircraft_ident']} {metadata['product']} {metadata['unit']} {metadata['software_version']} {flight_type}")
+            print(
+                f"{log.name}: {metadata['aircraft_ident']} {metadata['product']} {metadata['unit']} {metadata['software_version']} {flight_type}"
+            )
 
         results.append((log, flight_type, metadata))
 
@@ -228,7 +235,11 @@ def main() -> None:
     """CLI entry point."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Process and categorize Garmin G3X aircraft data logs')
-    parser.add_argument('search_path', nargs='?', help='Path to search for data_log directories. If not specified, attempts to auto-detect SD card.')
+    parser.add_argument(
+        'search_path',
+        nargs='?',
+        help='Path to search for data_log directories. If not specified, attempts to auto-detect SD card.',
+    )
     parser.add_argument('-o', '--output', help='Output directory for processed logs')
     parser.add_argument('-v', '--verbose', action='store_true', help='Output metadata information for each log file')
     args = parser.parse_args()
@@ -236,7 +247,10 @@ def main() -> None:
     # Determine search path: command line > environment > auto-detect
     mount_root_str = args.search_path or os.getenv('G3X_SEARCH_PATH') or sdcard.detect_sd_card()
     if not mount_root_str:
-        print("Error: Search path must be provided via G3X_SEARCH_PATH environment variable, command line argument, or SD card must be mounted", file=sys.stderr)
+        print(
+            "Error: Search path must be provided via G3X_SEARCH_PATH environment variable, command line argument, or SD card must be mounted",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     mount_root = pathlib.Path(mount_root_str).resolve()
@@ -250,6 +264,7 @@ def main() -> None:
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

@@ -161,14 +161,16 @@ WAYPOINT_TYPE_NDB = "NDB"
 WAYPOINT_TYPE_VOR = "VOR"
 WAYPOINT_TYPE_INT = "INT"
 WAYPOINT_TYPE_INT_VRP = "INT-VRP"
-WAYPOINT_TYPES = frozenset([
-    WAYPOINT_TYPE_USER,
-    WAYPOINT_TYPE_AIRPORT,
-    WAYPOINT_TYPE_NDB,
-    WAYPOINT_TYPE_VOR,
-    WAYPOINT_TYPE_INT,
-    WAYPOINT_TYPE_INT_VRP,
-])
+WAYPOINT_TYPES = frozenset(
+    [
+        WAYPOINT_TYPE_USER,
+        WAYPOINT_TYPE_AIRPORT,
+        WAYPOINT_TYPE_NDB,
+        WAYPOINT_TYPE_VOR,
+        WAYPOINT_TYPE_INT,
+        WAYPOINT_TYPE_INT_VRP,
+    ]
+)
 
 # Validation patterns from XSD
 IDENTIFIER_PATTERN = re.compile(r'^[A-Z0-9]{1,12}$')
@@ -194,10 +196,7 @@ def validate_identifier(identifier: str) -> None:
         ValueError: If identifier doesn't match pattern
     """
     if not IDENTIFIER_PATTERN.match(identifier):
-        raise ValueError(
-            f"Invalid identifier '{identifier}': must be 1-12 uppercase "
-            f"alphanumeric characters"
-        )
+        raise ValueError(f"Invalid identifier '{identifier}': must be 1-12 uppercase " f"alphanumeric characters")
 
 
 def validate_country_code(country_code: str) -> None:
@@ -214,8 +213,7 @@ def validate_country_code(country_code: str) -> None:
     """
     if not COUNTRY_CODE_PATTERN.match(country_code):
         raise ValueError(
-            f"Invalid country code '{country_code}': must be 2 uppercase "
-            f"alphanumeric characters or empty string"
+            f"Invalid country code '{country_code}': must be 2 uppercase " f"alphanumeric characters or empty string"
         )
 
 
@@ -270,9 +268,7 @@ def validate_latitude(lat: float) -> None:
         ValueError: If latitude is out of range
     """
     if not -90.0 <= lat <= 90.0:
-        raise ValueError(
-            f"Invalid latitude {lat}: must be between -90.0 and 90.0"
-        )
+        raise ValueError(f"Invalid latitude {lat}: must be between -90.0 and 90.0")
 
 
 def validate_longitude(lon: float) -> None:
@@ -288,9 +284,7 @@ def validate_longitude(lon: float) -> None:
         ValueError: If longitude is out of range
     """
     if not -180.0 <= lon <= 180.0:
-        raise ValueError(
-            f"Invalid longitude {lon}: must be between -180.0 and 180.0"
-        )
+        raise ValueError(f"Invalid longitude {lon}: must be between -180.0 and 180.0")
 
 
 def validate_flight_plan_index(index: int) -> None:
@@ -306,9 +300,7 @@ def validate_flight_plan_index(index: int) -> None:
         ValueError: If index is out of range
     """
     if not 1 <= index <= 98:
-        raise ValueError(
-            f"Invalid flight plan index {index}: must be between 1 and 98"
-        )
+        raise ValueError(f"Invalid flight plan index {index}: must be between 1 and 98")
 
 
 def validate_waypoint_type(waypoint_type: str) -> None:
@@ -325,8 +317,7 @@ def validate_waypoint_type(waypoint_type: str) -> None:
     """
     if waypoint_type not in WAYPOINT_TYPES:
         raise ValueError(
-            f"Invalid waypoint type '{waypoint_type}': must be one of "
-            f"{', '.join(sorted(WAYPOINT_TYPES))}"
+            f"Invalid waypoint type '{waypoint_type}': must be one of " f"{', '.join(sorted(WAYPOINT_TYPES))}"
         )
 
 
@@ -340,6 +331,7 @@ class Email:
         id: The id part of the email (e.g., "billgates2004")
         domain: The domain part of the email (e.g., "hotmail.com")
     """
+
     id: str
     domain: str
 
@@ -354,6 +346,7 @@ class Person:
         email: The author's email address
         link: A link to more information (anyURI)
     """
+
     author_name: Optional[str] = None
     email: Optional[Email] = None
     link: Optional[str] = None
@@ -376,6 +369,7 @@ class Waypoint:
         symbol: Waypoint symbol name
         extensions: Extensions element for additional data
     """
+
     identifier: str
     type: str
     country_code: str
@@ -399,6 +393,7 @@ class RoutePoint:
         waypoint_country_code: Country code of the waypoint
         extensions: Extensions element for additional data
     """
+
     waypoint_identifier: str
     waypoint_type: str
     waypoint_country_code: str
@@ -417,6 +412,7 @@ class Route:
         route_description: Description (reference only, ignored by device)
         extensions: Extensions element for additional data
     """
+
     route_name: str
     flight_plan_index: int
     route_points: list[RoutePoint]
@@ -438,6 +434,7 @@ class FlightPlan:
         link: A link to more information (anyURI)
         extensions: Extensions element for additional data
     """
+
     waypoint_table: list[Waypoint]
     created: Optional[datetime] = None
     route: Optional[Route] = None
@@ -448,6 +445,7 @@ class FlightPlan:
 
 
 # XML Reading (Deserialization)
+
 
 def _ns(tag: str) -> str:
     """
@@ -657,9 +655,7 @@ def _parse_route(elem: ET.Element, validate: bool) -> Route:
         validate_route_name(route_name)
         validate_flight_plan_index(flight_plan_index)
         if len(route_points) > 300:
-            raise ValueError(
-                f"Too many route points: {len(route_points)} (max 300)"
-            )
+            raise ValueError(f"Too many route points: {len(route_points)} (max 300)")
 
     return Route(
         route_name=route_name,
@@ -696,9 +692,7 @@ def _parse_flight_plan(root: ET.Element, validate: bool) -> FlightPlan:
         # Validate timezone is UTC
         utc_offset = created.utcoffset()
         if created.tzinfo is None or utc_offset is None or utc_offset.total_seconds() != 0:
-            raise ValueError(
-                f"Timestamp must be in UTC timezone, got: {created_str}"
-            )
+            raise ValueError(f"Timestamp must be in UTC timezone, got: {created_str}")
 
     # Parse author
     author_elem = root.find(_ns("author"))
@@ -724,9 +718,7 @@ def _parse_flight_plan(root: ET.Element, validate: bool) -> FlightPlan:
         if len(waypoints) == 0:
             raise ValueError("Waypoint table must contain at least one waypoint")
         if len(waypoints) > 3000:
-            raise ValueError(
-                f"Too many waypoints: {len(waypoints)} (max 3000)"
-            )
+            raise ValueError(f"Too many waypoints: {len(waypoints)} (max 3000)")
 
     return FlightPlan(
         waypoint_table=waypoints,
@@ -767,6 +759,7 @@ def read_fpl(file_path: pathlib.Path, validate: bool = True) -> FlightPlan:
 
 
 # XML Writing (Serialization)
+
 
 def _add_optional_text(parent: ET.Element, tag: str, value: Optional[str]) -> None:
     """
@@ -912,9 +905,7 @@ def _create_route_elem(route: Route, validate: bool) -> ET.Element:
         validate_route_name(route.route_name)
         validate_flight_plan_index(route.flight_plan_index)
         if len(route.route_points) > 300:
-            raise ValueError(
-                f"Too many route points: {len(route.route_points)} (max 300)"
-            )
+            raise ValueError(f"Too many route points: {len(route.route_points)} (max 300)")
 
     elem = ET.Element("route")
     ET.SubElement(elem, "route-name").text = route.route_name
@@ -948,9 +939,7 @@ def _create_flight_plan_elem(flight_plan: FlightPlan, validate: bool) -> ET.Elem
         if len(flight_plan.waypoint_table) == 0:
             raise ValueError("Waypoint table must contain at least one waypoint")
         if len(flight_plan.waypoint_table) > 3000:
-            raise ValueError(
-                f"Too many waypoints: {len(flight_plan.waypoint_table)} (max 3000)"
-            )
+            raise ValueError(f"Too many waypoints: {len(flight_plan.waypoint_table)} (max 3000)")
 
     elem = ET.Element("flight-plan")
     elem.set("xmlns", _FPL_NAMESPACE)
@@ -967,9 +956,7 @@ def _create_flight_plan_elem(flight_plan: FlightPlan, validate: bool) -> ET.Elem
         if validate:
             utc_offset = flight_plan.created.utcoffset()
             if flight_plan.created.tzinfo is None or utc_offset is None or utc_offset.total_seconds() != 0:
-                raise ValueError(
-                    f"Timestamp must be in UTC timezone, got offset: {flight_plan.created.utcoffset()}"
-                )
+                raise ValueError(f"Timestamp must be in UTC timezone, got offset: {flight_plan.created.utcoffset()}")
         created_str = flight_plan.created.isoformat().replace('+00:00', 'Z')
         ET.SubElement(elem, "created").text = created_str
 
@@ -988,12 +975,7 @@ def _create_flight_plan_elem(flight_plan: FlightPlan, validate: bool) -> ET.Elem
     return elem
 
 
-def write_fpl(
-    flight_plan: FlightPlan,
-    file_path: pathlib.Path,
-    validate: bool = True,
-    pretty: bool = True
-) -> None:
+def write_fpl(flight_plan: FlightPlan, file_path: pathlib.Path, validate: bool = True, pretty: bool = True) -> None:
     """
     Write a FlightPlan dataclass to a Garmin FPL file.
 
@@ -1029,6 +1011,7 @@ def write_fpl(
 
 
 # Helper Functions and Utilities
+
 
 def create_waypoint(
     identifier: str,
@@ -1196,8 +1179,7 @@ def create_flight_plan_from_route_list(
 
     # Create route references
     route_refs = [
-        (identifier, waypoint_type, country_code)
-        for identifier, _, _, waypoint_type, country_code in route_waypoints
+        (identifier, waypoint_type, country_code) for identifier, _, _, waypoint_type, country_code in route_waypoints
     ]
 
     # Generate route name if not provided
@@ -1216,12 +1198,7 @@ def create_flight_plan_from_route_list(
     return create_flight_plan(waypoints, route, created)
 
 
-def get_waypoint(
-    flight_plan: FlightPlan,
-    identifier: str,
-    waypoint_type: str,
-    country_code: str
-) -> Optional[Waypoint]:
+def get_waypoint(flight_plan: FlightPlan, identifier: str, waypoint_type: str, country_code: str) -> Optional[Waypoint]:
     """
     Find a waypoint in the flight plan by its key.
 
@@ -1240,9 +1217,11 @@ def get_waypoint(
         >>> wp = get_waypoint(fp, "KBLU", WAYPOINT_TYPE_AIRPORT, "K2")
     """
     for waypoint in flight_plan.waypoint_table:
-        if (waypoint.identifier == identifier and
-            waypoint.type == waypoint_type and
-            waypoint.country_code == country_code):
+        if (
+            waypoint.identifier == identifier
+            and waypoint.type == waypoint_type
+            and waypoint.country_code == country_code
+        ):
             return waypoint
     return None
 
@@ -1271,9 +1250,7 @@ def validate_flight_plan(flight_plan: FlightPlan) -> None:
     if len(flight_plan.waypoint_table) == 0:
         raise ValueError("Waypoint table must contain at least one waypoint")
     if len(flight_plan.waypoint_table) > 3000:
-        raise ValueError(
-            f"Too many waypoints: {len(flight_plan.waypoint_table)} (max 3000)"
-        )
+        raise ValueError(f"Too many waypoints: {len(flight_plan.waypoint_table)} (max 3000)")
 
     # Build waypoint lookup cache for O(1) lookups (composite key: identifier, type, country_code)
     waypoint_cache = {}
@@ -1291,9 +1268,7 @@ def validate_flight_plan(flight_plan: FlightPlan) -> None:
         # Check for duplicate waypoints (XSD composite key uniqueness)
         waypoint_key = (waypoint.identifier, waypoint.type, waypoint.country_code)
         if waypoint_key in seen_waypoints:
-            raise ValueError(
-                f"Duplicate waypoint: {waypoint.identifier}/{waypoint.type}/{waypoint.country_code}"
-            )
+            raise ValueError(f"Duplicate waypoint: {waypoint.identifier}/{waypoint.type}/{waypoint.country_code}")
         seen_waypoints.add(waypoint_key)
         waypoint_cache[waypoint_key] = waypoint
 
@@ -1303,9 +1278,7 @@ def validate_flight_plan(flight_plan: FlightPlan) -> None:
         validate_flight_plan_index(flight_plan.route.flight_plan_index)
 
         if len(flight_plan.route.route_points) > 300:
-            raise ValueError(
-                f"Too many route points: {len(flight_plan.route.route_points)} (max 300)"
-            )
+            raise ValueError(f"Too many route points: {len(flight_plan.route.route_points)} (max 300)")
 
         # Validate key/keyref constraint: route points must reference waypoints
         # Uses O(1) cache lookup instead of O(n) linear search

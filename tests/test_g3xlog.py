@@ -43,11 +43,7 @@ def test_parse_log_metadata_valid(tmp_path):
 def test_parse_log_metadata_missing_required_keys(tmp_path):
     """Reject log file missing required metadata keys."""
     log_file = tmp_path / "log_test.csv"
-    log_file.write_text(
-        '#airframe_info,log_version="1",product="G3X Touch"\n'
-        'Lcl Date,Lcl Time\n'
-        'Date,Time\n'
-    )
+    log_file.write_text('#airframe_info,log_version="1",product="G3X Touch"\n' 'Lcl Date,Lcl Time\n' 'Date,Time\n')
 
     with pytest.raises(ValueError, match="Missing required metadata"):
         g3xlog._parse_log_metadata(log_file)

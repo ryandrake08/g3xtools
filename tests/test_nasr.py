@@ -143,7 +143,7 @@ def test_load_nasr_database_valid(tmp_path, monkeypatch):
         'connections': {
             0: [(1, 0)],
             1: [(0, 0)],
-        }
+        },
     }
 
     with open(db_path, 'wb') as f:
@@ -356,7 +356,9 @@ def test_write_msgpack_file_creates_database(tmp_path, monkeypatch):
         inner_zip_buffer = io.BytesIO()
         with zipfile.ZipFile(inner_zip_buffer, 'w') as inner_zip:
             # Add minimal CSV files
-            apt_csv = 'ARPT_ID,SITE_TYPE_CODE,LAT_DECIMAL,LONG_DECIMAL,COUNTRY_CODE,ICAO_ID\nKTEST,A,40.0,-120.0,US,KTEST\n'
+            apt_csv = (
+                'ARPT_ID,SITE_TYPE_CODE,LAT_DECIMAL,LONG_DECIMAL,COUNTRY_CODE,ICAO_ID\nKTEST,A,40.0,-120.0,US,KTEST\n'
+            )
             fix_csv = 'FIX_ID,FIX_USE_CODE,LAT_DECIMAL,LONG_DECIMAL,COUNTRY_CODE\nFXTEST,RNAV,40.5,-120.5,US\n'
             nav_csv = 'NAV_ID,NAV_TYPE,LAT_DECIMAL,LONG_DECIMAL,COUNTRY_CODE\nVTEST,VOR,41.0,-121.0,US\n'
             awy_csv = 'AWY_ID,AWY_LOCATION,AWY_DESIGNATION\nV999,US,V\n'
@@ -420,7 +422,10 @@ def test_write_msgpack_file_empty_data(tmp_path):
             inner_zip.writestr('FIX_BASE.csv', 'FIX_ID,FIX_USE_CODE,LAT_DECIMAL,LONG_DECIMAL,COUNTRY_CODE\n')
             inner_zip.writestr('NAV_BASE.csv', 'NAV_ID,NAV_TYPE,LAT_DECIMAL,LONG_DECIMAL,COUNTRY_CODE\n')
             inner_zip.writestr('AWY_BASE.csv', 'AWY_ID,AWY_LOCATION,AWY_DESIGNATION\n')
-            inner_zip.writestr('AWY_SEG_ALT.csv', 'AWY_ID,AWY_LOCATION,FROM_POINT,FROM_PT_TYPE,TO_POINT,COUNTRY_CODE,AWY_SEG_GAP_FLAG\n')
+            inner_zip.writestr(
+                'AWY_SEG_ALT.csv',
+                'AWY_ID,AWY_LOCATION,FROM_POINT,FROM_PT_TYPE,TO_POINT,COUNTRY_CODE,AWY_SEG_GAP_FLAG\n',
+            )
 
         outer_zip.writestr('CSV_Data/nasr.zip', inner_zip_buffer.getvalue())
 

@@ -54,6 +54,7 @@ _API_TIMEOUT = 30  # seconds
 _session = requests.Session()
 del _session.headers['User-Agent']  # Garmin API accepts requests without User-Agent
 
+
 def flygarmin_list_aircraft(access_token: str) -> list:
     """
     List all aircraft registered to the user.
@@ -87,6 +88,7 @@ def flygarmin_list_aircraft(access_token: str) -> list:
     result: list = resp.json()
     return result
 
+
 def flygarmin_list_series(series_id: int) -> dict:
     """
     Get information about a specific database series.
@@ -111,6 +113,7 @@ def flygarmin_list_series(series_id: int) -> dict:
         raise ValueError(f"Expected JSON response, got Content-Type: {resp.headers.get('Content-Type')}")
     result: dict = resp.json()
     return result
+
 
 def flygarmin_list_files(series_id: int, issue_name: str) -> dict:
     """
@@ -138,6 +141,7 @@ def flygarmin_list_files(series_id: int, issue_name: str) -> dict:
     result: dict = resp.json()
     return result
 
+
 def flygarmin_unlock(access_token: str, series_id: int, issue_name: str, device_id: int, card_serial: int) -> dict:
     """
     Get unlock codes for downloading files to a specific device and SD card.
@@ -156,7 +160,9 @@ def flygarmin_unlock(access_token: str, series_id: int, issue_name: str, device_
         requests.HTTPError: If API request fails
         ValueError: If response is not JSON
     """
-    print(f"[flygarmin] Getting unlock code for series {series_id}, issue {issue_name} for installtaion on device {device_id}, sdcard {card_serial:08X}, using access token {access_token}")
+    print(
+        f"[flygarmin] Getting unlock code for series {series_id}, issue {issue_name} for installtaion on device {device_id}, sdcard {card_serial:08X}, using access token {access_token}"
+    )
     resp = _session.get(
         f"{_API_PREFIX}/avdb-series/{series_id}/{issue_name}/unlock/",
         params={
@@ -174,12 +180,15 @@ def flygarmin_unlock(access_token: str, series_id: int, issue_name: str, device_
     result: dict = resp.json()
     return result
 
+
 def main() -> None:
     """Simple test interface for the Garmin API functions."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Test Garmin API functions')
     parser.add_argument('-T', '--access-token', help='Specify flygarmin access token')
-    parser.add_argument('-t', '--test', choices=['aircraft', 'series', 'files', 'unlock'], help='Test a specific API function')
+    parser.add_argument(
+        '-t', '--test', choices=['aircraft', 'series', 'files', 'unlock'], help='Test a specific API function'
+    )
     parser.add_argument('--series-id', type=int, help='Series ID for testing')
     parser.add_argument('--issue-name', help='Issue name for testing')
     parser.add_argument('--device-id', type=int, help='Device ID for testing')
@@ -206,14 +215,20 @@ def main() -> None:
         print(json.dumps(files_result, indent=2))
     elif args.test == 'unlock':
         if not all([args.series_id, args.issue_name, args.device_id, args.card_serial]):
-            print("Error: --series-id, --issue-name, --device-id, and --card-serial required for unlock test", file=sys.stderr)
+            print(
+                "Error: --series-id, --issue-name, --device-id, and --card-serial required for unlock test",
+                file=sys.stderr,
+            )
             sys.exit(1)
-        unlock_result = flygarmin_unlock(access_token, args.series_id, args.issue_name, args.device_id, args.card_serial)
+        unlock_result = flygarmin_unlock(
+            access_token, args.series_id, args.issue_name, args.device_id, args.card_serial
+        )
         print(json.dumps(unlock_result, indent=2))
     elif access_token:
         print("Access token obtained successfully:", access_token)
     else:
         print("Failed to obtain access token")
+
 
 if __name__ == "__main__":
     main()

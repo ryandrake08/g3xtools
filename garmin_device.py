@@ -78,6 +78,7 @@ __all__ = [
 _DEVICE_NAMESPACE = "http://www.garmin.com/xmlschemas/GarminDevice/v2"
 _DEVICE_EXT_NAMESPACE = "http://www.garmin.com/xmlschemas/GarminDeviceExtensions/v1"
 
+
 # Dataclasses
 @dataclass
 class Model:
@@ -89,6 +90,7 @@ class Model:
         software_version: Software version as integer (e.g., 952 displays as v9.52)
         description: Human-readable device description (e.g., "GDU 460")
     """
+
     part_number: str
     software_version: int
     description: str
@@ -103,6 +105,7 @@ class Version:
         major: Major version number
         minor: Minor version number
     """
+
     major: int
     minor: int
 
@@ -119,6 +122,7 @@ class UpdateFile:
         path: Installation path on device (e.g., ".System")
         file_name: File name (e.g., "gmapbmap.img")
     """
+
     part_number: str
     version: Version
     description: Optional[str] = None
@@ -135,6 +139,7 @@ class Specification:
         identifier: Format identifier (optional, e.g., "http://www.topografix.com/GPX/1/1" or "IMG")
         documentation: URL to format documentation (optional)
     """
+
     identifier: Optional[str] = None
     documentation: Optional[str] = None
 
@@ -149,6 +154,7 @@ class Location:
         path: Directory path (optional, e.g., "GPX", ".System")
         base_name: Base file name without extension (optional)
     """
+
     file_extension: str
     path: Optional[str] = None
     base_name: Optional[str] = None
@@ -164,6 +170,7 @@ class FileSpec:
         location: File location on device
         transfer_direction: Transfer direction ("InputToUnit", "OutputFromUnit", "InputOutput")
     """
+
     specification: Specification
     location: Location
     transfer_direction: str
@@ -178,6 +185,7 @@ class DataType:
         name: Data type name (e.g., "GPSData", "BaseMaps", "Voices")
         files: List of file specifications for this data type
     """
+
     name: str
     files: list[FileSpec]
 
@@ -194,6 +202,7 @@ class Device:
         update_files: List of installed update files
         extensions: Extension data (optional)
     """
+
     model: Model
     device_id: int
     data_types: list[DataType]
@@ -202,6 +211,7 @@ class Device:
 
 
 # XML Parsing (Deserialization)
+
 
 def _get_text(element: Optional[ET.Element], default: str = "") -> str:
     """
@@ -247,11 +257,7 @@ def _parse_model(model_elem: ET.Element, ns: str) -> Model:
     if not description:
         raise ValueError("Model XML missing required Description element")
 
-    return Model(
-        part_number=part_number,
-        software_version=software_version,
-        description=description
-    )
+    return Model(part_number=part_number, software_version=software_version, description=description)
 
 
 def _parse_version(version_elem: ET.Element, ns: str) -> Version:
@@ -279,10 +285,7 @@ def _parse_version(version_elem: ET.Element, ns: str) -> Version:
     except ValueError as e:
         raise ValueError(f"Version Major/Minor must be valid integers: {e}") from e
 
-    return Version(
-        major=major,
-        minor=minor
-    )
+    return Version(major=major, minor=minor)
 
 
 def _parse_specification(spec_elem: ET.Element, ns: str) -> Specification:
@@ -299,10 +302,7 @@ def _parse_specification(spec_elem: ET.Element, ns: str) -> Specification:
     identifier = _get_text(spec_elem.find(f"{ns}Identifier"))
     documentation = _get_text(spec_elem.find(f"{ns}Documentation")) or None
 
-    return Specification(
-        identifier=identifier,
-        documentation=documentation
-    )
+    return Specification(identifier=identifier, documentation=documentation)
 
 
 def _parse_location(loc_elem: ET.Element, ns: str) -> Location:
@@ -323,11 +323,7 @@ def _parse_location(loc_elem: ET.Element, ns: str) -> Location:
     path = _get_text(loc_elem.find(f"{ns}Path")) or None
     base_name = _get_text(loc_elem.find(f"{ns}BaseName")) or None
 
-    return Location(
-        file_extension=file_extension,
-        path=path,
-        base_name=base_name
-    )
+    return Location(file_extension=file_extension, path=path, base_name=base_name)
 
 
 def _parse_file_spec(file_elem: ET.Element, ns: str) -> FileSpec:
@@ -355,11 +351,7 @@ def _parse_file_spec(file_elem: ET.Element, ns: str) -> FileSpec:
     if not transfer_direction:
         raise ValueError("File XML missing required TransferDirection element")
 
-    return FileSpec(
-        specification=specification,
-        location=location,
-        transfer_direction=transfer_direction
-    )
+    return FileSpec(specification=specification, location=location, transfer_direction=transfer_direction)
 
 
 def _parse_data_type(dt_elem: ET.Element, ns: str) -> DataType:
@@ -381,10 +373,7 @@ def _parse_data_type(dt_elem: ET.Element, ns: str) -> DataType:
     if not files:
         raise ValueError(f"DataType '{name}' must have at least one File element")
 
-    return DataType(
-        name=name,
-        files=files
-    )
+    return DataType(name=name, files=files)
 
 
 def _parse_update_file(uf_elem: ET.Element, ns: str) -> UpdateFile:
@@ -411,13 +400,7 @@ def _parse_update_file(uf_elem: ET.Element, ns: str) -> UpdateFile:
     path = _get_text(uf_elem.find(f"{ns}Path")) or None
     file_name = _get_text(uf_elem.find(f"{ns}FileName")) or None
 
-    return UpdateFile(
-        part_number=part_number,
-        version=version,
-        description=description,
-        path=path,
-        file_name=file_name
-    )
+    return UpdateFile(part_number=part_number, version=version, description=description, path=path, file_name=file_name)
 
 
 def _parse_device(root: ET.Element) -> Device:
@@ -466,11 +449,7 @@ def _parse_device(root: ET.Element) -> Device:
     extensions = extensions_elem if extensions_elem is not None else None
 
     return Device(
-        model=model,
-        device_id=device_id,
-        data_types=data_types,
-        update_files=update_files,
-        extensions=extensions
+        model=model, device_id=device_id, data_types=data_types, update_files=update_files, extensions=extensions
     )
 
 
@@ -527,9 +506,17 @@ def get_system_serial(file_path: pathlib.Path) -> Optional[int]:
 def main() -> None:
     """Command-line interface for reading GarminDevice.xml files."""
     parser = argparse.ArgumentParser(description='Read and display information from GarminDevice.xml files')
-    parser.add_argument('file', nargs='?', help='Path to GarminDevice.xml file. If not specified, attempts to auto-detect SD card and use Garmin/GarminDevice.xml')
-    parser.add_argument('-s', '--system-serial', action='store_true', help='Extract and display system serial number only')
-    parser.add_argument('-u', '--updates', action='store_true', help='List installed update files (databases, software)')
+    parser.add_argument(
+        'file',
+        nargs='?',
+        help='Path to GarminDevice.xml file. If not specified, attempts to auto-detect SD card and use Garmin/GarminDevice.xml',
+    )
+    parser.add_argument(
+        '-s', '--system-serial', action='store_true', help='Extract and display system serial number only'
+    )
+    parser.add_argument(
+        '-u', '--updates', action='store_true', help='List installed update files (databases, software)'
+    )
     parser.add_argument('-d', '--data-types', action='store_true', help='List supported data types and file formats')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show all available information')
     args = parser.parse_args()

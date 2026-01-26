@@ -52,9 +52,9 @@ __all__ = [
 _SSO_CLIENT_ID = "FLY_GARMIN_DESKTOP"
 _OAUTH_TOKEN_URL = "https://services.garmin.com/api/oauth/token"
 
+
 class _GarminHandler(http.server.BaseHTTPRequestHandler):
-    def handle_credentials(self, auth: dict[str, str]) -> None:
-        ...
+    def handle_credentials(self, auth: dict[str, str]) -> None: ...
 
     def do_GET(self) -> None:
         path = urllib.parse.urlsplit(self.path, scheme="http", allow_fragments=False).path
@@ -119,6 +119,7 @@ class _GarminHandler(http.server.BaseHTTPRequestHandler):
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
+
 def flygarmin_login() -> dict[str, Any]:
     """Perform OAuth login flow and return json containing credentials and other data."""
     data: dict[str, Any] = {}
@@ -144,10 +145,12 @@ def flygarmin_login() -> dict[str, Any]:
     # Return the authentication record
     return data
 
+
 def main() -> None:
     # Obtain the access token and print it to stdout
     access_token = flygarmin_login()
     print(access_token)
+
 
 if __name__ == "__main__":
     main()

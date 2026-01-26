@@ -26,7 +26,7 @@ def test_unix_vsn_valid_fat32(tmp_path):
     boot_sector = bytearray(512)
 
     # FAT32 signature at offset 82
-    boot_sector[82:82+8] = b'FAT32   '
+    boot_sector[82 : 82 + 8] = b'FAT32   '
 
     # Volume serial number at offset 67 (4 bytes little-endian)
     # Example: 0x12345678
@@ -45,7 +45,7 @@ def test_unix_vsn_invalid_signature(tmp_path):
 
     # Boot sector with wrong signature
     boot_sector = bytearray(512)
-    boot_sector[82:82+8] = b'NOTFAT32'
+    boot_sector[82 : 82 + 8] = b'NOTFAT32'
     boot_sector[67:71] = (0x12345678).to_bytes(4, 'little')
 
     device_file.write_bytes(boot_sector)
@@ -113,8 +113,10 @@ def test_windows_vsn_error_handling():
     mock_win32 = mock.Mock()
     mock_win32.GetVolumeInformation.side_effect = OSError("Device not ready")
 
-    with mock.patch.dict('sys.modules', {'win32api': mock_win32}), \
-         pytest.raises(OSError, match="Error accessing drive"):
+    with (
+        mock.patch.dict('sys.modules', {'win32api': mock_win32}),
+        pytest.raises(OSError, match="Error accessing drive"),
+    ):
         sdcard._windows_vsn('D:')
 
 
@@ -124,7 +126,7 @@ def test_read_vsn_unix_platform(tmp_path):
 
     # Create valid FAT32 boot sector
     boot_sector = bytearray(512)
-    boot_sector[82:82+8] = b'FAT32   '
+    boot_sector[82 : 82 + 8] = b'FAT32   '
     boot_sector[67:71] = (0x87654321).to_bytes(4, 'little')
     device_file.write_bytes(boot_sector)
 
@@ -144,8 +146,7 @@ def test_read_vsn_windows_platform():
     mock_win32 = mock.Mock()
     mock_win32.GetVolumeInformation.return_value = mock_volume_info
 
-    with mock.patch('sys.platform', 'win32'), \
-         mock.patch.dict('sys.modules', {'win32api': mock_win32}):
+    with mock.patch('sys.platform', 'win32'), mock.patch.dict('sys.modules', {'win32api': mock_win32}):
         vsn = sdcard.read_vsn('D:')
         assert vsn == 0x11223344
 
@@ -167,8 +168,7 @@ def test_get_platform_device_example():
 
 def test_detect_sd_card_no_psutil():
     """Handle missing psutil library gracefully."""
-    with mock.patch.dict('sys.modules', {'psutil': None}), \
-         mock.patch('builtins.__import__', side_effect=ImportError):
+    with mock.patch.dict('sys.modules', {'psutil': None}), mock.patch('builtins.__import__', side_effect=ImportError):
         result = sdcard.detect_sd_card()
         assert result == ""
 
@@ -185,9 +185,10 @@ def test_detect_sd_card_single_candidate():
     mock_partition.mountpoint = '/media/sdcard'
     mock_partition.fstype = 'fat32'
 
-    with mock.patch('psutil.disk_partitions', return_value=[mock_partition]), \
-         mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):  # 16 GB
-
+    with (
+        mock.patch('psutil.disk_partitions', return_value=[mock_partition]),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):  # 16 GB
         result = sdcard.detect_sd_card()
         assert result == '/media/sdcard'
 
@@ -214,9 +215,10 @@ def test_detect_sd_card_multiple_candidates():
         else:
             return (16 * 1024**3, 0, 0)  # 16 GB
 
-    with mock.patch('psutil.disk_partitions', return_value=[mock_partition1, mock_partition2]), \
-         mock.patch('shutil.disk_usage', side_effect=mock_disk_usage):
-
+    with (
+        mock.patch('psutil.disk_partitions', return_value=[mock_partition1, mock_partition2]),
+        mock.patch('shutil.disk_usage', side_effect=mock_disk_usage),
+    ):
         result = sdcard.detect_sd_card()
         # Should prefer smaller (16 GB)
         assert result == '/media/sdcard2'
@@ -238,10 +240,11 @@ def test_detect_sd_card_filter_system_partitions_mac():
     sd_partition.mountpoint = '/Volumes/SDCARD'
     sd_partition.fstype = 'msdos'
 
-    with mock.patch('sys.platform', 'darwin'), \
-         mock.patch('psutil.disk_partitions', return_value=[system_partition, sd_partition]), \
-         mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):
-
+    with (
+        mock.patch('sys.platform', 'darwin'),
+        mock.patch('psutil.disk_partitions', return_value=[system_partition, sd_partition]),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):
         result = sdcard.detect_sd_card()
         assert result == '/Volumes/SDCARD'
 
@@ -262,9 +265,10 @@ def test_detect_sd_card_filter_by_filesystem():
     fat32_partition.mountpoint = '/media/sdcard'
     fat32_partition.fstype = 'fat32'
 
-    with mock.patch('psutil.disk_partitions', return_value=[ntfs_partition, fat32_partition]), \
-         mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):
-
+    with (
+        mock.patch('psutil.disk_partitions', return_value=[ntfs_partition, fat32_partition]),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):
         result = sdcard.detect_sd_card()
         # Should only return FAT32
         assert result == '/media/sdcard'
@@ -298,9 +302,10 @@ def test_detect_sd_card_filter_by_size():
         else:
             return (16 * 1024**3, 0, 0)  # 16 GB - just right
 
-    with mock.patch('psutil.disk_partitions', return_value=[too_small, just_right, too_large]), \
-         mock.patch('shutil.disk_usage', side_effect=mock_disk_usage):
-
+    with (
+        mock.patch('psutil.disk_partitions', return_value=[too_small, just_right, too_large]),
+        mock.patch('shutil.disk_usage', side_effect=mock_disk_usage),
+    ):
         result = sdcard.detect_sd_card()
         assert result == '/media/sdcard'
 
@@ -317,9 +322,10 @@ def test_detect_sd_card_no_candidates():
     mock_partition.mountpoint = '/media/usb'
     mock_partition.fstype = 'ntfs'  # Not FAT32
 
-    with mock.patch('psutil.disk_partitions', return_value=[mock_partition]), \
-         mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):
-
+    with (
+        mock.patch('psutil.disk_partitions', return_value=[mock_partition]),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):
         result = sdcard.detect_sd_card()
         assert result == ""
 
@@ -335,8 +341,7 @@ def test_get_mount_point_darwin():
    Mount Point:              /Volumes/GARMIN
    Volume Name:              GARMIN
 """
-    with mock.patch('sys.platform', 'darwin'), \
-         mock.patch('subprocess.run') as mock_run:
+    with mock.patch('sys.platform', 'darwin'), mock.patch('subprocess.run') as mock_run:
         mock_run.return_value = mock.Mock(returncode=0, stdout=mock_output)
 
         result = sdcard._get_mount_point('/dev/disk2s1')
@@ -348,8 +353,7 @@ def test_get_mount_point_darwin():
 
 def test_get_mount_point_linux():
     """Get mount point from device on Linux."""
-    with mock.patch('sys.platform', 'linux'), \
-         mock.patch('subprocess.run') as mock_run:
+    with mock.patch('sys.platform', 'linux'), mock.patch('subprocess.run') as mock_run:
         mock_run.return_value = mock.Mock(returncode=0, stdout='/media/sdcard\n')
 
         result = sdcard._get_mount_point('/dev/sdb1')
@@ -373,8 +377,7 @@ def test_get_mount_point_not_mounted():
    Device Identifier:        disk2s1
    Mount Point:              Not applicable (no file system)
 """
-    with mock.patch('sys.platform', 'darwin'), \
-         mock.patch('subprocess.run') as mock_run:
+    with mock.patch('sys.platform', 'darwin'), mock.patch('subprocess.run') as mock_run:
         mock_run.return_value = mock.Mock(returncode=0, stdout=mock_output)
 
         result = sdcard._get_mount_point('/dev/disk2s1')
@@ -384,9 +387,7 @@ def test_get_mount_point_not_mounted():
 
 def test_get_mount_point_error():
     """Return empty string on error."""
-    with mock.patch('sys.platform', 'darwin'), \
-         mock.patch('subprocess.run', side_effect=OSError("Command failed")):
-
+    with mock.patch('sys.platform', 'darwin'), mock.patch('subprocess.run', side_effect=OSError("Command failed")):
         result = sdcard._get_mount_point('/dev/disk2s1')
 
         assert result == ''
@@ -398,8 +399,7 @@ def test_get_volume_label_darwin():
    Device Identifier:        disk2s1
    Volume Name:              GARMIN
 """
-    with mock.patch('sys.platform', 'darwin'), \
-         mock.patch('subprocess.run') as mock_run:
+    with mock.patch('sys.platform', 'darwin'), mock.patch('subprocess.run') as mock_run:
         mock_run.return_value = mock.Mock(returncode=0, stdout=mock_output)
 
         result = sdcard._get_volume_label('/Volumes/GARMIN')
@@ -409,8 +409,7 @@ def test_get_volume_label_darwin():
 
 def test_get_volume_label_linux():
     """Get volume label on Linux."""
-    with mock.patch('sys.platform', 'linux'), \
-         mock.patch('subprocess.run') as mock_run:
+    with mock.patch('sys.platform', 'linux'), mock.patch('subprocess.run') as mock_run:
         mock_run.return_value = mock.Mock(returncode=0, stdout='SDCARD\n')
 
         result = sdcard._get_volume_label('/media/sdcard')
@@ -422,13 +421,9 @@ def test_get_volume_label_linux():
 
 def test_get_volume_label_linux_fallback():
     """Use findmnt as fallback on Linux."""
-    with mock.patch('sys.platform', 'linux'), \
-         mock.patch('subprocess.run') as mock_run:
+    with mock.patch('sys.platform', 'linux'), mock.patch('subprocess.run') as mock_run:
         # lsblk fails, findmnt succeeds
-        mock_run.side_effect = [
-            mock.Mock(returncode=1, stdout=''),
-            mock.Mock(returncode=0, stdout='SDCARD\n')
-        ]
+        mock_run.side_effect = [mock.Mock(returncode=1, stdout=''), mock.Mock(returncode=0, stdout='SDCARD\n')]
 
         result = sdcard._get_volume_label('/media/sdcard')
 
@@ -441,8 +436,7 @@ def test_get_volume_label_windows():
     mock_output = """Label
 SDCARD
 """
-    with mock.patch('sys.platform', 'win32'), \
-         mock.patch('subprocess.run') as mock_run:
+    with mock.patch('sys.platform', 'win32'), mock.patch('subprocess.run') as mock_run:
         mock_run.return_value = mock.Mock(returncode=0, stdout=mock_output)
 
         result = sdcard._get_volume_label('D:')
@@ -452,8 +446,7 @@ SDCARD
 
 def test_get_volume_label_empty():
     """Handle volumes with no label."""
-    with mock.patch('sys.platform', 'linux'), \
-         mock.patch('subprocess.run') as mock_run:
+    with mock.patch('sys.platform', 'linux'), mock.patch('subprocess.run') as mock_run:
         mock_run.return_value = mock.Mock(returncode=0, stdout='\n')
 
         result = sdcard._get_volume_label('/media/sdcard')
@@ -463,9 +456,7 @@ def test_get_volume_label_empty():
 
 def test_get_volume_label_error():
     """Return empty string on error."""
-    with mock.patch('sys.platform', 'darwin'), \
-         mock.patch('subprocess.run', side_effect=OSError("Command failed")):
-
+    with mock.patch('sys.platform', 'darwin'), mock.patch('subprocess.run', side_effect=OSError("Command failed")):
         result = sdcard._get_volume_label('/Volumes/GARMIN')
 
         assert result == ''
@@ -491,10 +482,11 @@ def test_cache_vsn_and_get_cached_vsn(tmp_path):
     mount_point = '/media/sdcard'
     vsn = 0xABCD1234
 
-    with mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'), \
-         mock.patch('sdcard._get_volume_label', return_value='GARMIN'), \
-         mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):
-
+    with (
+        mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'),
+        mock.patch('sdcard._get_volume_label', return_value='GARMIN'),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):
         # Cache the VSN
         sdcard._cache_vsn(mount_point, vsn)
 
@@ -508,10 +500,11 @@ def test_get_cached_vsn_not_found(tmp_path):
     """Return None when VSN not in cache."""
     mount_point = '/media/sdcard'
 
-    with mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'), \
-         mock.patch('sdcard._get_volume_label', return_value='GARMIN'), \
-         mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):
-
+    with (
+        mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'),
+        mock.patch('sdcard._get_volume_label', return_value='GARMIN'),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):
         cached_vsn = sdcard._get_cached_vsn(mount_point)
 
         assert cached_vsn is None
@@ -522,9 +515,10 @@ def test_get_cached_vsn_different_size(tmp_path):
     mount_point = '/media/sdcard'
     vsn = 0xABCD1234
 
-    with mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'), \
-         mock.patch('sdcard._get_volume_label', return_value='GARMIN'):
-
+    with (
+        mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'),
+        mock.patch('sdcard._get_volume_label', return_value='GARMIN'),
+    ):
         # Cache with 16GB size
         with mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):
             sdcard._cache_vsn(mount_point, vsn)
@@ -540,9 +534,10 @@ def test_cache_vsn_multiple_cards(tmp_path):
     vsn1 = 0x11111111
     vsn2 = 0x22222222
 
-    with mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'), \
-         mock.patch('sdcard._get_volume_label', return_value='GARMIN'):
-
+    with (
+        mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'),
+        mock.patch('sdcard._get_volume_label', return_value='GARMIN'),
+    ):
         # Cache 16GB card
         with mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):
             sdcard._cache_vsn('/media/sdcard1', vsn1)
@@ -562,10 +557,11 @@ def test_cache_vsn_multiple_cards(tmp_path):
 def test_cache_vsn_error_handling(tmp_path):
     """Handle errors gracefully when caching."""
     # Should not raise exception even if caching fails
-    with mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'readonly' / 'vsn_cache.json'), \
-         mock.patch('sdcard._get_volume_label', return_value='GARMIN'), \
-         mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):
-
+    with (
+        mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'readonly' / 'vsn_cache.json'),
+        mock.patch('sdcard._get_volume_label', return_value='GARMIN'),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):
         # Should not raise
         sdcard._cache_vsn('/media/sdcard', 0x12345678)
 
@@ -575,10 +571,11 @@ def test_get_cached_vsn_corrupted_cache(tmp_path):
     cache_file = tmp_path / 'vsn_cache.json'
     cache_file.write_text('not valid json{')
 
-    with mock.patch('sdcard._get_vsn_cache_path', return_value=cache_file), \
-         mock.patch('sdcard._get_volume_label', return_value='GARMIN'), \
-         mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):
-
+    with (
+        mock.patch('sdcard._get_vsn_cache_path', return_value=cache_file),
+        mock.patch('sdcard._get_volume_label', return_value='GARMIN'),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):
         # Should return None, not raise
         cached_vsn = sdcard._get_cached_vsn('/media/sdcard')
         assert cached_vsn is None
@@ -619,10 +616,11 @@ def test_get_vsn_from_cache(tmp_path):
     mount_point = '/media/sdcard'
     cached_vsn = 0x12345678
 
-    with mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'), \
-         mock.patch('sdcard._get_volume_label', return_value='GARMIN'), \
-         mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):
-
+    with (
+        mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'),
+        mock.patch('sdcard._get_volume_label', return_value='GARMIN'),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):
         # Pre-populate cache
         sdcard._cache_vsn(mount_point, cached_vsn)
 
@@ -646,11 +644,12 @@ def test_get_vsn_auto_detect_sd_card(tmp_path):
     mock_partition.mountpoint = mount_point
     mock_partition.fstype = 'fat32'
 
-    with mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'), \
-         mock.patch('sdcard._get_volume_label', return_value='GARMIN'), \
-         mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)), \
-         mock.patch('psutil.disk_partitions', return_value=[mock_partition]):
-
+    with (
+        mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'),
+        mock.patch('sdcard._get_volume_label', return_value='GARMIN'),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+        mock.patch('psutil.disk_partitions', return_value=[mock_partition]),
+    ):
         # Pre-populate cache
         sdcard._cache_vsn(mount_point, cached_vsn)
 
@@ -663,9 +662,10 @@ def test_get_vsn_not_in_cache():
     """Return None and print warning when VSN not in cache."""
     mount_point = '/media/sdcard'
 
-    with mock.patch('sdcard._get_cached_vsn', return_value=None), \
-         mock.patch('sdcard._get_platform_device_example', return_value='/dev/sdb1'):
-
+    with (
+        mock.patch('sdcard._get_cached_vsn', return_value=None),
+        mock.patch('sdcard._get_platform_device_example', return_value='/dev/sdb1'),
+    ):
         vsn = sdcard.get_vsn(None, mount_point, verbose=False)
         assert vsn is None
 
@@ -675,10 +675,11 @@ def test_get_vsn_verbose_output(tmp_path, capsys):
     mount_point = '/media/sdcard'
     cached_vsn = 0xABCDEF12
 
-    with mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'), \
-         mock.patch('sdcard._get_volume_label', return_value='GARMIN'), \
-         mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)):
-
+    with (
+        mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'),
+        mock.patch('sdcard._get_volume_label', return_value='GARMIN'),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):
         # Pre-populate cache
         sdcard._cache_vsn(mount_point, cached_vsn)
 

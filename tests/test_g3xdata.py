@@ -42,13 +42,13 @@ MOCK_AIRCRAFT_DATA = [
                                         'name': '2510',
                                         'availableAt': '2025-10-01T00:00:00Z',
                                         'effectiveAt': '2025-10-10T00:00:00Z',
-                                        'invalidAt': '2025-11-07T00:00:00Z'
+                                        'invalidAt': '2025-11-07T00:00:00Z',
                                     }
-                                ]
+                                ],
                             }
-                        ]
+                        ],
                     }
-                ]
+                ],
             },
             {
                 'id': 102,
@@ -56,9 +56,9 @@ MOCK_AIRCRAFT_DATA = [
                 'serial': 987654321,
                 'name': 'GDU 460 #2',
                 'aircraftID': 'N12345',
-                'avdbTypes': []
-            }
-        ]
+                'avdbTypes': [],
+            },
+        ],
     },
     {
         'id': 2,
@@ -73,10 +73,10 @@ MOCK_AIRCRAFT_DATA = [
                 'serial': 111111111,
                 'name': 'G3X Touch',
                 'aircraftID': 'N67890',
-                'avdbTypes': []
+                'avdbTypes': [],
             }
-        ]
-    }
+        ],
+    },
 ]
 
 
@@ -94,9 +94,7 @@ def test_get_default_device_system_serial_empty_aircraft():
 
 def test_get_default_device_system_serial_no_devices():
     """Raise error when aircraft have no devices."""
-    aircraft_no_devices = [
-        {'id': 1, 'devices': []}
-    ]
+    aircraft_no_devices = [{'id': 1, 'devices': []}]
     with pytest.raises(ValueError, match="No devices found"):
         g3xdata._get_default_device_system_serial(aircraft_no_devices)
 
@@ -281,7 +279,7 @@ def test_get_device_with_missing_fields():
                     'serial': 12345,
                     # Missing: name, aircraftID, etc.
                 }
-            ]
+            ],
         }
     ]
 

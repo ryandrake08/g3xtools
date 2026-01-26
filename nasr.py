@@ -84,6 +84,7 @@ _DEFAULT_FILENAME = 'downloaded_file'
 _CACHE_PATH = cache.user_cache_path("g3xtools", "g3xtools")
 _NASR_MSGPACK_DATABASE_PATH = _CACHE_PATH / 'nasr.msgpack'
 
+
 def load_nasr_database() -> dict[str, Any]:
     """
     Load the NASR database from cache.
@@ -114,6 +115,7 @@ def load_nasr_database() -> dict[str, Any]:
     except Exception as e:
         raise RuntimeError(f"Failed to load NASR database: {e}") from e
 
+
 def sanitize_filename(filename: str, max_length: int = 255) -> str:
     """Sanitize a filename to prevent path traversal and other security issues."""
     if not filename:
@@ -139,9 +141,10 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     # Ensure filename has reasonable length
     if len(filename) > max_length:
         name, ext = os.path.splitext(filename)
-        filename = name[:max_length - len(ext)] + ext if ext else filename[:max_length]
+        filename = name[: max_length - len(ext)] + ext if ext else filename[:max_length]
 
     return filename
+
 
 def _article() -> bs4.element.Tag:
     # Get the main NASR page and find the article element
@@ -150,9 +153,10 @@ def _article() -> bs4.element.Tag:
         html = response.read().decode('utf-8')
     soup = bs4.BeautifulSoup(html, 'html.parser')
     article = soup.find('article', id='content')
-    if article is None:
+    if article is None or not isinstance(article, bs4.element.Tag):
         raise ValueError("NASR page article content not found")
     return article
+
 
 def list_archives() -> dict[str, str]:
     """
@@ -175,22 +179,23 @@ def list_archives() -> dict[str, str]:
     if archives_h2 is None:
         raise ValueError("Archives section not found")
     archives_section = archives_h2.find_next('ul')
-    if archives_section is None:
+    if archives_section is None or not isinstance(archives_section, bs4.element.Tag):
         raise ValueError("Archives list not found")
 
     for li in archives_section.find_all('li'):
-        text = li.contents[0].strip()
+        text = str(li.contents[0]).strip()
         # Remove prefix if present
         if text.startswith('Subscription effective '):
-            text = text[len('Subscription effective '):]
+            text = text[len('Subscription effective ') :]
         # Remove suffix if present
         if text.endswith(' -'):
-            text = text[:-len(' -')]
+            text = text[: -len(' -')]
         link = li.find('a')
-        if link:
-            dataurl[text] = link['href']
+        if link and isinstance(link, bs4.element.Tag):
+            dataurl[text] = str(link['href'])
 
     return dataurl
+
 
 def current_or_preview(which: str) -> dict[str, str]:
     """
@@ -210,11 +215,11 @@ def current_or_preview(which: str) -> dict[str, str]:
     if section_h2 is None:
         raise ValueError(f"{which} section not found")
     section_ul = section_h2.find_next('ul')
-    if section_ul is None:
+    if section_ul is None or not isinstance(section_ul, bs4.element.Tag):
         raise ValueError(f"{which} list not found")
 
     effective_date = None
-    fullzip_link = None
+    fullzip_link: Optional[str] = None
 
     for li in section_ul.find_all('li'):
         link = li.find('a')
@@ -222,10 +227,10 @@ def current_or_preview(which: str) -> dict[str, str]:
             continue
         effective_date = link.text
         if effective_date.startswith('Subscription effective '):
-            effective_date = effective_date[len('Subscription effective '):]
+            effective_date = effective_date[len('Subscription effective ') :]
 
         # Follow the link to get the fullzip and aptzip URLs
-        subpage_url = urllib.parse.urljoin(_NASR_URL, link['href'])
+        subpage_url = urllib.parse.urljoin(_NASR_URL, str(link['href']))
         subpage_response = urllib.request.urlopen(subpage_url)
         subpage_html = subpage_response.read().decode('utf-8')
         subpage_soup = bs4.BeautifulSoup(subpage_html, 'html.parser')
@@ -233,13 +238,14 @@ def current_or_preview(which: str) -> dict[str, str]:
         if subpage_article is None:
             continue
         download_link = subpage_article.find('a', string='Download')  # type: ignore
-        if download_link:
-            fullzip_link = download_link['href']
+        if download_link and isinstance(download_link, bs4.element.Tag):
+            fullzip_link = str(download_link['href'])
 
     if effective_date is None or fullzip_link is None:
         raise ValueError(f"Could not find download link in {which} section")
 
     return {effective_date: fullzip_link}
+
 
 def download(url: str, filename: Optional[str] = None) -> str:
     """
@@ -293,6 +299,7 @@ def download(url: str, filename: Optional[str] = None) -> str:
 
     return str(filepath)
 
+
 class CsvZip:
     """
     A context manager class to handle the nested CSV ZIP file contained in the main ZIP archive.
@@ -338,7 +345,9 @@ class CsvZip:
         self.archive = zipfile.ZipFile(self.filename)
 
         # Find the CSV data file the archive
-        csv_data_name = next(name for name in self.archive.namelist() if name.startswith('CSV_Data/') and name.endswith('.zip'))
+        csv_data_name = next(
+            name for name in self.archive.namelist() if name.startswith('CSV_Data/') and name.endswith('.zip')
+        )
 
         # Open the single file inside the CSV_Data folder as a new ZipFile
         self.csv_archive = zipfile.ZipFile(self.archive.open(csv_data_name))
@@ -379,7 +388,10 @@ class CsvZip:
             raise RuntimeError("CSV archive not opened")
         return self.csv_archive.open(name)
 
-def read_csv_file(csv_archive: 'CsvZip', file_name: str, columns: list[str], rowdata: Union[list[list[str]], list[dict[str, Any]]]) -> None:
+
+def read_csv_file(
+    csv_archive: 'CsvZip', file_name: str, columns: list[str], rowdata: Union[list[list[str]], list[dict[str, Any]]]
+) -> None:
     """
     Reads a CSV file from a given archive and extracts specified columns into a list.
 
@@ -402,10 +414,11 @@ def read_csv_file(csv_archive: 'CsvZip', file_name: str, columns: list[str], row
         for row in csv_reader:
             values: list[Union[float, str]] = [
                 # Handling CSV rows: Strip whitespace and convert to float if necessary
-                float(row[csv_header]) if csv_header in ['LAT_DECIMAL', 'LONG_DECIMAL'] else
-                row[csv_header].strip()
-                    for csv_header in columns]
+                float(row[csv_header]) if csv_header in ['LAT_DECIMAL', 'LONG_DECIMAL'] else row[csv_header].strip()
+                for csv_header in columns
+            ]
             rowdata.append(values)  # type: ignore[arg-type]
+
 
 def write_msgpack_file(csvzip_path: pathlib.Path, msgpack_path: pathlib.Path):
     waypoints: list[list[str]] = []
@@ -415,13 +428,33 @@ def write_msgpack_file(csvzip_path: pathlib.Path, msgpack_path: pathlib.Path):
     # Open archive
     with CsvZip(csvzip_path) as csv_archive:
         # Read waypoint data
-        read_csv_file(csv_archive, 'APT_BASE.csv', ['ARPT_ID', 'SITE_TYPE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE', 'ICAO_ID'], waypoints)
-        read_csv_file(csv_archive, 'FIX_BASE.csv', ['FIX_ID', 'FIX_USE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
-        read_csv_file(csv_archive, 'NAV_BASE.csv', ['NAV_ID', 'NAV_TYPE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'], waypoints)
+        read_csv_file(
+            csv_archive,
+            'APT_BASE.csv',
+            ['ARPT_ID', 'SITE_TYPE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE', 'ICAO_ID'],
+            waypoints,
+        )
+        read_csv_file(
+            csv_archive,
+            'FIX_BASE.csv',
+            ['FIX_ID', 'FIX_USE_CODE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'],
+            waypoints,
+        )
+        read_csv_file(
+            csv_archive,
+            'NAV_BASE.csv',
+            ['NAV_ID', 'NAV_TYPE', 'LAT_DECIMAL', 'LONG_DECIMAL', 'COUNTRY_CODE'],
+            waypoints,
+        )
 
         # Read airway data
         read_csv_file(csv_archive, 'AWY_BASE.csv', ['AWY_ID', 'AWY_LOCATION', 'AWY_DESIGNATION'], airways)
-        read_csv_file(csv_archive, 'AWY_SEG_ALT.csv', ['AWY_ID', 'AWY_LOCATION', 'FROM_POINT', 'FROM_PT_TYPE', 'TO_POINT', 'COUNTRY_CODE', 'AWY_SEG_GAP_FLAG'], airway_seg)
+        read_csv_file(
+            csv_archive,
+            'AWY_SEG_ALT.csv',
+            ['AWY_ID', 'AWY_LOCATION', 'FROM_POINT', 'FROM_PT_TYPE', 'TO_POINT', 'COUNTRY_CODE', 'AWY_SEG_GAP_FLAG'],
+            airway_seg,
+        )
 
     # Build a temporary reverse lookup dictionary of waypoint_id to [list of waypoint index]
     # Unfortunately waypoint_id are not unique
@@ -445,11 +478,15 @@ def write_msgpack_file(csvzip_path: pathlib.Path, msgpack_path: pathlib.Path):
         waypoint_indices = waypoint_lookup.get(from_point, [])
 
         # Find the waypoint index that matches the type and country code
-        matching_waypoint_indices = [i for i in waypoint_indices if waypoints[i][1] == from_point_type and waypoints[i][4] == country_code]
+        matching_waypoint_indices = [
+            i for i in waypoint_indices if waypoints[i][1] == from_point_type and waypoints[i][4] == country_code
+        ]
 
         # Error if multiple waypoints found, this should not happen
         if len(matching_waypoint_indices) > 1:
-            raise ValueError(f'Multiple waypoints found for {from_point} with type {from_point_type} and country {country_code}. Indices: {waypoint_indices}')
+            raise ValueError(
+                f'Multiple waypoints found for {from_point} with type {from_point_type} and country {country_code}. Indices: {waypoint_indices}'
+            )
 
         if matching_waypoint_indices:
             # Add the waypoint index to the current waypoint index list
@@ -468,15 +505,12 @@ def write_msgpack_file(csvzip_path: pathlib.Path, msgpack_path: pathlib.Path):
             connections[i2].append((i1, airway_index))
 
     # Serialize all data into a single database file
-    database = {
-        'waypoints': waypoints,
-        'airways': airways,
-        'connections': connections
-    }
+    database = {'waypoints': waypoints, 'airways': airways, 'connections': connections}
     packed_data: Optional[bytes] = msgpack.packb(database)
     if packed_data:
         with open(msgpack_path, 'wb') as f:
             f.write(packed_data)
+
 
 def validate_sql_identifier(identifier):
     """Validate that an identifier is safe for SQL use."""
@@ -493,6 +527,7 @@ def validate_sql_identifier(identifier):
         raise ValueError(f"Reserved word not allowed as identifier: {identifier}")
 
     return identifier
+
 
 def write_sqlite_file(csvzip_path: pathlib.Path, db_path: pathlib.Path, spatialite: bool):
     import sqlite3
@@ -556,7 +591,7 @@ def write_sqlite_file(csvzip_path: pathlib.Path, db_path: pathlib.Path, spatiali
                 c.execute(f'CREATE TABLE IF NOT EXISTS {safe_table_name} ({", ".join(column_definition)})')
 
                 # File encoding is usually iso-8859-1
-                file_encodings = { 'CDR': 'utf-8' }
+                file_encodings = {'CDR': 'utf-8'}
                 file_encoding = file_encodings.get(csv_table_name, 'iso-8859-1')
 
                 # Open the data file
@@ -596,31 +631,31 @@ def write_sqlite_file(csvzip_path: pathlib.Path, db_path: pathlib.Path, spatiali
                 c.execute(f'UPDATE {table} SET {geom_column} = MakePoint({longitude_column}, {latitude_column}, 4269)')
 
             tables = [
-                ['APT_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['APT_RWY_END', 'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
+                ['APT_BASE', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['APT_RWY_END', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
                 ['APT_RWY_END', 'GEOMETRY_DISPLACED_THR', 'LAT_DISPLACED_THR_DECIMAL', 'LONG_DISPLACED_THR_DECIMAL'],
-                ['APT_RWY_END', 'GEOMETRY_LAHSO',         'LAT_LAHSO_DECIMAL',         'LONG_LAHSO_DECIMAL'],
-                ['ARB_BASE',    'GEOMETRY_REFERENCE',     'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['ARB_SEG',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['AWOS',        'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['AWY_SEG_ALT', 'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['COM',         'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['DP_RTE',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['FIX_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['FRQ',         'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['FSS_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['ILS_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['ILS_DME',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['ILS_GS',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['ILS_MKR',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['MAA_BASE',    'GEOMETRY_REFERENCE',     'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['MAA_SHP',     'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['MTR_PT',      'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['NAV_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['NAV_BASE',    'GEOMETRY_TACAN_DME',     'TACAN_DME_LAT_DECIMAL',     'TACAN_DME_LONG_DECIMAL'],
-                ['PJA_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['STAR_RTE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL'],
-                ['WXL_BASE',    'GEOMETRY',               'LAT_DECIMAL',               'LONG_DECIMAL']
+                ['APT_RWY_END', 'GEOMETRY_LAHSO', 'LAT_LAHSO_DECIMAL', 'LONG_LAHSO_DECIMAL'],
+                ['ARB_BASE', 'GEOMETRY_REFERENCE', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['ARB_SEG', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['AWOS', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['AWY_SEG_ALT', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['COM', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['DP_RTE', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['FIX_BASE', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['FRQ', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['FSS_BASE', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['ILS_BASE', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['ILS_DME', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['ILS_GS', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['ILS_MKR', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['MAA_BASE', 'GEOMETRY_REFERENCE', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['MAA_SHP', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['MTR_PT', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['NAV_BASE', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['NAV_BASE', 'GEOMETRY_TACAN_DME', 'TACAN_DME_LAT_DECIMAL', 'TACAN_DME_LONG_DECIMAL'],
+                ['PJA_BASE', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['STAR_RTE', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
+                ['WXL_BASE', 'GEOMETRY', 'LAT_DECIMAL', 'LONG_DECIMAL'],
             ]
 
             for table, geom_column, lat_column, long_column in tables:
@@ -631,13 +666,15 @@ def write_sqlite_file(csvzip_path: pathlib.Path, db_path: pathlib.Path, spatiali
             # Add multipoint geometries for AWY, DP, MTR, STAR
             def add_multipoint_geometry(table, geom_column, point_table, point_geom_column, identifying_columns):
                 where_clause = ' AND '.join([f'{table}.{col} = {point_table}.{col}' for col in identifying_columns])
-                c.execute(f'UPDATE {table} SET {geom_column} = (SELECT CastToMultipoint(Collect({point_geom_column})) FROM {point_table} WHERE {where_clause})')
+                c.execute(
+                    f'UPDATE {table} SET {geom_column} = (SELECT CastToMultipoint(Collect({point_geom_column})) FROM {point_table} WHERE {where_clause})'
+                )
 
             multipoint_tables: list[tuple[str, str, str, str, list[str]]] = [
                 ('AWY_LINES', 'GEOMETRY', 'AWY_SEG_ALT', 'GEOMETRY', ['AWY_LOCATION', 'AWY_ID', 'LINE_SEQ']),
-                ('DP_LINES',  'GEOMETRY', 'DP_RTE',      'GEOMETRY', ['DP_COMPUTER_CODE', 'ROUTE_NAME', 'BODY_SEQ']),
-                ('MTR_LINES', 'GEOMETRY', 'MTR_PT',      'GEOMETRY', ['ROUTE_TYPE_CODE', 'ROUTE_ID']),
-                ('STAR_LINES','GEOMETRY', 'STAR_RTE',    'GEOMETRY', ['STAR_COMPUTER_CODE', 'ROUTE_NAME', 'BODY_SEQ'])
+                ('DP_LINES', 'GEOMETRY', 'DP_RTE', 'GEOMETRY', ['DP_COMPUTER_CODE', 'ROUTE_NAME', 'BODY_SEQ']),
+                ('MTR_LINES', 'GEOMETRY', 'MTR_PT', 'GEOMETRY', ['ROUTE_TYPE_CODE', 'ROUTE_ID']),
+                ('STAR_LINES', 'GEOMETRY', 'STAR_RTE', 'GEOMETRY', ['STAR_COMPUTER_CODE', 'ROUTE_NAME', 'BODY_SEQ']),
             ]
 
             for table, geom_column, point_table, point_geom_column, identifying_columns in multipoint_tables:
@@ -654,7 +691,9 @@ def write_sqlite_file(csvzip_path: pathlib.Path, db_path: pathlib.Path, spatiali
             # Add polygon geometries for: MAA_SHP
             def add_polygon_geometry(table, geom_column, point_table, point_geom_column, identifying_columns):
                 where_clause = ' AND '.join([f'{table}.{col} = {point_table}.{col}' for col in identifying_columns])
-                c.execute(f'UPDATE {table} SET {geom_column} = (SELECT MakePolygon({point_geom_column}) FROM {point_table} WHERE {where_clause})')
+                c.execute(
+                    f'UPDATE {table} SET {geom_column} = (SELECT MakePolygon({point_geom_column}) FROM {point_table} WHERE {where_clause})'
+                )
 
             add_geometry_column('MAA_BASE', 'GEOMETRY', 'POLYGON')
             add_polygon_geometry('MAA_BASE', 'GEOMETRY', 'MAA_SHP', 'GEOMETRY', ['MAA_ID'])
@@ -670,13 +709,16 @@ def write_sqlite_file(csvzip_path: pathlib.Path, db_path: pathlib.Path, spatiali
     finally:
         conn.close()
 
+
 def main():
     """
     Main function to download NASR data and store it in data structures useful for flight planning.
     """
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Download NASR data and store it in data structures useful for flight planning.')
+    parser = argparse.ArgumentParser(
+        description='Download NASR data and store it in data structures useful for flight planning.'
+    )
     mode_group = parser.add_mutually_exclusive_group(required=True)
     mode_group.add_argument('--current', action='store_true', help='Download the Current data.')
     mode_group.add_argument('--preview', action='store_true', help='Download the Preview data.')
@@ -685,12 +727,17 @@ def main():
     parser.add_argument('--filename', help='Specify the NASR data filename. Uses basename of URL if not provided.')
 
     # Output format arguments
-    parser.add_argument('--msgpack', nargs='?', const=_NASR_MSGPACK_DATABASE_PATH, metavar='FILE',
-                        help=f'Output msgpack format (default: {_NASR_MSGPACK_DATABASE_PATH})')
-    parser.add_argument('--sqlite', metavar='FILE',
-                        help='Output sqlite format (filename required)')
-    parser.add_argument('--with-geometry', action='store_true',
-                        help='Include spatialite geometry (only valid with --sqlite)')
+    parser.add_argument(
+        '--msgpack',
+        nargs='?',
+        const=_NASR_MSGPACK_DATABASE_PATH,
+        metavar='FILE',
+        help=f'Output msgpack format (default: {_NASR_MSGPACK_DATABASE_PATH})',
+    )
+    parser.add_argument('--sqlite', metavar='FILE', help='Output sqlite format (filename required)')
+    parser.add_argument(
+        '--with-geometry', action='store_true', help='Include spatialite geometry (only valid with --sqlite)'
+    )
 
     args = parser.parse_args()
 
@@ -740,6 +787,7 @@ def main():
     if args.sqlite:
         sqlite_path = pathlib.Path(args.sqlite)
         write_sqlite_file(csvzip_path, sqlite_path, args.with_geometry)
+
 
 if __name__ == '__main__':
     main()
