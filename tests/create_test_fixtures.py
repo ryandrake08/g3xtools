@@ -218,24 +218,42 @@ def create_nasr_fixtures(fixtures_dir: Path):
 
     database = {
         "waypoints": [
-            ["KAAA", "A", 40.0, -120.0, "US", "KAAA"],
-            ["KBBB", "A", 40.5, -120.5, "US", "KBBB"],
-            ["VPTEST", "VFR", 40.25, -120.25, "US", ""],
-            ["KCCC", "A", 41.0, -121.0, "US", "KCCC"],
-            ["VORNAV", "V", 40.6, -120.6, "US", ""],
-            ["NDBPT", "N", 40.1, -120.1, "US", ""],
+            ["KAAA", "A", 40.0, -120.0, "US", "KAAA"],  # 0 - Airport A
+            ["KBBB", "A", 40.5, -120.5, "US", "KBBB"],  # 1 - Airport B
+            ["VPTEST", "VFR", 40.25, -120.25, "US", ""],  # 2 - VFR waypoint
+            ["KCCC", "A", 41.0, -121.0, "US", "KCCC"],  # 3 - Airport C
+            ["VORNAV", "V", 40.6, -120.6, "US", ""],  # 4 - VOR
+            ["NDBPT", "N", 40.1, -120.1, "US", ""],  # 5 - NDB
+            ["KDDD", "A", 41.5, -121.5, "US", "KDDD"],  # 6 - Airport D
+            ["KEEE", "A", 42.0, -122.0, "US", "KEEE"],  # 7 - Airport E
+            ["KFFF", "A", 42.5, -122.5, "US", "KFFF"],  # 8 - Airport F
+            ["KGGG", "A", 43.0, -123.0, "US", "KGGG"],  # 9 - Airport G
+            ["FIXAB", "WP", 40.25, -120.25, "US", ""],  # 10 - Fix between A and B
+            ["FIXBC", "WP", 40.75, -120.75, "US", ""],  # 11 - Fix between B and C
+            ["FIXCD", "WP", 41.25, -121.25, "US", ""],  # 12 - Fix between C and D
         ],
+        # Airport chain: KAAA(0)→KBBB(1)→KCCC(3)→KDDD(6)→KEEE(7)→KFFF(8)→KGGG(9)
+        # Each segment ~37nm, total ~222nm
+        # Fix chain: KAAA(0)→FIXAB(10)→FIXBC(11)→FIXCD(12)→KDDD(6)
+        # Each segment ~19-37nm, simulates airway route through navaids
         "airways": [
             ["V999", "TEST", "V"],
             ["J888", "TEST", "J"],
         ],
         "connections": {
-            0: [(1, 0), (2, -1), (5, -1)],
+            0: [(1, 0), (2, -1), (5, -1), (10, 0)],
             1: [(0, 0), (2, -1), (3, -1), (4, -1)],
             2: [(0, -1), (1, -1)],
-            3: [(1, 1)],
+            3: [(1, 1), (6, -1)],
             4: [(1, -1)],
             5: [(0, -1)],
+            6: [(3, -1), (7, -1), (12, 0)],
+            7: [(6, -1), (8, -1)],
+            8: [(7, -1), (9, -1)],
+            9: [(8, -1)],
+            10: [(0, 0), (11, 0)],
+            11: [(10, 0), (12, 0)],
+            12: [(11, 0), (6, 0)],
         },
     }
 

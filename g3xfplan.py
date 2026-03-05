@@ -30,6 +30,45 @@ EARTH_RADIUS_METERS = 6371000  # Mean radius of Earth in meters
 # Flight planning defaults
 DEFAULT_MAX_LEG_LENGTH_NM = 80  # Default maximum leg length for VFR routing
 
+# All aerodrome-type waypoint codes (used for waypoint lookup and FPL type mapping)
+AIRPORT_TYPES = frozenset(('A', 'B', 'C', 'G', 'H', 'U'))
+
+# Only land airports are valid split points for multi-flight routes
+SPLIT_AIRPORT_TYPES = frozenset(('A',))
+
+# Flight split strategies
+SPLIT_STRATEGY_GREEDY = 'greedy'
+SPLIT_STRATEGY_RECOMPUTE = 'recompute'
+
+# Map NASR waypoint types to FPL waypoint types
+WAYPOINT_TYPE_MAP = {
+    'A': fpl.WAYPOINT_TYPE_AIRPORT,
+    'B': fpl.WAYPOINT_TYPE_AIRPORT,  # unconfirmed
+    'C': fpl.WAYPOINT_TYPE_AIRPORT,
+    'G': fpl.WAYPOINT_TYPE_AIRPORT,
+    'H': fpl.WAYPOINT_TYPE_AIRPORT,
+    'U': fpl.WAYPOINT_TYPE_AIRPORT,
+    'DME': fpl.WAYPOINT_TYPE_VOR,
+    'NDB': fpl.WAYPOINT_TYPE_NDB,
+    'NDB/DME': fpl.WAYPOINT_TYPE_NDB,
+    'VOR': fpl.WAYPOINT_TYPE_VOR,
+    'VORTAC': fpl.WAYPOINT_TYPE_VOR,
+    'VOR/DME': fpl.WAYPOINT_TYPE_VOR,
+    'VFR': fpl.WAYPOINT_TYPE_INT,
+    'CN': fpl.WAYPOINT_TYPE_INT,  # unconfirmed
+    'MR': fpl.WAYPOINT_TYPE_INT,
+    'RP': fpl.WAYPOINT_TYPE_INT,
+    'WP': fpl.WAYPOINT_TYPE_INT,
+    'USER': fpl.WAYPOINT_TYPE_USER,
+}
+
+# Map NASR country codes to FPL country codes
+COUNTRY_CODE_MAP = {
+    'US': "K2",  # With some exceptions, Garmin seems to use K2 for country code in the .fpl file
+    'CA': "CY",  # Found on the Internet. Unconfirmed
+    '': '',  # User waypoints are always blank country code
+}
+
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
@@ -305,6 +344,400 @@ class Router(astar.AStar):
         return distance * cost
 
 
+def find_nearest_airport(router: Router, waypoint_idx: int, search_radius_m: float) -> int:
+    """Find the nearest airport to a waypoint using the rtree spatial index.
+
+    Args:
+        router: Router instance with spatial index and waypoint data
+        waypoint_idx: Index of waypoint to search near
+        search_radius_m: Search radius in meters
+
+    Returns:
+        Waypoint index of the nearest airport, or -1 if none found
+    """
+    lat, lon = router.waypoints[waypoint_idx][2:4]
+    north, east, south, west = bounding_box(lat, lon, search_radius_m)
+    candidates = router.waypoints_idx.intersection((west, south, east, north))
+
+    best_idx = -1
+    best_dist = float('inf')
+    for idx in candidates:
+        if router.waypoints[idx][1] in SPLIT_AIRPORT_TYPES:
+            dist = haversine(lat, lon, router.waypoints[idx][2], router.waypoints[idx][3])
+            if dist < best_dist:
+                best_dist = dist
+                best_idx = idx
+
+    return best_idx
+
+
+def route_distance(router: Router, route: list[int]) -> float:
+    """Return total route distance in meters by summing haversine between consecutive waypoints."""
+    return float(sum(router.actual_distance_between(a, b) for a, b in zip(route, route[1:])))
+
+
+def find_split_point(
+    router: Router,
+    route: list[int],
+    max_length_m: float,
+    via_airport_indices: set[int],
+) -> tuple[int, int]:
+    """Find a split point airport at or near the route before max_length_m is exceeded.
+
+    Walks route accumulating distance. Prefers via airports when they appear
+    within the limit. When no airport exists in the route (e.g. airway routes
+    through navaids/fixes), falls back to searching the rtree spatial index
+    for the nearest airport near the last route position before the limit.
+
+    Args:
+        router: Router instance with waypoint data
+        route: List of waypoint indices
+        max_length_m: Maximum distance in meters
+        via_airport_indices: Set of waypoint indices that are via airports
+
+    Returns:
+        Tuple of (route_position, airport_waypoint_index).
+        When the airport is in the route: airport_idx == route[route_position].
+        When the airport is off-route (nearby fallback): airport_idx != route[route_position].
+        Returns (-1, -1) if no airport found anywhere.
+    """
+    cumulative = 0.0
+    last_airport_pos = -1
+    last_via_airport_pos = -1
+    last_pos_before_limit = 0
+
+    for i in range(1, len(route)):
+        cumulative += router.actual_distance_between(route[i - 1], route[i])
+        if cumulative > max_length_m:
+            break
+        last_pos_before_limit = i
+        if router.waypoints[route[i]][1] in SPLIT_AIRPORT_TYPES:
+            last_airport_pos = i
+            if route[i] in via_airport_indices:
+                last_via_airport_pos = i
+
+    # Prefer via airport if found
+    if last_via_airport_pos > 0:
+        return (last_via_airport_pos, route[last_via_airport_pos])
+    if last_airport_pos > 0:
+        return (last_airport_pos, route[last_airport_pos])
+
+    # Fallback: search for nearest airport near the last position before limit
+    if last_pos_before_limit > 0:
+        nearby = find_nearest_airport(router, route[last_pos_before_limit], router.max_leg_length)
+        if nearby >= 0:
+            return (last_pos_before_limit, nearby)
+
+    return (-1, -1)
+
+
+def compute_route(router: Router, origin: int, destination: int, via_ids: list[int], direct: bool = False) -> list[int]:
+    """Compute a route from origin to destination through via waypoints.
+
+    Args:
+        router: Router instance for A* pathfinding
+        origin: Origin waypoint index
+        destination: Destination waypoint index
+        via_ids: List of via waypoint indices (order will be optimized)
+        direct: If True, skip A* and use direct routing
+
+    Returns:
+        List of waypoint indices forming the route
+    """
+    # Calculate candidate route list (try all permutations of vias)
+    candidate_routes = [[origin] + list(perm) + [destination] for perm in itertools.permutations(via_ids)]
+
+    # For each candidate route, calculate the total distance
+    routes_and_distances = [
+        (cand, sum(router.actual_distance_between(s, e) for s, e in zip(cand, cand[1:]))) for cand in candidate_routes
+    ]
+
+    # Pick the shortest direct route
+    route, _ = min(routes_and_distances, key=lambda x: x[1])
+
+    # Generate a point-to-point route using A*
+    if not direct:
+        for start, end in zip(route, route[1:]):
+            subroute = router.astar(start, end)
+            if subroute:
+                route = route[: route.index(start)] + list(subroute) + route[route.index(end) + 1 :]
+
+    return route
+
+
+def split_route_greedy(
+    router: Router,
+    route: list[int],
+    max_length_m: float,
+    via_airport_indices: set[int],
+    equal_lengths: bool = False,
+) -> list[list[int]]:
+    """Split a pre-computed route into flights using greedy strategy.
+
+    Walks the route and splits at airport boundaries when the flight
+    length would exceed max_length_m.
+
+    Args:
+        router: Router instance with waypoint data
+        route: Pre-computed route as list of waypoint indices
+        max_length_m: Maximum flight length in meters
+        via_airport_indices: Set of waypoint indices that are via airports
+        equal_lengths: If True, distribute distance approximately evenly
+
+    Returns:
+        List of flights, each a list of waypoint indices
+    """
+    flights = []
+    remaining = route
+
+    if equal_lengths:
+        total_dist = route_distance(router, route)
+        num_flights = math.ceil(total_dist / max_length_m)
+        if num_flights <= 1:
+            return [route]
+        target_m = total_dist / num_flights
+    else:
+        num_flights = 0
+        target_m = max_length_m
+
+    while len(remaining) > 1:
+        rem_dist = route_distance(router, remaining)
+        if rem_dist <= target_m:
+            # Still split at via airports even when remaining distance fits
+            via_pos = next(
+                (i for i in range(1, len(remaining) - 1) if remaining[i] in via_airport_indices),
+                -1,
+            )
+            if via_pos > 0:
+                flights.append(remaining[: via_pos + 1])
+                remaining = remaining[via_pos:]
+                continue
+            flights.append(remaining)
+            break
+
+        split_pos, airport_idx = find_split_point(router, remaining, target_m, via_airport_indices)
+
+        if (split_pos, airport_idx) == (-1, -1):
+            # No airport found within limit - warn and include over-length leg
+            wp_name = router.waypoints[remaining[0]][0]
+            print(
+                f"Warning: no airport found within {target_m / 1852:.1f}nm " f"of {wp_name}, including over-length leg",
+                file=sys.stderr,
+            )
+            flights.append(remaining)
+            break
+
+        if split_pos == len(remaining) - 1 and airport_idx == remaining[split_pos]:
+            # Split point is destination - remaining route fits
+            flights.append(remaining)
+            break
+
+        if airport_idx == remaining[split_pos]:
+            # Airport is in the route (normal case)
+            flights.append(remaining[: split_pos + 1])
+            remaining = remaining[split_pos:]
+        else:
+            # Airport is off-route (nearby fallback for airway routes)
+            flights.append(remaining[: split_pos + 1] + [airport_idx])
+            remaining = [airport_idx] + remaining[split_pos + 1 :]
+
+        if equal_lengths:
+            flights_remaining = num_flights - len(flights)
+            if flights_remaining > 0:
+                target_m = route_distance(router, remaining) / flights_remaining
+
+    return flights
+
+
+def split_route_recompute(
+    router: Router,
+    origin: int,
+    destination: int,
+    via_ids: list[int],
+    max_length_m: float,
+    via_airport_indices: set[int],
+    direct: bool = False,
+    equal_lengths: bool = False,
+) -> list[list[int]]:
+    """Split a route into flights using recompute strategy.
+
+    Re-runs A* from each split point, independently optimizing each leg.
+
+    Args:
+        router: Router instance for pathfinding
+        origin: Origin waypoint index
+        destination: Destination waypoint index
+        via_ids: List of via waypoint indices
+        max_length_m: Maximum flight length in meters
+        via_airport_indices: Set of waypoint indices that are via airports
+        direct: If True, use direct routing
+        equal_lengths: If True, distribute distance approximately evenly
+
+    Returns:
+        List of flights, each a list of waypoint indices
+    """
+    flights = []
+    current_origin = origin
+    remaining_vias = list(via_ids)
+
+    if equal_lengths:
+        initial_route = compute_route(router, origin, destination, via_ids, direct)
+        total_dist = route_distance(router, initial_route)
+        num_flights = math.ceil(total_dist / max_length_m)
+        if num_flights <= 1:
+            return [initial_route]
+        target_m = total_dist / num_flights
+    else:
+        num_flights = 0
+        target_m = max_length_m
+
+    while current_origin != destination:
+        route = compute_route(router, current_origin, destination, remaining_vias, direct)
+
+        rem_dist = route_distance(router, route)
+        if rem_dist <= target_m:
+            # Still split at via airports even when remaining distance fits
+            via_pos = next(
+                (i for i in range(1, len(route) - 1) if route[i] in via_airport_indices),
+                -1,
+            )
+            if via_pos > 0:
+                flight = route[: via_pos + 1]
+                flights.append(flight)
+                current_origin = route[via_pos]
+                visited = set(flight)
+                remaining_vias = [v for v in remaining_vias if v not in visited]
+                continue
+            flights.append(route)
+            break
+
+        split_pos, airport_idx = find_split_point(router, route, target_m, via_airport_indices)
+
+        if (split_pos, airport_idx) == (-1, -1):
+            wp_name = router.waypoints[current_origin][0]
+            print(
+                f"Warning: no airport found within {target_m / 1852:.1f}nm " f"of {wp_name}, including over-length leg",
+                file=sys.stderr,
+            )
+            flights.append(route)
+            break
+
+        if split_pos == len(route) - 1 and airport_idx == route[split_pos]:
+            flights.append(route)
+            break
+
+        if airport_idx == route[split_pos]:
+            # Airport is in the route (normal case)
+            flight = route[: split_pos + 1]
+            flights.append(flight)
+            current_origin = route[split_pos]
+        else:
+            # Airport is off-route (nearby fallback for airway routes)
+            flight = route[: split_pos + 1] + [airport_idx]
+            flights.append(flight)
+            current_origin = airport_idx
+
+        visited = set(flight)
+        remaining_vias = [v for v in remaining_vias if v not in visited]
+
+        if equal_lengths:
+            flights_remaining = num_flights - len(flights)
+            if flights_remaining > 0:
+                next_route = compute_route(router, current_origin, destination, remaining_vias, direct)
+                target_m = route_distance(router, next_route) / flights_remaining
+
+    return flights
+
+
+def split_route_into_flights(
+    router: Router,
+    route: list[int],
+    origin: int,
+    destination: int,
+    via_ids: list[int],
+    max_flight_length_m: float,
+    strategy: str,
+    equal_lengths: bool = False,
+    direct: bool = False,
+) -> list[list[int]]:
+    """Split a route into multiple flights based on maximum flight length.
+
+    Args:
+        router: Router instance
+        route: Pre-computed full route
+        origin: Origin waypoint index
+        destination: Destination waypoint index
+        via_ids: List of via waypoint indices
+        max_flight_length_m: Maximum flight length in meters
+        strategy: Split strategy ('greedy' or 'recompute')
+        equal_lengths: If True, distribute distance approximately evenly
+        direct: If True, use direct routing for recompute strategy
+
+    Returns:
+        List of flights, each a list of waypoint indices.
+        Last waypoint of flight N equals first waypoint of flight N+1.
+    """
+    via_airport_indices = {v for v in via_ids if router.waypoints[v][1] in SPLIT_AIRPORT_TYPES}
+
+    # Check if route fits in a single flight and has no via airports to split at
+    has_via_split = any(route[i] in via_airport_indices for i in range(1, len(route) - 1))
+    if route_distance(router, route) <= max_flight_length_m and not has_via_split:
+        return [route]
+
+    if strategy == SPLIT_STRATEGY_RECOMPUTE:
+        return split_route_recompute(
+            router, origin, destination, via_ids, max_flight_length_m, via_airport_indices, direct, equal_lengths
+        )
+    else:
+        return split_route_greedy(router, route, max_flight_length_m, via_airport_indices, equal_lengths)
+
+
+def build_route_text(router: Router, route: list[int], name_fn, minimal_airway: bool = False) -> str:
+    """Build textual representation of a route.
+
+    Args:
+        router: Router instance with airway data
+        route: List of waypoint indices
+        name_fn: Function that takes a waypoint index and returns its display name
+        minimal_airway: If True, show condensed airway notation
+
+    Returns:
+        Route as a text string
+    """
+    if not minimal_airway:
+        return ' '.join(name_fn(idx) for idx in route)
+
+    # Build airway-aware route text
+    airway_counts: dict[int, int] = {}
+    airway_segments: list[Union[set[int], int, None]] = []
+    for wp1, wp2 in zip(route, route[1:]):
+        airways_in_segment = set()
+        for neighbor, airway in router.connections.get(wp1, []):
+            if neighbor == wp2:
+                airway_counts[airway] = airway_counts.get(airway, 0) + 1
+                airways_in_segment.add(airway)
+        airway_segments.append(airways_in_segment)
+
+    current_airway: Optional[int] = None
+    for i, segment in enumerate(airway_segments):
+        segment_airways: Union[set[int], int, None] = segment
+        if not segment_airways:
+            current_airway = None
+        elif isinstance(segment_airways, set) and current_airway not in segment_airways:
+            current_airway = max(segment_airways, key=lambda x: airway_counts[x])
+        airway_segments[i] = current_airway
+
+    route_text = ""
+    for i, (waypoint_idx, airway_idx) in enumerate(zip(route, airway_segments + [None])):
+        if airway_idx is None:
+            route_text += name_fn(waypoint_idx) + ' '
+        elif i == 0 or (airway_idx != airway_segments[i - 1]):
+            route_text += name_fn(waypoint_idx) + ' '
+            if airway_idx:
+                route_text += f'{router.airways[airway_idx][0]} '
+    return route_text.strip()
+
+
 def main() -> None:
     """
     Main function to generate a flight plan from origin to destination, via an optional list of waypoints.
@@ -367,6 +800,26 @@ def main() -> None:
         type=float,
         default=DEFAULT_MAX_LEG_LENGTH_NM,
         help='Specify the maximum leg length for direct neighbors, in nautical miles.',
+    )
+
+    # Flight splitting options
+    parser.add_argument(
+        '--max-flight-length',
+        type=float,
+        default=None,
+        metavar='LENGTH',
+        help='Split route into multiple flights, each no longer than LENGTH nautical miles. Each flight begins and ends at an airport.',
+    )
+    parser.add_argument(
+        '--equal-flight-lengths',
+        action='store_true',
+        help='Distribute distance approximately evenly across flights. Requires --max-flight-length.',
+    )
+    parser.add_argument(
+        '--flight-split-strategy',
+        choices=[SPLIT_STRATEGY_GREEDY, SPLIT_STRATEGY_RECOMPUTE],
+        default=SPLIT_STRATEGY_GREEDY,
+        help='Strategy for splitting route into flights. "greedy" splits a single pre-computed route; "recompute" re-runs A* from each split point. Requires --max-flight-length.',
     )
 
     # Waypoint preferences
@@ -482,6 +935,14 @@ def main() -> None:
     if args.max_leg_length <= 0:
         parser.error(f'Maximum leg length must be positive, got: {args.max_leg_length}')
 
+    # Validate flight splitting arguments
+    if args.max_flight_length is not None and args.max_flight_length <= 0:
+        parser.error(f'Maximum flight length must be positive, got: {args.max_flight_length}')
+    if args.equal_flight_lengths and not args.max_flight_length:
+        parser.error('--equal-flight-lengths requires --max-flight-length')
+    if args.flight_split_strategy != SPLIT_STRATEGY_GREEDY and not args.max_flight_length:
+        parser.error('--flight-split-strategy requires --max-flight-length')
+
     # Create a mapping from waypoint type to route preference
     waypoint_preferences = {
         # Aerodromes can be configured individually
@@ -579,7 +1040,7 @@ def main() -> None:
                 index
                 for index, waypoint in enumerate(r.waypoints)
                 if (waypoint[0] == waypoint_id or (len(waypoint) > 5 and waypoint[5] == waypoint_id))
-                and waypoint[1] not in ('A', 'B', 'C', 'G', 'H', 'U')
+                and waypoint[1] not in AIRPORT_TYPES
             ),
             None,
         )
@@ -606,7 +1067,7 @@ def main() -> None:
                 index
                 for index, waypoint in enumerate(r.waypoints)
                 if (waypoint[0] == airport_id or (len(waypoint) > 5 and waypoint[5] == airport_id))
-                and waypoint[1] in ('A', 'B', 'C', 'G', 'H', 'U')
+                and waypoint[1] in AIRPORT_TYPES
             ),
             None,
         )
@@ -628,141 +1089,82 @@ def main() -> None:
     # Map waypoint_id to id all vias (supports all waypoint types)
     via_ids = [find_waypoint(via.upper()) for via in args.via]
 
-    # Calculate candidate route list
-    candidate_routes = [[origin_id] + list(perm) + [destination_id] for perm in itertools.permutations(via_ids)]
+    # Compute the route
+    route = compute_route(r, origin_id, destination_id, via_ids, args.direct)
 
-    # For each candidate route, calculate the total distance
-    routes_and_distances = [
-        (route, sum(r.actual_distance_between(start, end) for start, end in zip(route, route[1:])))
-        for route in candidate_routes
-    ]
-
-    # Pick the shortest direct route
-    route, _ = min(routes_and_distances, key=lambda x: x[1])
-
-    # Generate a point-to-point route
-    if not args.direct:
-        # Find the route between each pair of waypoints
-        for start, end in zip(route, route[1:]):
-            subroute = r.astar(start, end)
-            # Insert the subroute into the main route
-            if subroute:
-                route = route[: route.index(start)] + list(subroute) + route[route.index(end) + 1 :]
-
-    # Build textual route
-    route_text = ""
-
-    # If this is an airway route, need to assign airways to segments, consolidate, and display them
-    if args.airway and args.output_minimal_airway:
-        # A segment can be on multiple airways.
-        # First walk the route pairwise and create a list of possible airways for each segment,
-        # also counting how often each airway is present in the overall route
-        airway_counts: dict[int, int] = {}
-        airway_segments: list[Union[set[int], int, None]] = []
-        for wp1, wp2 in zip(route, route[1:]):
-            # Find all airway segments between the current waypoint and the previous waypoint
-            airways_in_segment = set()
-            for neighbor, airway in r.connections.get(wp1, []):
-                if neighbor == wp2:
-                    # Keep track of the count. This will be used to break ties when selecting airways to display
-                    airway_counts[airway] = airway_counts.get(airway, 0) + 1
-
-                    # Add the airway to the segment
-                    airways_in_segment.add(airway)
-
-            # Add the segment to the list
-            airway_segments.append(airways_in_segment)
-
-        # Next, walk the segments and assign airways, keeping track of the current airway to favor continuity
-        current_airway: Optional[int] = None
-        for i, segment in enumerate(airway_segments):
-            # Type narrowing: segment can be set[int], int, or None
-            segment_airways: Union[set[int], int, None] = segment
-
-            # If segment has no airways, set the current airway to None
-            if not segment_airways:
-                current_airway = None
-
-            # Favor the current airway, or if no current airway, find the one with the highest count
-            elif isinstance(segment_airways, set) and current_airway not in segment_airways:
-                current_airway = max(segment_airways, key=lambda x: airway_counts[x])
-
-            # Update the segment in-place with the single airway
-            airway_segments[i] = current_airway
-
-        # Finally, walk the segments and waypoints and print if no airway or the airway changed
-        for i, (waypoint_idx, airway_idx) in enumerate(zip(route, airway_segments + [None])):
-            if airway_idx is None:
-                # If no airway, just print the waypoint and continue
-                route_text += airport_name(waypoint_idx) + ' '
-            elif i == 0 or (airway_idx != airway_segments[i - 1]):
-                # If airway is different from previous, print the waypoint and new airway (if exists)
-                route_text += airport_name(waypoint_idx) + ' '
-                if airway_idx:
-                    route_text += f'{r.airways[airway_idx][0]} '
-        # Remove trailing space
-        route_text = route_text.strip()
+    # Split route into flights if --max-flight-length specified
+    if args.max_flight_length:
+        flights = split_route_into_flights(
+            r,
+            route,
+            origin_id,
+            destination_id,
+            via_ids,
+            args.max_flight_length * 1852,
+            args.flight_split_strategy,
+            args.equal_flight_lengths,
+            args.direct,
+        )
     else:
-        route_text = ' '.join(airport_name(waypoint_idx) for waypoint_idx in route)
+        flights = [route]
 
-    # Print the route
-    print(route_text)
+    multiple_flights = len(flights) > 1
+    minimal_airway = args.airway and args.output_minimal_airway
 
-    # Open the route in Skyvector if requested
+    # Build and print text for each flight
+    for flight_num, flight_route in enumerate(flights, 1):
+        route_text = build_route_text(r, flight_route, airport_name, minimal_airway)
+
+        if multiple_flights:
+            flight_dist_nm = route_distance(r, flight_route) / 1852
+            orig_name = airport_name(flight_route[0])
+            dest_name = airport_name(flight_route[-1])
+            print(f"Flight {flight_num}: {orig_name} to {dest_name} ({flight_dist_nm:.1f}nm)")
+            print(f"  {route_text}")
+            if args.output_skyvector:
+                encoded_route = urllib.parse.quote_plus(route_text)
+                print(f"  https://skyvector.com/?fpl={encoded_route}")
+            if flight_num < len(flights):
+                print()
+        else:
+            print(route_text)
+
+    # Open the first flight in SkyVector if requested
     if args.output_skyvector:
-        # URL encode the route text to prevent injection
-        encoded_route = urllib.parse.quote_plus(route_text)
-        skyvector_url = f'https://skyvector.com/?fpl={encoded_route}'
-        webbrowser.open(skyvector_url)
+        first_text = build_route_text(r, flights[0], airport_name, minimal_airway)
+        encoded_route = urllib.parse.quote_plus(first_text)
+        webbrowser.open(f'https://skyvector.com/?fpl={encoded_route}')
+        if multiple_flights:
+            print("Note: SkyVector opened with first flight only", file=sys.stderr)
 
-    # Output FPL file if requested
+    # Output FPL file(s) if requested
     if args.output_fpl:
-        # Map NASR waypoint types to FPL waypoint types
-        waypoint_type_map = {
-            'A': fpl.WAYPOINT_TYPE_AIRPORT,
-            'B': fpl.WAYPOINT_TYPE_AIRPORT,  # unconfirmed
-            'C': fpl.WAYPOINT_TYPE_AIRPORT,
-            'G': fpl.WAYPOINT_TYPE_AIRPORT,
-            'H': fpl.WAYPOINT_TYPE_AIRPORT,
-            'U': fpl.WAYPOINT_TYPE_AIRPORT,
-            'DME': fpl.WAYPOINT_TYPE_VOR,
-            'NDB': fpl.WAYPOINT_TYPE_NDB,
-            'NDB/DME': fpl.WAYPOINT_TYPE_NDB,
-            'VOR': fpl.WAYPOINT_TYPE_VOR,
-            'VORTAC': fpl.WAYPOINT_TYPE_VOR,
-            'VOR/DME': fpl.WAYPOINT_TYPE_VOR,
-            'VFR': fpl.WAYPOINT_TYPE_INT,
-            'CN': fpl.WAYPOINT_TYPE_INT,  # unconfirmed
-            'MR': fpl.WAYPOINT_TYPE_INT,
-            'RP': fpl.WAYPOINT_TYPE_INT,
-            'WP': fpl.WAYPOINT_TYPE_INT,
-            'USER': fpl.WAYPOINT_TYPE_USER,
-        }
+        for flight_num, flight_route in enumerate(flights, 1):
+            # Determine file path (numbered suffix for multiple flights)
+            if multiple_flights:
+                fpl_path = output_fpl_path.with_stem(f"{output_fpl_path.stem}_{flight_num}")
+            else:
+                fpl_path = output_fpl_path
 
-        # Map NASR country codes to FPL country codes
-        country_code_map = {
-            'US': "K2",  # With some exceptions, Garmin seems to use K2 for country code in the .fpl file
-            'CA': "CY",  # Found on the Internet. Unconfirmed
-            '': '',  # User waypoints are always blank country code
-        }
+            # Build route list: (identifier, lat, lon, waypoint_type, country_code)
+            route_data = []
+            for idx in flight_route:
+                wp = r.waypoints[idx]
+                # wp structure: [id, type, lat, lon, country, icao_id]
+                waypoint_id = wp[5] if len(wp) > 5 and wp[5] else wp[0]
+                fpl_type = WAYPOINT_TYPE_MAP.get(wp[1], fpl.WAYPOINT_TYPE_USER)
+                country = COUNTRY_CODE_MAP.get(wp[4], '')
+                route_data.append((waypoint_id, wp[2], wp[3], fpl_type, country))
 
-        # Build route list: (identifier, lat, lon, waypoint_type, country_code)
-        route_data = []
-        for idx in route:
-            wp = r.waypoints[idx]
-            # wp structure: [id, type, lat, lon, country, icao_id]
-            waypoint_id = wp[5] if len(wp) > 5 and wp[5] else wp[0]
-            fpl_type = waypoint_type_map.get(wp[1], fpl.WAYPOINT_TYPE_USER)
-            country = country_code_map.get(wp[4], '')
-            route_data.append((waypoint_id, wp[2], wp[3], fpl_type, country))
+            # Create route name from flight origin to destination
+            orig_name = airport_name(flight_route[0])
+            dest_name = airport_name(flight_route[-1])
+            route_name = f"{orig_name}/{dest_name}"
 
-        # Create route name from origin to destination
-        route_name = f"{airport_name(origin_id)}/{airport_name(destination_id)}"
-
-        # Create and write flight plan
-        flight_plan = fpl.create_flight_plan_from_route_list(route_data, route_name)
-        fpl.write_fpl(flight_plan, args.output_fpl)
-        print(f"Flight plan written to {args.output_fpl}")
+            # Create and write flight plan
+            flight_plan = fpl.create_flight_plan_from_route_list(route_data, route_name)
+            fpl.write_fpl(flight_plan, fpl_path)
+            print(f"Flight plan written to {fpl_path}")
 
 
 if __name__ == '__main__':
