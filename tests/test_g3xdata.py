@@ -155,8 +155,9 @@ def test_get_device_info_not_found():
         g3xdata._get_device_info(MOCK_AIRCRAFT_DATA, 'BADSERIAL')
 
 
-def test_get_cached_file_path_for_url_simple():
+def test_get_cached_file_path_for_url_simple(tmp_path, monkeypatch):
     """Generate cache path for simple URL."""
+    monkeypatch.setattr(g3xdata, '_CACHE_PATH', tmp_path)
     url = "https://avdb.garmin.com/path/to/file.taw"
     path = g3xdata._get_cached_file_path_for_url(url)
 
@@ -166,8 +167,9 @@ def test_get_cached_file_path_for_url_simple():
     assert path.name == "file.taw"
 
 
-def test_get_cached_file_path_for_url_nested():
+def test_get_cached_file_path_for_url_nested(tmp_path, monkeypatch):
     """Generate cache path for deeply nested URL."""
+    monkeypatch.setattr(g3xdata, '_CACHE_PATH', tmp_path)
     url = "https://example.com/a/b/c/d/file.dat"
     path = g3xdata._get_cached_file_path_for_url(url)
 
@@ -180,9 +182,9 @@ def test_get_cached_file_path_for_url_nested():
     assert "d" in parts
 
 
-def test_get_cached_file_path_for_url_no_hostname():
+def test_get_cached_file_path_for_url_no_hostname(tmp_path, monkeypatch):
     """Handle URL with no hostname (defaults to avdb.garmin.com)."""
-    # This shouldn't happen in practice, but tests defensive coding
+    monkeypatch.setattr(g3xdata, '_CACHE_PATH', tmp_path)
     url = "https:///path/to/file.bin"
     path = g3xdata._get_cached_file_path_for_url(url)
 
@@ -190,16 +192,18 @@ def test_get_cached_file_path_for_url_no_hostname():
     assert "avdb.garmin.com" in str(path)
 
 
-def test_get_cached_file_path_for_url_path_traversal():
+def test_get_cached_file_path_for_url_path_traversal(tmp_path, monkeypatch):
     """Reject URL with path traversal attempt."""
+    monkeypatch.setattr(g3xdata, '_CACHE_PATH', tmp_path)
     url = "https://evil.com/../../etc/passwd"
 
     with pytest.raises(ValueError, match="directory traversal"):
         g3xdata._get_cached_file_path_for_url(url)
 
 
-def test_get_cached_file_path_for_url_leading_slash_stripped():
+def test_get_cached_file_path_for_url_leading_slash_stripped(tmp_path, monkeypatch):
     """Strip leading slash from URL path."""
+    monkeypatch.setattr(g3xdata, '_CACHE_PATH', tmp_path)
     url = "https://example.com/file.dat"
     path = g3xdata._get_cached_file_path_for_url(url)
 
@@ -207,8 +211,9 @@ def test_get_cached_file_path_for_url_leading_slash_stripped():
     assert "//" not in str(path)
 
 
-def test_get_cached_file_path_for_url_query_parameters():
+def test_get_cached_file_path_for_url_query_parameters(tmp_path, monkeypatch):
     """Handle URL with query parameters."""
+    monkeypatch.setattr(g3xdata, '_CACHE_PATH', tmp_path)
     url = "https://example.com/file.dat?token=abc123&version=2"
     path = g3xdata._get_cached_file_path_for_url(url)
 
@@ -218,8 +223,9 @@ def test_get_cached_file_path_for_url_query_parameters():
     assert path.name == "file.dat"
 
 
-def test_get_cached_file_path_for_url_special_chars():
+def test_get_cached_file_path_for_url_special_chars(tmp_path, monkeypatch):
     """Handle URL with special characters."""
+    monkeypatch.setattr(g3xdata, '_CACHE_PATH', tmp_path)
     url = "https://example.com/my%20file.dat"
     path = g3xdata._get_cached_file_path_for_url(url)
 
@@ -296,8 +302,9 @@ def test_get_device_info_returns_correct_types():
     assert isinstance(system_serial, int)
 
 
-def test_get_cached_file_path_for_url_different_hosts():
+def test_get_cached_file_path_for_url_different_hosts(tmp_path, monkeypatch):
     """Different hostnames create different cache paths."""
+    monkeypatch.setattr(g3xdata, '_CACHE_PATH', tmp_path)
     url1 = "https://host1.example.com/file.dat"
     url2 = "https://host2.example.com/file.dat"
 
@@ -310,8 +317,9 @@ def test_get_cached_file_path_for_url_different_hosts():
     assert "host2.example.com" in str(path2)
 
 
-def test_get_cached_file_path_for_url_same_filename_different_paths():
+def test_get_cached_file_path_for_url_same_filename_different_paths(tmp_path, monkeypatch):
     """Same filename in different paths creates different cache entries."""
+    monkeypatch.setattr(g3xdata, '_CACHE_PATH', tmp_path)
     url1 = "https://example.com/path1/file.dat"
     url2 = "https://example.com/path2/file.dat"
 
@@ -331,8 +339,9 @@ def test_get_device_case_sensitive():
         g3xdata._get_device(MOCK_AIRCRAFT_DATA, '60001a2345bc0')  # lowercase
 
 
-def test_get_cached_file_path_for_url_fragment():
+def test_get_cached_file_path_for_url_fragment(tmp_path, monkeypatch):
     """Handle URL with fragment identifier."""
+    monkeypatch.setattr(g3xdata, '_CACHE_PATH', tmp_path)
     url = "https://example.com/file.dat#section1"
     path = g3xdata._get_cached_file_path_for_url(url)
 
