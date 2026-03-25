@@ -963,6 +963,11 @@ def main() -> None:
                     output_path, output_file_path, taw_region_path, card_serial, system_serial, args.check_crc
                 )
 
+            # Write encoded volume ID file (.evidf.dat)
+            evidf_path = output_path / '.evidf.dat'
+            evidf_path.write_bytes(featunlk.encode_volume_id(card_serial).to_bytes(4, 'little'))
+            vprint(f"Wrote {evidf_path}")
+
             vprint("Finished creating SD card")
 
 

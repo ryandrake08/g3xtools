@@ -72,6 +72,7 @@ OTHER DB:
 
 # Public API
 __all__ = [
+    'encode_volume_id',
     'update_feature_unlock',
     'dump_feature_unlock',
 ]
@@ -80,7 +81,7 @@ _FEAT_UNLK = 'feat_unlk.dat'
 _GARMIN_SECURITY_ID = 1727
 
 
-def _encode_volume_id(vol_id: int) -> int:
+def encode_volume_id(vol_id: int) -> int:
     """
     Encodes volume ID for feature unlock structure.
 
@@ -293,7 +294,7 @@ def update_feature_unlock(
     content1.write(_MAGIC2.to_bytes(4, 'little'))
     content1.write((1 << feature.bit).to_bytes(4, 'little'))
     content1.write((0).to_bytes(4, 'little'))
-    content1.write(_encode_volume_id(vol_id).to_bytes(4, 'little'))
+    content1.write(encode_volume_id(vol_id).to_bytes(4, 'little'))
 
     if feature == _Feature.NAVIGATION:
         content1.write(_MAGIC3.to_bytes(2, 'little'))

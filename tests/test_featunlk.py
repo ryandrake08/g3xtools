@@ -40,7 +40,7 @@ def test_volume_id_encoding():
     """Volume ID encoding should match Garmin spec."""
     # Test known volume IDs
     vol_id = 0x12345678
-    encoded = featunlk._encode_volume_id(vol_id)
+    encoded = featunlk.encode_volume_id(vol_id)
 
     # Encoded should be 32-bit unsigned integer
     assert isinstance(encoded, int)
@@ -49,7 +49,7 @@ def test_volume_id_encoding():
     # Encoding should be reversible in principle (though we don't have decode function)
     # At minimum, different inputs should produce different outputs
     vol_id2 = 0x87654321
-    encoded2 = featunlk._encode_volume_id(vol_id2)
+    encoded2 = featunlk.encode_volume_id(vol_id2)
     assert encoded != encoded2
 
 
@@ -149,7 +149,7 @@ def test_volume_id_encode_decode_roundtrip():
     """Encoding then decoding volume ID should return original value."""
     test_ids = [0x00000000, 0x12345678, 0xDEADBEEF, 0xFFFFFFFF, 0xAA7A1724]
     for vol_id in test_ids:
-        encoded = featunlk._encode_volume_id(vol_id)
+        encoded = featunlk.encode_volume_id(vol_id)
         decoded = featunlk._decode_volume_id(encoded)
         assert decoded == vol_id, f"Round-trip failed for {vol_id:#x}"
 
@@ -157,13 +157,13 @@ def test_volume_id_encode_decode_roundtrip():
 def test_decode_volume_id():
     """Decode volume ID should be inverse of encode."""
     vol_id = 0x12345678
-    encoded = featunlk._encode_volume_id(vol_id)
+    encoded = featunlk.encode_volume_id(vol_id)
     decoded = featunlk._decode_volume_id(encoded)
     assert decoded == vol_id
 
     # Test edge cases
-    assert featunlk._decode_volume_id(featunlk._encode_volume_id(0)) == 0
-    assert featunlk._decode_volume_id(featunlk._encode_volume_id(0xFFFFFFFF)) == 0xFFFFFFFF
+    assert featunlk._decode_volume_id(featunlk.encode_volume_id(0)) == 0
+    assert featunlk._decode_volume_id(featunlk.encode_volume_id(0xFFFFFFFF)) == 0xFFFFFFFF
 
 
 def test_database_types_mapping():
@@ -240,7 +240,7 @@ def _create_valid_feat_unlk_content(feature: featunlk._Feature, vol_id: int, sys
     content1.write(featunlk._MAGIC2.to_bytes(4, 'little'))
     content1.write((1 << feature.bit).to_bytes(4, 'little'))
     content1.write((0).to_bytes(4, 'little'))
-    content1.write(featunlk._encode_volume_id(vol_id).to_bytes(4, 'little'))
+    content1.write(featunlk.encode_volume_id(vol_id).to_bytes(4, 'little'))
 
     if feature == featunlk._Feature.NAVIGATION:
         content1.write(featunlk._MAGIC3.to_bytes(2, 'little'))
