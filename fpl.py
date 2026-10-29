@@ -196,7 +196,7 @@ def validate_identifier(identifier: str) -> None:
         ValueError: If identifier doesn't match pattern
     """
     if not IDENTIFIER_PATTERN.match(identifier):
-        raise ValueError(f"Invalid identifier '{identifier}': must be 1-12 uppercase " f"alphanumeric characters")
+        raise ValueError(f"Invalid identifier '{identifier}': must be 1-12 uppercase alphanumeric characters")
 
 
 def validate_country_code(country_code: str) -> None:
@@ -213,7 +213,7 @@ def validate_country_code(country_code: str) -> None:
     """
     if not COUNTRY_CODE_PATTERN.match(country_code):
         raise ValueError(
-            f"Invalid country code '{country_code}': must be 2 uppercase " f"alphanumeric characters or empty string"
+            f"Invalid country code '{country_code}': must be 2 uppercase alphanumeric characters or empty string"
         )
 
 
@@ -231,8 +231,7 @@ def validate_comment(comment: str) -> None:
     """
     if not COMMENT_PATTERN.match(comment):
         raise ValueError(
-            f"Invalid comment '{comment}': must be 1-25 uppercase "
-            f"alphanumeric characters, spaces, or slashes, or empty"
+            f"Invalid comment '{comment}': must be 1-25 uppercase alphanumeric characters, spaces, or slashes, or empty"
         )
 
 
@@ -316,9 +315,7 @@ def validate_waypoint_type(waypoint_type: str) -> None:
         ValueError: If waypoint type is not recognized
     """
     if waypoint_type not in WAYPOINT_TYPES:
-        raise ValueError(
-            f"Invalid waypoint type '{waypoint_type}': must be one of " f"{', '.join(sorted(WAYPOINT_TYPES))}"
-        )
+        raise ValueError(f"Invalid waypoint type '{waypoint_type}': must be one of {', '.join(sorted(WAYPOINT_TYPES))}")
 
 
 # Dataclasses

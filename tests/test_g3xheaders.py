@@ -48,7 +48,7 @@ def test_g3xlogfiledata_missing_header_rows(tmp_path):
     """Reject file with missing header rows."""
     log_file = tmp_path / "incomplete.csv"
     log_file.write_text(
-        '#airframe_info,log_version="1"\n' 'Lcl Date,Lcl Time\n'
+        '#airframe_info,log_version="1"\nLcl Date,Lcl Time\n'
         # Missing stable keys row
     )
 
@@ -59,7 +59,7 @@ def test_g3xlogfiledata_missing_header_rows(tmp_path):
 def test_g3xlogfiledata_invalid_metadata_format(tmp_path):
     """Reject file with malformed metadata."""
     log_file = tmp_path / "bad_metadata.csv"
-    log_file.write_text('#airframe_info,invalid_no_equals_sign\n' 'Lcl Date,Lcl Time\n' 'Date,Time\n')
+    log_file.write_text('#airframe_info,invalid_no_equals_sign\nLcl Date,Lcl Time\nDate,Time\n')
 
     with pytest.raises(ValueError, match="Invalid airframe metadata format"), g3xheaders.G3XLogFileData(log_file):
         pass
@@ -94,9 +94,7 @@ def test_compare_headers_no_changes(tmp_path, capsys):
 def test_compare_headers_new_columns(tmp_path, capsys):
     """Detect new columns added."""
     log1 = tmp_path / "log_001.csv"
-    log1.write_text(
-        '#airframe_info,software_version="10.20"\n' 'Lcl Date,Lcl Time\n' 'Date,Time\n' '01/15/2024,10:30:00\n'
-    )
+    log1.write_text('#airframe_info,software_version="10.20"\nLcl Date,Lcl Time\nDate,Time\n01/15/2024,10:30:00\n')
 
     log2 = tmp_path / "log_002.csv"
     log2.write_text(
@@ -129,9 +127,7 @@ def test_compare_headers_removed_columns(tmp_path, capsys):
     )
 
     log2 = tmp_path / "log_002.csv"
-    log2.write_text(
-        '#airframe_info,software_version="10.30"\n' 'Lcl Date,Lcl Time\n' 'Date,Time\n' '01/15/2024,11:30:00\n'
-    )
+    log2.write_text('#airframe_info,software_version="10.30"\nLcl Date,Lcl Time\nDate,Time\n01/15/2024,11:30:00\n')
 
     with g3xheaders.G3XLogFileData(log1) as data1, g3xheaders.G3XLogFileData(log2) as data2:
         result = g3xheaders._compare_headers(data1, data2)
@@ -211,9 +207,7 @@ def test_compare_headers_mixed_changes(tmp_path, capsys):
 def test_compare_headers_context_manager_usage(tmp_path):
     """Verify context manager properly opens and closes files."""
     log_file = tmp_path / "log_001.csv"
-    log_file.write_text(
-        '#airframe_info,software_version="10.20"\n' 'Lcl Date,Lcl Time\n' 'Date,Time\n' '01/15/2024,10:30:00\n'
-    )
+    log_file.write_text('#airframe_info,software_version="10.20"\nLcl Date,Lcl Time\nDate,Time\n01/15/2024,10:30:00\n')
 
     # Open and close via context manager
     with g3xheaders.G3XLogFileData(log_file) as data:
@@ -227,12 +221,10 @@ def test_compare_headers_context_manager_usage(tmp_path):
 def test_compare_headers_version_transition(tmp_path, capsys):
     """Verify software version transition is reported."""
     log1 = tmp_path / "log_v1.csv"
-    log1.write_text('#airframe_info,software_version="9.50"\n' 'Lcl Date\n' 'Date\n' '01/15/2024\n')
+    log1.write_text('#airframe_info,software_version="9.50"\nLcl Date\nDate\n01/15/2024\n')
 
     log2 = tmp_path / "log_v2.csv"
-    log2.write_text(
-        '#airframe_info,software_version="10.00"\n' 'Lcl Date,New Feature\n' 'Date,NewFeat\n' '01/15/2024,value\n'
-    )
+    log2.write_text('#airframe_info,software_version="10.00"\nLcl Date,New Feature\nDate,NewFeat\n01/15/2024,value\n')
 
     with g3xheaders.G3XLogFileData(log1) as data1, g3xheaders.G3XLogFileData(log2) as data2:
         g3xheaders._compare_headers(data1, data2)

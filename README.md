@@ -310,6 +310,7 @@ Python module for reading and writing Garmin Flight Plan (FPL) v1 XML files with
 ```python
 # Read a flight plan file
 from fpl import read_fpl, write_fpl
+
 flight_plan = read_fpl("flight.fpl")
 print(f"Route: {flight_plan.route.route_name}")
 print(f"Waypoints: {len(flight_plan.waypoint_table)}")
@@ -324,11 +325,14 @@ waypoints = [
     create_waypoint("KAUN", 38.954827, -121.081717, WAYPOINT_TYPE_AIRPORT, "K2"),
 ]
 
-route = create_route("KBLU/KAUN", [
-    ("KBLU", WAYPOINT_TYPE_AIRPORT, "K2"),
-    ("USR001", WAYPOINT_TYPE_USER, ""),
-    ("KAUN", WAYPOINT_TYPE_AIRPORT, "K2"),
-])
+route = create_route(
+    "KBLU/KAUN",
+    [
+        ("KBLU", WAYPOINT_TYPE_AIRPORT, "K2"),
+        ("USR001", WAYPOINT_TYPE_USER, ""),
+        ("KAUN", WAYPOINT_TYPE_AIRPORT, "K2"),
+    ],
+)
 
 flight_plan = create_flight_plan(waypoints, route, created=datetime.now(timezone.utc))
 

@@ -521,7 +521,7 @@ def split_route_greedy(
             # No airport found within limit - warn and include over-length leg
             wp_name = router.waypoints[remaining[0]][0]
             print(
-                f"Warning: no airport found within {target_m / 1852:.1f}nm " f"of {wp_name}, including over-length leg",
+                f"Warning: no airport found within {target_m / 1852:.1f}nm of {wp_name}, including over-length leg",
                 file=sys.stderr,
             )
             flights.append(remaining)
@@ -616,7 +616,7 @@ def split_route_recompute(
         if (split_pos, airport_idx) == (-1, -1):
             wp_name = router.waypoints[current_origin][0]
             print(
-                f"Warning: no airport found within {target_m / 1852:.1f}nm " f"of {wp_name}, including over-length leg",
+                f"Warning: no airport found within {target_m / 1852:.1f}nm of {wp_name}, including over-length leg",
                 file=sys.stderr,
             )
             flights.append(route)

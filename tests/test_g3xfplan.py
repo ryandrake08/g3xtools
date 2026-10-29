@@ -561,16 +561,16 @@ def test_split_greedy_airway_route(airway_router):
 
     # Each flight should start and end at an airport
     for i, flight in enumerate(flights):
-        assert (
-            airway_router.waypoints[flight[0]][1] in g3xfplan.SPLIT_AIRPORT_TYPES
-        ), f"Flight {i+1} start {airway_router.waypoints[flight[0]][0]} is not an airport"
-        assert (
-            airway_router.waypoints[flight[-1]][1] in g3xfplan.SPLIT_AIRPORT_TYPES
-        ), f"Flight {i+1} end {airway_router.waypoints[flight[-1]][0]} is not an airport"
+        assert airway_router.waypoints[flight[0]][1] in g3xfplan.SPLIT_AIRPORT_TYPES, (
+            f"Flight {i + 1} start {airway_router.waypoints[flight[0]][0]} is not an airport"
+        )
+        assert airway_router.waypoints[flight[-1]][1] in g3xfplan.SPLIT_AIRPORT_TYPES, (
+            f"Flight {i + 1} end {airway_router.waypoints[flight[-1]][0]} is not an airport"
+        )
 
     # Last waypoint of flight N = first waypoint of flight N+1 (continuity)
     for i in range(len(flights) - 1):
-        assert flights[i][-1] == flights[i + 1][0], f"Flight {i+1} end != Flight {i+2} start"
+        assert flights[i][-1] == flights[i + 1][0], f"Flight {i + 1} end != Flight {i + 2} start"
 
 
 def test_split_greedy_always_splits_at_via_airports(test_router):
