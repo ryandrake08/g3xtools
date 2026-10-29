@@ -1,26 +1,37 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix]
+        name: ruff
+        entry: ruff check --force-exclude --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
       - id: ruff-format
+        name: ruff-format
+        entry: ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.14.1
-    hooks:
       - id: mypy
-        additional_dependencies:
-          - types-requests>=2.32.4
-          - types-PyYAML>=6.0.12
+        name: mypy
+        entry: mypy --ignore-missing-imports --scripts-are-modules
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
 
-  - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.393
-    hooks:
       - id: pyright
+        name: pyright
+        entry: pyright
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
 
-  - repo: https://github.com/netromdk/vermin
-    rev: v1.6.0
-    hooks:
       - id: vermin
-        args: [--target=3.9-, --violations]
+        name: Check minimum Python version
+        entry: vermin --target=3.9- --violations
+        language: system
+        types: [python]
+        require_serial: true
