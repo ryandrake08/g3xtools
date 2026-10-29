@@ -274,6 +274,25 @@ def test_detect_sd_card_filter_by_filesystem():
         assert result == '/media/sdcard'
 
 
+def test_detect_sd_card_accepts_linux_vfat():
+    """Accept vfat filesystem type reported by Linux for FAT32 cards."""
+    try:
+        import psutil  # noqa: F401
+    except ImportError:
+        pytest.skip("psutil not available")
+
+    vfat_partition = mock.Mock()
+    vfat_partition.mountpoint = '/media/sdcard'
+    vfat_partition.fstype = 'vfat'
+
+    with (
+        mock.patch('sys.platform', 'linux'),
+        mock.patch('psutil.disk_partitions', return_value=[vfat_partition]),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):
+        assert sdcard.detect_sd_card() == '/media/sdcard'
+
+
 def test_detect_sd_card_filter_by_size():
     """Filter partitions by size range."""
     try:
@@ -692,3 +711,26 @@ def test_get_vsn_verbose_output(tmp_path, capsys):
         captured = capsys.readouterr()
         assert 'Checking VSN cache' in captured.out
         assert 'Using cached VSN: ABCDEF12' in captured.out
+
+
+def test_main_detect_prints_mount_point(capsys):
+    """--detect prints the detected SD card mount point."""
+    with (
+        mock.patch('sys.argv', ['sdcard.py', '--detect']),
+        mock.patch('sdcard.detect_sd_card', return_value='/media/sdcard'),
+    ):
+        sdcard.main()
+
+    assert capsys.readouterr().out == '/media/sdcard\n'
+
+
+def test_main_detect_no_card_exits_nonzero():
+    """--detect exits with status 1 when no SD card is found."""
+    with (
+        mock.patch('sys.argv', ['sdcard.py', '--detect']),
+        mock.patch('sdcard.detect_sd_card', return_value=''),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        sdcard.main()
+
+    assert exc_info.value.code == 1

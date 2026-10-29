@@ -11,6 +11,7 @@ Usage:
     python3 sdcard.py --cached /Volumes/GARMIN    # Check cached VSN for mount point
     python3 sdcard.py --label /Volumes/GARMIN     # Show volume label
     python3 sdcard.py --clear-cache               # Clear VSN cache
+    python3 sdcard.py --detect                    # Auto-detect SD card mount point
 
 Workflow:
     1. Run once with sudo to read VSN from block device (e.g., /dev/rdisk2s1)
@@ -335,7 +336,7 @@ def detect_sd_card() -> str:
         Path to SD card mount point, or empty string if no suitable candidate found
 
     Filters by:
-    - FAT32 filesystem only (includes 'msdos' which may be FAT32)
+    - FAT32 filesystem only (includes 'msdos' on macOS and 'vfat' on Linux, which may be FAT32)
     - SD card sizes between 8-32 GB only
     - Excludes system mount points
     """
@@ -358,8 +359,8 @@ def detect_sd_card() -> str:
         if sys.platform == 'win32' and mountpoint.upper() in ['C:\\']:
             continue
 
-        # Filter for FAT32 filesystem only (msdos on macOS is typically FAT32)
-        if partition.fstype.lower() not in ['fat32', 'msdos']:
+        # Filter for FAT32 filesystem only (msdos on macOS and vfat on Linux are typically FAT32)
+        if partition.fstype.lower() not in ['fat32', 'msdos', 'vfat']:
             continue
 
         # Check if size matches SD card sizes (8-32 GB)
@@ -472,7 +473,8 @@ def main() -> None:
         '  sudo %(prog)s /dev/rdisk2s1         # Read VSN and cache (requires sudo)\n'
         '  %(prog)s --cached /Volumes/GARMIN   # Check cached VSN (no sudo needed)\n'
         '  %(prog)s --label /Volumes/GARMIN    # Show volume label\n'
-        '  %(prog)s --clear-cache              # Clear VSN cache',
+        '  %(prog)s --clear-cache              # Clear VSN cache\n'
+        '  %(prog)s --detect                   # Auto-detect SD card mount point',
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -481,6 +483,7 @@ def main() -> None:
     group.add_argument('--cached', metavar='MOUNT_POINT', help='Check cached VSN for mount point')
     group.add_argument('--label', metavar='MOUNT_POINT', help='Show volume label for mount point')
     group.add_argument('--clear-cache', action='store_true', help='Clear VSN cache')
+    group.add_argument('--detect', action='store_true', help='Auto-detect SD card mount point')
 
     args = parser.parse_args()
 
@@ -489,6 +492,14 @@ def main() -> None:
         if args.clear_cache:
             _clear_vsn_cache()
             print("VSN cache cleared")
+            return
+
+        # Detect SD card
+        if args.detect:
+            path = detect_sd_card()
+            if not path:
+                sys.exit(1)
+            print(path)
             return
 
         # Show label
