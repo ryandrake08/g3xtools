@@ -1589,8 +1589,9 @@ Filter values:
 """,
     )
 
-    parser.add_argument("port", nargs="?", help="Serial port (e.g., /dev/ttyUSB0 or COM3)")
-    parser.add_argument("-f", "--file", type=Path, help="Read from file instead of serial port")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("port", nargs="?", help="Serial port (e.g., /dev/ttyUSB0 or COM3)")
+    source.add_argument("-f", "--file", type=Path, help="Read from file instead of serial port")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     parser.add_argument(
         "--filter",
@@ -1599,13 +1600,6 @@ Filter values:
     )
 
     args = parser.parse_args()
-
-    # Validate arguments
-    if args.file is None and args.port is None:
-        parser.error("Either PORT or --file must be specified")
-
-    if args.file is not None and args.port is not None:
-        parser.error("Cannot specify both PORT and --file")
 
     # Parse filters
     filters = None

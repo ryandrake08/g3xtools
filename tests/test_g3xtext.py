@@ -5,6 +5,8 @@ Tests cover message parsing, checksum validation, and data conversion.
 All test data is synthetic based on the G3X Text Out specification.
 """
 
+from unittest import mock
+
 import pytest
 
 import g3xtext
@@ -866,3 +868,27 @@ class TestIntegration:
         # Position data is all underscores, so should be None
         assert result.latitude is None
         assert result.longitude is None
+
+
+# =============================================================================
+# CLI Argument Tests
+# =============================================================================
+
+
+def test_main_requires_port_or_file():
+    """Exits with usage error when neither PORT nor --file is given."""
+    with mock.patch("sys.argv", ["g3xtext"]), pytest.raises(SystemExit) as exc_info:
+        g3xtext.main()
+
+    assert exc_info.value.code == 2
+
+
+def test_main_rejects_port_and_file_together(tmp_path):
+    """Exits with usage error when both PORT and --file are given."""
+    with (
+        mock.patch("sys.argv", ["g3xtext", "/dev/ttyUSB0", "--file", str(tmp_path / "log.txt")]),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        g3xtext.main()
+
+    assert exc_info.value.code == 2
