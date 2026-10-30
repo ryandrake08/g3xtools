@@ -580,6 +580,9 @@ python3 nasr.py --name <name>
 
 # Save the downloaded NASR zip in the cache directory under a specific filename
 python3 nasr.py --current --filename nasr_current.zip
+
+# Process an existing local NASR zip file without downloading
+python3 nasr.py --filename /path/to/28DaySubscription.zip --sqlite nasr.db
 ```
 
 Downloads go to the cache directory and are skipped if the cached zip has not changed on the FAA server.

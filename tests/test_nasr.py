@@ -7,6 +7,7 @@ Web scraping and CSV processing functions are better suited for integration test
 
 import sys
 from pathlib import Path
+from unittest import mock
 
 import msgpack
 import pytest
@@ -598,3 +599,39 @@ def test_write_sqlite_file_validates_table_names(tmp_path):
             sql_path.write_text(original_sql_content)
         else:
             sql_path.unlink()
+
+
+def test_main_filename_processes_local_zip_without_download(tmp_path):
+    """--filename alone processes the given local zip and skips downloading."""
+    zip_path = tmp_path / "nasr.zip"
+    zip_path.write_bytes(b"")
+    sqlite_path = tmp_path / "nasr.db"
+
+    with (
+        mock.patch("sys.argv", ["nasr.py", "--filename", str(zip_path), "--sqlite", str(sqlite_path)]),
+        mock.patch("nasr.download") as mock_download,
+        mock.patch("nasr.write_sqlite_file") as mock_write_sqlite,
+    ):
+        nasr.main()
+
+    mock_download.assert_not_called()
+    mock_write_sqlite.assert_called_once_with(zip_path, sqlite_path, False)
+
+
+def test_main_filename_missing_file_exits_with_usage_error(tmp_path):
+    """--filename alone exits with a usage error when the zip file does not exist."""
+    with (
+        mock.patch("sys.argv", ["nasr.py", "--filename", str(tmp_path / "missing.zip")]),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        nasr.main()
+
+    assert exc_info.value.code == 2
+
+
+def test_main_no_source_exits_with_usage_error():
+    """Exits with a usage error when no download option or --filename is given."""
+    with mock.patch("sys.argv", ["nasr.py"]), pytest.raises(SystemExit) as exc_info:
+        nasr.main()
+
+    assert exc_info.value.code == 2

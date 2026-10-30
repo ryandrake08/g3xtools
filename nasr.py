@@ -16,7 +16,8 @@ Command Line Arguments:
     --preview: Downloads the Preview data.
     --name: Downloads archived data by name.
     --list: Lists the available NASR data in the Archive section.
-    --filename: Specifies the NASR data filename. Uses basename of URL if not provided.
+    --filename: With --current, --preview, or --name, names the cached download (default: basename of URL).
+        Otherwise, processes the given local NASR zip file without downloading.
     --msgpack [FILE]: Output msgpack format (default: platform-specific cached file).
     --sqlite FILE: Output sqlite format (filename required).
     --with-geometry: Include spatialite geometry (only valid with --sqlite).
@@ -30,6 +31,9 @@ Usage:
     python nasr.py --list
         (then)
     python nasr.py --name <name>
+
+        (to skip downloading)
+    python nasr.py --filename <file.zip> --sqlite nasr.db
 
 Functions:
     list_archives() -> dict:
@@ -716,12 +720,16 @@ def main():
     parser = argparse.ArgumentParser(
         description='Download NASR data and store it in data structures useful for flight planning.'
     )
-    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument('--current', action='store_true', help='Download the Current data.')
     mode_group.add_argument('--preview', action='store_true', help='Download the Preview data.')
     mode_group.add_argument('--name', help='Download archived data by name.')
     mode_group.add_argument('--list', action='store_true', help='List of NASR data in the Archive section.')
-    parser.add_argument('--filename', help='Specify the NASR data filename. Uses basename of URL if not provided.')
+    parser.add_argument(
+        '--filename',
+        help='NASR zip filename. With --current, --preview, or --name, the name to save the download as in the '
+        'cache directory (default: basename of URL). Otherwise, a local NASR zip file to process without downloading.',
+    )
 
     # Output format arguments
     parser.add_argument(
@@ -765,10 +773,12 @@ def main():
         filename = download(fullzip_link, args.filename)
 
     elif args.filename:
+        if not pathlib.Path(args.filename).is_file():
+            parser.error(f'NASR zip file not found: {args.filename}')
         filename = args.filename
 
     else:
-        raise FileNotFoundError('nasr: No data found or specified.')
+        parser.error('one of the arguments --current --preview --name --list --filename is required')
 
     # Default behavior: if no output format specified, use msgpack
     if not args.msgpack and not args.sqlite:
