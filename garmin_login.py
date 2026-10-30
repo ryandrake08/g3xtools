@@ -11,20 +11,18 @@ This module implements the complete OAuth flow:
 2. Opens a browser to Garmin's SSO login page
 3. Captures the service ticket from the callback
 4. Exchanges the service ticket for an access token
-5. Caches the token data for reuse
 
 Features:
 - Browser-based OAuth login with local callback server
-- Automatic token caching in JSON files
 - Standalone CLI for testing and token extraction
 
 Example usage:
     # As a module
-    from garmin_login import flygarmin_get_access_token
-    token = flygarmin_get_access_token()
+    from garmin_login import flygarmin_login
+    token = flygarmin_login()['access_token']
 
     # Standalone
-    python3 garmin_login.py --dump-auth-json auth.json
+    python3 garmin_login.py
 """
 
 import http.server

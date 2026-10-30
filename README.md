@@ -1,9 +1,19 @@
 # G3X Tools
 
-A Python toolset for processing and analyzing Garmin G3X aircraft systems, including data logs, aviation checklists, navigation database updates, and flight planning.
+A Python toolset for processing and analyzing Garmin G3X aircraft systems, including data logs, RS-232 Text Out data, aviation checklists, device information, navigation database updates, and flight planning.
 
 **NOTE:**
 Navigation database functionality heavily based on the work done in https://github.com/dimaryaz/jdmtool
+
+| Tool | Purpose |
+|---|---|
+| [g3xlog.py](#g3xlogpy---flight-data-log-processor) | Sort data logs into config, taxi, and flight sessions |
+| [g3xheaders.py](#g3xheaderspy---log-structure-analyzer) | Report log column changes across software versions |
+| [g3xtext.py](#g3xtextpy---rs-232-text-out-parser) | Parse RS-232 Text Out serial data |
+| [g3xchecklist.py](#g3xchecklistpy---aviation-checklist-converter) | Convert checklists between binary .ace and YAML |
+| [garmin_device.py](#garmin_devicepy---device-information-reader) | Show device and installed database information from GarminDevice.xml |
+| [g3xdata.py](#g3xdatapy---aviation-database-downloader-and-sd-card-creator) | Download aviation databases and build SD card images |
+| [g3xfplan.py](#g3xfplanpy---flight-route-planner) | Plan VFR and IFR routes and export Garmin FPL files |
 
 ## Tools Overview
 
@@ -11,7 +21,8 @@ Navigation database functionality heavily based on the work done in https://gith
 Processes and categorizes Garmin G3X aircraft data logs into flight types based on operational characteristics.
 
 **Features:**
-- Automatically discovers CSV log files from mounted volumes
+- Automatically discovers CSV log files under the search path
+- Detects a mounted SD card (FAT32, 8-32GB) when no search path is given
 - Analyzes flight data (oil pressure, ground speed) to categorize sessions
 - Organizes logs into subdirectories: `config`, `taxi`, and `flight`
 - Preserves file modification times during copying
@@ -25,7 +36,12 @@ python3 g3xlog.py /path/to/search -o /output/path -v
 export G3X_SEARCH_PATH=/path/to/search
 export G3X_LOG_PATH=/output/path
 python3 g3xlog.py -v
+
+# Search the automatically detected SD card
+python3 g3xlog.py -o /output/path -v
 ```
+
+The search path is taken from the command line, then `G3X_SEARCH_PATH`, then SD card detection.
 
 **Classification Logic:**
 - **config**: No oil pressure detected (< 1 PSI) - ground testing/configuration
@@ -67,18 +83,17 @@ Parses RS-232 "Text Out" serial data from Garmin G3X/G3X Touch displays as defin
 # Read from serial port (requires pyserial)
 python3 g3xtext.py /dev/ttyUSB0
 
-# Read from file
+# Read from file (prints message counts only)
 python3 g3xtext.py --file g3x_flight.log
 
 # Verbose output with all parsed fields
 python3 g3xtext.py -v /dev/ttyUSB0
 
 # Filter specific message types
-python3 g3xtext.py --filter attitude,engine /dev/ttyUSB0
-
-# Show message counts only (no verbose output)
-python3 g3xtext.py --file g3x_flight.log
+python3 g3xtext.py -v --filter attitude,engine /dev/ttyUSB0
 ```
+
+Exactly one of a serial port or `--file` must be given. Without `-v`, only a summary of message counts is printed.
 
 **Message Types:**
 - **attitude**: Attitude and air data (pitch, roll, heading, airspeed, altitude)
@@ -97,7 +112,7 @@ Converts Garmin G3X aviation checklist files between binary (.ace) and human-rea
 **Features:**
 - Bidirectional conversion: ACE ↔ YAML
 - Full support for all ACE item types (challenges, responses, warnings, etc.)
-- Compatibile with Garmin G3X and G3X Touch displays
+- Compatible with Garmin G3X and G3X Touch displays
 
 **Usage:**
 ```bash
@@ -106,6 +121,36 @@ python3 g3xchecklist.py -x checklist.ace -o checklist.yaml
 
 # Compile edited YAML back to binary for G3X
 python3 g3xchecklist.py -c checklist.yaml -o checklist.ace
+```
+
+### garmin_device.py - Device Information Reader
+Reads `GarminDevice.xml` files, which describe a Garmin avionics device's model, software version, supported data types, and installed databases.
+
+**Features:**
+- Detects a mounted SD card and reads `Garmin/GarminDevice.xml` when no file is given
+- Displays device model, part number, software version, and device ID
+- Lists installed update files (databases and software)
+- Lists supported data types and file formats
+
+**Usage:**
+```bash
+# Read device information from the detected SD card
+python3 garmin_device.py
+
+# Read a specific file
+python3 garmin_device.py /path/to/GarminDevice.xml
+
+# Print the system serial number only
+python3 garmin_device.py -s
+
+# List installed databases and software
+python3 garmin_device.py --updates
+
+# List supported data types
+python3 garmin_device.py --data-types
+
+# Show all available information
+python3 garmin_device.py --verbose
 ```
 
 ### g3xdata.py - Aviation Database Downloader and SD Card Creator
@@ -120,7 +165,7 @@ Downloads current aviation database updates from Garmin's fly.garmin.com service
 - Optional progress bars for download and extraction phases
 - TAW archive extraction
 - Cross-platform volume serial number reading and SD card auto-detection
-- Device-specific unlock code generation
+- Device-specific unlock code generation (`feat_unlk.dat`) and encoded volume ID file (`.evidf.dat`)
 - Supports many aviation database types (obstacles, terrain, navigation, charts)
 - Automatic SD card detection (FAT32, 8-32GB) when output path not specified
 - Automatic device serial number detection from SD card's GarminDevice.xml
@@ -157,9 +202,6 @@ python3 g3xdata.py -p -v
 sudo python3 sdcard.py /dev/rdisk2s1 (--> outputs 1234ABCD)
 python3 g3xdata.py -s 60001A2345BC0 -o /path/to/sdcard -N 1234ABCD
 
-# Create SD card image for a given G3X system, sdcard at given mount point, using given sdcard block device
-sudo python3 g3xdata.py -s 60001A2345BC0 -o /path/to/sdcard -d /dev/sdc1
-
 # Create SD card image for the default (first) G3X system, automatically detecting sdcard path, using known sdcard serial number
 python3 g3xdata.py -N 1234ABCD
 
@@ -175,10 +217,26 @@ export G3X_SDCARD_PATH=/path/to/sdcard
 export G3X_SDCARD_SERIAL=1234ABCD
 python3 g3xdata.py
 
-# NOTE: Exactly one of: sdcard serial number -N or the sdcard block device -d must be specified. If neither are specified, data will be copied but not installable on G3X device
+# NOTE: The SD card volume serial number comes from -N, then G3X_SDCARD_SERIAL, then the VSN cached by sdcard.py for the output path.
+# If none is available, data will be copied but not installable on G3X device
 
 # Only select issues within the validity window (effectiveAt ≤ now < invalidAt)
 python3 g3xdata.py -V -s 60001A2345BC0 -N 1234ABCD
+
+# Add a specific series and issue, or exclude one (each can be repeated)
+python3 g3xdata.py -I 2054 2509 -E 2056 25D4
+
+# Include a local TAW file (can be repeated)
+python3 g3xdata.py -W /path/to/custom.taw
+
+# Verify CRC of each data file while generating feat_unlk.dat (slow)
+python3 g3xdata.py -c
+
+# Use a specific flygarmin access token instead of the cached one
+python3 g3xdata.py -T ACCESS_TOKEN
+
+# Re-download data files, and copy files even if the destination looks up to date
+python3 g3xdata.py -F -C
 ```
 
 **Automatic Device Detection:**
@@ -223,6 +281,7 @@ Generates flight plans using A* pathfinding with configurable routing preference
 - SkyVector integration for route visualization
 - Condensed airway output (entry/exit waypoints only)
 - Garmin FPL v1 XML file export for G3X systems
+- Splitting long routes into multiple flights that each start and end at an airport
 
 **Usage:**
 ```bash
@@ -234,10 +293,9 @@ python3 nasr.py --current
 python3 g3xfplan.py KHAF KUAO
 
 # Direct routing with multiple via points (shortest path)
-# NEW: Multiple waypoints can be specified in one --via flag
 python3 g3xfplan.py --direct KLVK KAPC --via KVCB KHAF KCCR
 
-# Old style still works (multiple --via flags)
+# Equivalent, using repeated --via flags
 python3 g3xfplan.py --direct KLVK KAPC --via KVCB --via KHAF --via KCCR
 
 # IFR routing with airways
@@ -247,10 +305,9 @@ python3 g3xfplan.py --airway KMOD KPSP
 python3 g3xfplan.py KSFO KLAX --max-leg-length 60
 
 # Add user waypoints as routing candidates (PREFER by default)
-# NEW: Multiple waypoints can be specified in one --waypoint flag
 python3 g3xfplan.py KHAF KUAO --waypoint "USR001,37.5,-122.0" "USR002,38.0,-121.5"
 
-# Old style still works (multiple --waypoint flags)
+# Equivalent, using repeated --waypoint flags
 python3 g3xfplan.py KHAF KUAO --waypoint "USR001,37.5,-122.0" --waypoint "USR002,38.0,-121.5"
 
 # User waypoints with AVOID preference
@@ -275,10 +332,28 @@ python3 g3xfplan.py KTVL KTRK \
   --output-fpl flight.fpl
 ```
 
+**Multi-Flight Splitting:**
+```bash
+# Split into flights of at most 300nm each
+python3 g3xfplan.py KHAF KABQ --max-flight-length 300
+
+# Distribute distance approximately evenly across flights
+python3 g3xfplan.py KHAF KABQ --max-flight-length 300 --equal-flight-lengths
+
+# Re-run A* from each split point instead of splitting one pre-computed route
+python3 g3xfplan.py KHAF KABQ --max-flight-length 300 --flight-split-strategy recompute
+
+# Writes /tmp/trip_1.fpl, /tmp/trip_2.fpl, etc.
+python3 g3xfplan.py KHAF KABQ --max-flight-length 300 --output-fpl /tmp/trip.fpl
+```
+
+Split points are always airports, and via airports are preferred as split points. Each flight is printed as `Flight N: ORIG to DEST (XXX.Xnm)` followed by its route. With `--output-skyvector`, a SkyVector URL is printed for each flight and the first flight is opened in the browser.
+
 **Routing Preferences:**
-- **Waypoint Types**: Configure handling for airports, balloonports, seaplane bases, gliderports, heliports, ultralight fields, user waypoints, VFR waypoints, DME, NDB, VOR, VORTAC, VOR/DME
+- **Waypoint Types**: Configure handling for airports, balloonports, seaplane bases, gliderports, heliports, ultralight fields, user waypoints, VFR waypoints, DME, NDB, NDB/DME, VOR, VORTAC, VOR/DME
 - **Airway Types**: Configure handling for Victor, RNAV (T/Q), Jet, Color, Atlantic, Bahama, Pacific, Puerto Rico airways
-- **Preference Levels**: PREFER, INCLUDE (default), AVOID, REJECT
+- **Preference Levels**: PREFER, INCLUDE, AVOID, REJECT
+- **Defaults**: Airports, VFR waypoints, and RNAV airways are INCLUDE; user waypoints and Victor airways are PREFER; all other types are REJECT. With `--airway`, navaids and airway fixes are always INCLUDE, regardless of their `--route-*` options.
 
 Examples:
 ```bash
@@ -357,11 +432,11 @@ write_fpl(flight_plan, "output.fpl")
 - XSD key/keyref validation (route points must reference existing waypoints)
 
 ### garmin_login.py - OAuth Authentication
-Handles authentication with Garmin's flight services using browser-based OAuth flow with automatic token caching.
+Handles authentication with Garmin's flight services using a browser-based OAuth flow. g3xdata.py caches the resulting token in `garmin_auth.json` in the cache directory.
 
 **Usage:**
 ```bash
-# Get access token (opens browser for login if not cached)
+# Log in through the browser and print the resulting credentials
 python3 garmin_login.py
 ```
 
@@ -370,14 +445,17 @@ Provides clean interface to Garmin's aviation database APIs with comprehensive t
 
 **Usage:**
 ```bash
-# Test aircraft API
-python3 garmin_api.py -t aircraft
+# Test aircraft API (requires an access token)
+python3 garmin_api.py -T ACCESS_TOKEN -t aircraft
 
 # Test series API
 python3 garmin_api.py -t series --series-id 12345
 
 # Test files API
-python3 garmin_api.py -t files --series-id 12345 --issue-name "2024-01"
+python3 garmin_api.py -t files --series-id 12345 --issue-name 2509
+
+# Test unlock API (requires an access token; --card-serial is the VSN as a decimal integer)
+python3 garmin_api.py -T ACCESS_TOKEN -t unlock --series-id 12345 --issue-name 2509 --device-id 67890 --card-serial 305419896
 ```
 
 ### taw.py - TAW Archive Extractor
@@ -392,35 +470,41 @@ Extracts and analyzes Garmin TAW (navigation database) archive files. Primarily 
 **Usage:**
 ```bash
 # Extract TAW archive to directory
-python3 taw.py archive.taw /output/path
+python3 taw.py archive.taw -o /output/path
 
 # Show archive contents only (no extraction)
 python3 taw.py -i archive.taw
 
 # Verbose extraction with detailed output
-python3 taw.py -v archive.taw /output/path
+python3 taw.py -v archive.taw -o /output/path
 ```
 
 ### featunlk.py - Feature Unlock File Generator
-Generates feature unlock files (feat_unlk.dat) for Garmin aviation systems. Primarily used by g3xdata.py but can be used standalone.
+Reads and updates feature unlock files (feat_unlk.dat) for Garmin aviation systems. Primarily used by g3xdata.py but can be used standalone.
 
 **Features:**
-- Cross-platform CLI with short argument support
+- Dumps the features in an existing feat_unlk.dat (default mode)
+- Updates feat_unlk.dat with the unlock entry for a data file (`-u`)
 - Optional CRC checking during processing
 - Supports all Garmin aviation database file types
 - Generates device-specific unlock codes
 
 **Usage:**
 ```bash
-# Generate unlock file for navigation data
-python3 featunlk.py -o /sdcard -f /sdcard/ldr_sys/avtn_db.bin -r "ldr_sys/avtn_db.bin" -N A1B2C3D4 -S 12345678
+# Dump all features in an existing feat_unlk.dat
+python3 featunlk.py /sdcard/feat_unlk.dat
 
-# Generate with CRC checking (slower but more reliable)
-python3 featunlk.py -c -o /sdcard -f /sdcard/terrain_9as.tdb -r "terrain_9as.tdb" -N A1B2C3D4 -S 12345678
+# Dump one feature
+python3 featunlk.py /sdcard/feat_unlk.dat --feature NAVIGATION
 
-# Show help for all options
-python3 featunlk.py --help
+# Update /sdcard/feat_unlk.dat for a navigation data file
+python3 featunlk.py -u /sdcard/ldr_sys/avtn_db.bin -o /sdcard -r "ldr_sys/avtn_db.bin" -N A1B2C3D4 -S 12345678
+
+# Update with CRC checking (slower but more reliable)
+python3 featunlk.py -u -c /sdcard/terrain_9as.tdb -o /sdcard -r "terrain_9as.tdb" -N A1B2C3D4 -S 12345678
 ```
+
+In dump mode, `FILE` is the feat_unlk.dat file. In update mode (`-u`), `FILE` is the data file being unlocked, and feat_unlk.dat is written in the `-o` directory. `-N` (volume serial number) and `-S` (system serial number) are hexadecimal.
 
 ### sdcard.py - SD Card Detection and Volume Serial Number Reader
 Cross-platform utility for reading volume serial numbers from storage devices and detecting SD card mount points, supporting both Unix-style raw devices and Windows drive letters.
@@ -428,11 +512,12 @@ Cross-platform utility for reading volume serial numbers from storage devices an
 **Features:**
 - Automatic SD card detection filtering by FAT32 filesystem and 8-32GB size range
 - Cross-platform volume serial number reading (Unix/Windows)
-- Platform-specific device path examples
-- Used by g3xdata.py for automatic SD card discovery
+- VSN caching keyed by volume label and size, so later reads need no privileges
+- Used by g3xdata.py, g3xlog.py, and garmin_device.py for automatic SD card discovery
 
 **Usage:**
 ```bash
+# Read VSN and cache it for the device's mount point
 # Unix/Mac (requires sudo for raw device access)
 sudo python3 sdcard.py /dev/rdisk2s1
 
@@ -440,7 +525,21 @@ sudo python3 sdcard.py /dev/rdisk2s1
 python3 sdcard.py D:
 
 # Output format: 8-character uppercase hexadecimal (e.g., A1B2C3D4)
+
+# Print the cached VSN for a mount point (no sudo needed)
+python3 sdcard.py --cached /Volumes/GARMIN
+
+# Print the volume label for a mount point
+python3 sdcard.py --label /Volumes/GARMIN
+
+# Print the automatically detected SD card mount point
+python3 sdcard.py --detect
+
+# Clear the VSN cache
+python3 sdcard.py --clear-cache
 ```
+
+**Recommended workflow:** Run `sudo python3 sdcard.py /dev/rdisk2s1` once per SD card. The VSN is cached in `vsn_cache.json` in the cache directory under a key such as `GARMIN:16.0GB`, and g3xdata.py then uses it without sudo or `-N`.
 
 ### nasr.py - NASR Database Generator
 Downloads and processes FAA NASR (National Airspace System Resources) data to create optimized databases for flight planning.
@@ -479,9 +578,11 @@ python3 nasr.py --list
 # Download specific archive by name
 python3 nasr.py --name <name>
 
-# Process existing NASR zip file
-python3 nasr.py --filename <file.zip> --sqlite nasr.db
+# Save the downloaded NASR zip in the cache directory under a specific filename
+python3 nasr.py --current --filename nasr_current.zip
 ```
+
+Downloads go to the cache directory and are skipped if the cached zip has not changed on the FAA server.
 
 **Output Formats:**
 - **msgpack** (default): Optimized binary format for g3xfplan.py, contains waypoints, airways, and connections
@@ -499,12 +600,12 @@ The virtual environment is not included in the repository. You must create it yo
 
 ```bash
 # Create virtual environment (first time only)
-python3 -m venv env
+python3 -m venv .venv
 
 # Activate the virtual environment
-source env/bin/activate  # Unix/Mac
+source .venv/bin/activate  # Unix/Mac
 # OR
-env\Scripts\activate     # Windows
+.venv\Scripts\activate     # Windows
 
 # Install the project
 pip install -e .
@@ -1075,11 +1176,10 @@ For now, see featunlk.py for this information.
 ## Development
 
 ### Environment Variables
-- `G3X_SEARCH_PATH`: Default search path for input log files (g3xlog.py, g3xheaders.py)
-- `G3X_LOG_PATH`: Default output path for processed logs (g3xlog.py, g3xheaders.py)
+- `G3X_SEARCH_PATH`: Default search path for input log files (g3xlog.py)
+- `G3X_LOG_PATH`: Default output path for processed logs (g3xlog.py), and default search path for g3xheaders.py
 - `G3X_SYSTEM_SERIAL`: Default avionics system serial number, e.g., ABC123 (g3xdata.py)
 - `G3X_SDCARD_PATH`: Default output path for SD card creation (g3xdata.py)
-- `G3X_SDCARD_DEVICE`: Default SD card block device for volume serial number reading (g3xdata.py)
 - `G3X_SDCARD_SERIAL`: Default SD card volume serial number in hex format, e.g., A1B2C3D4 (g3xdata.py)
 - `G3X_GARMIN_ACCESS_TOKEN`: Default Garmin flygarmin access token for authentication (g3xdata.py)
 
@@ -1091,7 +1191,7 @@ The project includes a test suite using pytest.
 
 ```bash
 # Activate virtual environment first
-source env/bin/activate
+source .venv/bin/activate
 
 # Run all tests
 pytest
@@ -1112,7 +1212,7 @@ pytest -x
 
 #### Code Quality
 
-The project uses **pre-commit** to manage code quality checks including **ruff** (linting/formatting), **mypy** (type checking), and **vermin** (Python version compatibility):
+The project uses **pre-commit** to manage code quality checks including **ruff** (linting/formatting), **mypy** and **pyright** (type checking), and **vermin** (Python version compatibility). The hooks run the tools installed in the virtual environment by `pip install -e ".[dev]"`, so the virtual environment must be active when committing:
 
 ```bash
 # Install dev dependencies (includes pre-commit)
@@ -1133,13 +1233,11 @@ ruff check --fix .
 ```
 
 **Configured Checks:**
-- **ruff**: Fast Python linter and formatter (auto-fixes enabled)
-- **mypy**: Static type checking with type stubs
+- **ruff**: Fast Python linter (auto-fixes enabled)
+- **ruff-format**: Python code formatter
+- **mypy**: Static type checking
+- **pyright**: Static type checking
 - **vermin**: Python 3.9+ compatibility verification
-- **trailing-whitespace**: Removes trailing whitespace
-- **end-of-file-fixer**: Ensures files end with newline
-- **check-yaml**: Validates YAML syntax
-- **mixed-line-ending**: Enforces LF line endings
 
 **Recommended Workflow:**
 ```bash
@@ -1157,7 +1255,7 @@ Basic functionality can be tested without the test suite:
 ```bash
 # Test authentication and API access
 python3 garmin_login.py                             # Test authentication
-python3 garmin_api.py -t aircraft                   # Test API calls
+python3 garmin_api.py -T ACCESS_TOKEN -t aircraft   # Test API calls
 
 # Test database discovery
 python3 g3xdata.py -l                               # List systems
@@ -1184,19 +1282,25 @@ python3 g3xheaders.py /path/to/logs
 g3xtools/
 ├── README.md                 # This file
 ├── pyproject.toml            # Project metadata and dependencies
+├── .pre-commit-config.yaml   # Code quality hooks
 ├── g3xchecklist.py           # Checklist converter
 ├── g3xdata.py                # Aviation database downloader and SD card creator
 ├── g3xfplan.py               # Flight route planner
 ├── g3xheaders.py             # Log structure analyzer
 ├── g3xlog.py                 # Flight data log processor
 ├── g3xtext.py                # RS-232 Text Out serial data parser
+├── garmin_device.py          # GarminDevice.xml reader
 ├── fpl.py                    # Flight plan file reader/writer (FPL v1 XML)
 ├── featunlk.py               # Feature unlock file generator
 ├── garmin_login.py           # OAuth authentication module
 ├── garmin_api.py             # REST API client module
 ├── nasr.py                   # NASR database generator
+├── post_process_nasr.sql     # SQL post-processing for nasr.py SQLite output
 ├── sdcard.py                 # SD card detection and volume serial number reader
-└── taw.py                    # TAW archive extractor
+├── taw.py                    # TAW archive extractor
+├── cache.py                  # Cross-platform cache directory utilities
+├── flygarmin/                # Login page served during the OAuth flow
+└── tests/                    # pytest test suite and fixtures
 ```
 
 ## License

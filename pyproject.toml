@@ -49,6 +49,7 @@ all = [
     "msgpack>=1.0.0",
     "psutil>=5.9.0",
     "pyserial>=3.5",
+    "pywin32>=304; sys_platform == 'win32'",
 ]
 test = [
     "pytest>=7.0",

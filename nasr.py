@@ -31,9 +31,6 @@ Usage:
         (then)
     python nasr.py --name <name>
 
-        (to skip downloading)
-    python nasr.py --filename <filename> --sqlite nasr.db
-
 Functions:
     list_archives() -> dict:
         Extracts and returns a dictionary of archive links from the NASR page.
