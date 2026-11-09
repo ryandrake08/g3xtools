@@ -35,7 +35,7 @@ import pathlib
 import shutil
 import sys
 import urllib.parse
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 try:
     import requests
@@ -651,6 +651,61 @@ def _installable_databases(aircraft_data: list, device_id: int, validity_window:
     return databases
 
 
+def _activate_features(
+    output_path: pathlib.Path,
+    features: list[tuple[str, pathlib.Path]],
+    card_serial: Optional[int],
+    system_serial: int,
+    check_crc: bool,
+    vprint: Callable[..., None],
+) -> None:
+    """
+    Writes feat_unlk.dat and .evidf.dat to the SD card for the extracted features.
+
+    Prints a warning to stderr whenever feat_unlk.dat is not written or does not unlock an
+    extracted file, since the data on the SD card is then not installable on the device.
+
+    Args:
+        output_path: SD card root directory
+        features: (TAW region path, extracted file path) pairs
+        card_serial: SD card volume serial number, or None if unknown
+        system_serial: Avionics system serial number
+        check_crc: Verify the CRC of each data file while unlocking
+        vprint: Verbose print function
+    """
+    if not card_serial:
+        print(
+            f"Warning: SD card volume serial number is unknown, so feat_unlk.dat was not written. "
+            f"The data copied to {output_path} is not installable. Cache the VSN with sdcard.py or specify it with -N.",
+            file=sys.stderr,
+        )
+        return
+
+    if not features:
+        print(
+            f"Warning: No unlockable data was extracted, so feat_unlk.dat was not written to {output_path}",
+            file=sys.stderr,
+        )
+
+    for taw_region_path, output_file_path in features:
+        vprint(f"Unlocking feature {taw_region_path}")
+        if not featunlk.update_feature_unlock(
+            output_path, output_file_path, taw_region_path, card_serial, system_serial, check_crc
+        ):
+            print(
+                f"Warning: No feature is known for TAW region {taw_region_path}, "
+                f"so {output_file_path} was not added to feat_unlk.dat",
+                file=sys.stderr,
+            )
+
+    # Write encoded volume ID file (.evidf.dat)
+    evidf_path = output_path / '.evidf.dat'
+    evidf_path.write_bytes(featunlk.encode_volume_id(card_serial).to_bytes(4, 'little'))
+    vprint(f"Wrote {evidf_path}")
+
+    vprint("Finished creating SD card")
+
+
 def main() -> None:
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Download G3X data update and create SD card')
@@ -955,20 +1010,7 @@ def main() -> None:
             vprint(
                 f"Creating SD card (s/n: {card_serial:08X}) at {output_path}, installable on device {device_id} (s/n: {system_serial})"
             )
-
-            # Activate all features
-            for taw_region_path, output_file_path in features:
-                vprint(f"Unlocking feature {taw_region_path}")
-                featunlk.update_feature_unlock(
-                    output_path, output_file_path, taw_region_path, card_serial, system_serial, args.check_crc
-                )
-
-            # Write encoded volume ID file (.evidf.dat)
-            evidf_path = output_path / '.evidf.dat'
-            evidf_path.write_bytes(featunlk.encode_volume_id(card_serial).to_bytes(4, 'little'))
-            vprint(f"Wrote {evidf_path}")
-
-            vprint("Finished creating SD card")
+        _activate_features(output_path, features, card_serial, system_serial, args.check_crc, vprint)
 
 
 if __name__ == "__main__":

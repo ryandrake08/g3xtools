@@ -145,6 +145,24 @@ def test_update_feature_unlock_validation(tmp_path):
         )
 
 
+def test_update_feature_unlock_unknown_region_returns_false(tmp_path):
+    """Returns False and leaves feat_unlk.dat unwritten for a region with no known feature."""
+    test_file = tmp_path / "test_data.bin"
+    test_file.write_bytes(b"\x00" * 104)
+
+    assert not featunlk.update_feature_unlock(tmp_path, test_file, "unknown/region.bin", 0xDEADBEEF, 0x999999999)
+    assert not (tmp_path / "feat_unlk.dat").exists()
+
+
+def test_update_feature_unlock_known_region_returns_true(tmp_path):
+    """Returns True and writes feat_unlk.dat for a region with a known feature."""
+    test_file = tmp_path / "test_data.bin"
+    test_file.write_bytes(b"\x00" * 104)
+
+    assert featunlk.update_feature_unlock(tmp_path, test_file, "terrain.tdb", 0xDEADBEEF, 0x999999999)
+    assert (tmp_path / "feat_unlk.dat").exists()
+
+
 def test_volume_id_encode_decode_roundtrip():
     """Encoding then decoding volume ID should return original value."""
     test_ids = [0x00000000, 0x12345678, 0xDEADBEEF, 0xFFFFFFFF, 0xAA7A1724]
@@ -357,3 +375,79 @@ def test_main_update_mode_missing_args(tmp_path, monkeypatch, capsys):
 
     captured = capsys.readouterr()
     assert "--output is required" in captured.err
+
+
+def test_main_update_mode_unknown_region_warns(tmp_path, monkeypatch, capsys):
+    """main() in update mode warns when the region has no known feature."""
+    test_file = tmp_path / "test.bin"
+    test_file.write_bytes(b"\x00" * 104)
+
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        [
+            'featunlk.py',
+            str(test_file),
+            '-u',
+            '-o',
+            str(tmp_path),
+            '-r',
+            'unknown/region.bin',
+            '-N',
+            'DEADBEEF',
+            '-S',
+            '999999999',
+        ],
+    )
+
+    featunlk.main()
+
+    assert "No feature is known for TAW region unknown/region.bin" in capsys.readouterr().err
+    assert not (tmp_path / "feat_unlk.dat").exists()
+
+
+def test_main_update_mode_missing_vsn(tmp_path, monkeypatch, capsys):
+    """main() in update mode exits with a usage error when -N is missing."""
+    test_file = tmp_path / "test.bin"
+    test_file.write_bytes(b"\x00" * 104)
+
+    monkeypatch.setattr(
+        sys, 'argv', ['featunlk.py', str(test_file), '-u', '-o', str(tmp_path), '-r', 'terrain.tdb', '-S', '999999999']
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        featunlk.main()
+
+    assert exc_info.value.code == 2
+    assert "--vsn is required" in capsys.readouterr().err
+
+
+def test_main_update_mode_invalid_vsn(tmp_path, monkeypatch):
+    """main() exits with a usage error when -N is not hexadecimal."""
+    test_file = tmp_path / "test.bin"
+    test_file.write_bytes(b"\x00" * 104)
+
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        ['featunlk.py', str(test_file), '-u', '-o', str(tmp_path), '-r', 'terrain.tdb', '-N', 'XYZ', '-S', '999999999'],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        featunlk.main()
+
+    assert exc_info.value.code == 2
+
+
+def test_update_feature_unlock_encodes_vsn(tmp_path):
+    """The written feat_unlk.dat entry decodes back to the given volume serial number."""
+    test_file = tmp_path / "test_data.bin"
+    test_file.write_bytes(b"\x00" * 104)
+    vol_id = 0xDEADBEEF
+
+    featunlk.update_feature_unlock(tmp_path, test_file, "terrain.tdb", vol_id, 0x999999999)
+
+    # Encoded volume ID follows magic1(2), security ID(2), magic2(4), feature bit(4), and a zero field(4)
+    vol_id_offset = featunlk._Feature.TERRAIN.offset + 16
+    encoded = (tmp_path / "feat_unlk.dat").read_bytes()[vol_id_offset : vol_id_offset + 4]
+    assert featunlk._decode_volume_id(int.from_bytes(encoded, 'little')) == vol_id

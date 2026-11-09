@@ -27,6 +27,7 @@ import datetime
 import os
 import pathlib
 import struct
+import sys
 import zipfile
 from enum import Enum
 from io import BytesIO
@@ -245,7 +246,24 @@ def update_feature_unlock(
     vol_id: int,
     system_id: int,
     check_crc: bool = False,
-) -> None:
+) -> bool:
+    """
+    Adds the unlock entry for a data file to feat_unlk.dat in dest_dir.
+
+    Args:
+        dest_dir: Directory containing feat_unlk.dat (usually the SD card root)
+        output_file_path: Data file to unlock
+        region_path: TAW region path of the data file, used to look up the feature
+        vol_id: SD card volume serial number
+        system_id: Avionics system serial number
+        check_crc: Verify the data file's CRC while reading it
+
+    Returns:
+        True if feat_unlk.dat was updated, False if region_path has no known feature
+
+    Raises:
+        ValueError: If a path or ID is invalid, or the data file fails its checksum
+    """
     # Validate paths
     if not dest_dir.exists():
         raise ValueError(f"Destination directory does not exist: {dest_dir}")
@@ -265,7 +283,7 @@ def update_feature_unlock(
     # Look up feature from region filename
     feature = _FILENAME_TO_FEATURE.get(region_path)
     if feature is None:
-        return
+        return False
 
     preview = None
     with open(output_file_path, 'rb') as data:
@@ -349,6 +367,7 @@ def update_feature_unlock(
 
     # Make read-only to be consistent with JDM
     feat_unlk.chmod(0o444)
+    return True
 
 
 def _calculate_crc_and_preview_of_file(feature: _Feature, filename: pathlib.Path) -> tuple[int, bytes]:
@@ -817,9 +836,14 @@ Examples:
         if args.system_id is None:
             parser.error("--system-serial is required for update mode")
 
-        update_feature_unlock(
+        if not update_feature_unlock(
             args.dest_dir, args.file_path, args.region_path, args.vol_id, args.system_id, args.check_crc
-        )
+        ):
+            print(
+                f"Warning: No feature is known for TAW region {args.region_path}, "
+                f"so {args.file_path} was not added to feat_unlk.dat",
+                file=sys.stderr,
+            )
     else:
         # Dump mode (default)
         result = dump_feature_unlock(args.file_path, args.feature_name or "", args.verbose, args.check_crc)

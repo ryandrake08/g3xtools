@@ -7,6 +7,7 @@ Network I/O and caching functions are better suited for integration tests.
 
 import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -349,3 +350,69 @@ def test_get_cached_file_path_for_url_fragment(tmp_path, monkeypatch):
     assert "#" not in str(path)
     assert "section1" not in str(path)
     assert path.name == "file.dat"
+
+
+def test_activate_features_unknown_vsn_warns_and_writes_nothing(tmp_path, capsys):
+    """Warns and writes neither feat_unlk.dat nor .evidf.dat when the VSN is unknown."""
+    features = [("ldr_sys/avtn_db.bin", tmp_path / "ldr_sys" / "avtn_db.bin")]
+
+    with mock.patch("featunlk.update_feature_unlock") as mock_update:
+        g3xdata._activate_features(tmp_path, features, None, 0x123456789, False, lambda *_: None)
+
+    mock_update.assert_not_called()
+    assert not (tmp_path / ".evidf.dat").exists()
+    assert "feat_unlk.dat was not written" in capsys.readouterr().err
+
+
+def test_activate_features_no_features_warns(tmp_path, capsys):
+    """Warns when there is no extracted data to unlock."""
+    g3xdata._activate_features(tmp_path, [], 0xDEADBEEF, 0x123456789, False, lambda *_: None)
+
+    assert "No unlockable data was extracted" in capsys.readouterr().err
+
+
+def test_activate_features_unknown_region_warns(tmp_path, capsys):
+    """Warns for each extracted file whose TAW region has no known feature."""
+    features = [("unknown/region.bin", tmp_path / "region.bin")]
+
+    with mock.patch("featunlk.update_feature_unlock", return_value=False):
+        g3xdata._activate_features(tmp_path, features, 0xDEADBEEF, 0x123456789, False, lambda *_: None)
+
+    assert "No feature is known for TAW region unknown/region.bin" in capsys.readouterr().err
+
+
+def test_activate_features_success_writes_evidf_without_warnings(tmp_path, capsys):
+    """Unlocks each feature and writes .evidf.dat with no warnings."""
+    data_path = tmp_path / "ldr_sys" / "avtn_db.bin"
+    features = [("ldr_sys/avtn_db.bin", data_path)]
+
+    with mock.patch("featunlk.update_feature_unlock", return_value=True) as mock_update:
+        g3xdata._activate_features(tmp_path, features, 0xDEADBEEF, 0x123456789, False, lambda *_: None)
+
+    mock_update.assert_called_once_with(tmp_path, data_path, "ldr_sys/avtn_db.bin", 0xDEADBEEF, 0x123456789, False)
+    assert (tmp_path / ".evidf.dat").exists()
+    assert capsys.readouterr().err == ""
+
+
+def test_activate_features_evidf_contains_encoded_vsn(tmp_path):
+    """.evidf.dat holds the encoded volume serial number as 4 little-endian bytes."""
+    with mock.patch("featunlk.update_feature_unlock", return_value=True):
+        g3xdata._activate_features(
+            tmp_path, [("terrain.tdb", tmp_path / "terrain.tdb")], 0xDEADBEEF, 0x123456789, False, lambda *_: None
+        )
+
+    expected = g3xdata.featunlk.encode_volume_id(0xDEADBEEF).to_bytes(4, 'little')
+    assert (tmp_path / ".evidf.dat").read_bytes() == expected
+
+
+def test_invalid_explicit_vsn_results_in_feat_unlk_warning(tmp_path, capsys):
+    """An invalid -N value resolves to no VSN, and SD card activation then warns."""
+    card_serial = g3xdata.sdcard.get_vsn("XYZ", str(tmp_path))
+
+    with mock.patch("featunlk.update_feature_unlock") as mock_update:
+        g3xdata._activate_features(
+            tmp_path, [("terrain.tdb", tmp_path / "terrain.tdb")], card_serial, 0x123456789, False, lambda *_: None
+        )
+
+    mock_update.assert_not_called()
+    assert "feat_unlk.dat was not written" in capsys.readouterr().err
