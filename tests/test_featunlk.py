@@ -451,3 +451,23 @@ def test_update_feature_unlock_encodes_vsn(tmp_path):
     vol_id_offset = featunlk._Feature.TERRAIN.offset + 16
     encoded = (tmp_path / "feat_unlk.dat").read_bytes()[vol_id_offset : vol_id_offset + 4]
     assert featunlk._decode_volume_id(int.from_bytes(encoded, 'little')) == vol_id
+
+
+def test_update_feature_unlock_matches_region_case_insensitively(tmp_path):
+    """Matches TAW region paths to features ignoring case, as FAT32 filenames do."""
+    test_file = tmp_path / "Obstacle.odb"
+    test_file.write_bytes(b"\x00" * 104)
+
+    assert featunlk.update_feature_unlock(tmp_path, test_file, ".System/AVTN/Obstacle.odb", 0xDEADBEEF, 0x999999999)
+
+    entry = (tmp_path / "feat_unlk.dat").read_bytes()[featunlk._Feature.OBSTACLE.offset :]
+    feature_bit = int.from_bytes(entry[8:12], 'little')
+    assert feature_bit == 1 << featunlk._Feature.OBSTACLE.bit
+
+
+def test_dump_feature_unlock_filename_case_insensitive(tmp_path):
+    """dump_feature_unlock accepts a feature filename in any case."""
+    feat_unlk_file = tmp_path / "feat_unlk.dat"
+    feat_unlk_file.write_bytes(b"\x00" * 18000)
+
+    assert featunlk.dump_feature_unlock(feat_unlk_file, "AVTN_DB.BIN") == 0

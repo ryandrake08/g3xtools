@@ -192,8 +192,9 @@ class _Feature(Enum):
         self.filenames = filenames
 
 
+# Keyed by lowercase filename, since FAT32 filenames are case-insensitive
 _FILENAME_TO_FEATURE: dict[str, _Feature] = {
-    filename: feature for feature in _Feature for filename in feature.filenames
+    filename.lower(): feature for feature in _Feature for filename in feature.filenames
 }
 
 _FEAT_UNLK_POLYNOMIAL_1 = 0x076DC419
@@ -281,7 +282,7 @@ def update_feature_unlock(
         raise ValueError(f"System ID must be a 64-bit unsigned integer: {system_id:#x}")
 
     # Look up feature from region filename
-    feature = _FILENAME_TO_FEATURE.get(region_path)
+    feature = _FILENAME_TO_FEATURE.get(region_path.lower())
     if feature is None:
         return False
 
@@ -772,7 +773,7 @@ def dump_feature_unlock(
             feature = _Feature[feature_name]
         except KeyError:
             # Try as filename
-            feature_lookup = _FILENAME_TO_FEATURE.get(feature_name)
+            feature_lookup = _FILENAME_TO_FEATURE.get(feature_name.lower())
 
             if feature_lookup is None:
                 print(f"Unsupported feature: {feature_name}")
