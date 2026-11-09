@@ -201,6 +201,10 @@ def extract_taw(
             if region_path:
                 output_file = pathlib.PurePosixPath(region_path)
             elif skip_unknown_regions:
+                print(
+                    f"Warning: Skipping unknown TAW region {region:02x} ({data_size} bytes) in {input_path}",
+                    file=sys.stderr,
+                )
                 output_file = None
             else:
                 output_file = f"region_{region:02x}.bin"

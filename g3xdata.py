@@ -691,7 +691,7 @@ def _activate_features(
         vprint(f"Unlocking feature {taw_region_path}")
         if not featunlk.update_feature_unlock(
             output_path, output_file_path, taw_region_path, card_serial, system_serial, check_crc
-        ):
+        ) and not featunlk.is_unlock_free(taw_region_path):
             print(
                 f"Warning: No feature is known for TAW region {taw_region_path}, "
                 f"so {output_file_path} was not added to feat_unlk.dat",

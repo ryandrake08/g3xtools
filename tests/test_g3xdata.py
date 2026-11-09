@@ -428,3 +428,13 @@ def test_activate_features_zero_vsn_writes_without_warning(tmp_path, capsys):
     mock_update.assert_called_once()
     assert (tmp_path / ".evidf.dat").exists()
     assert capsys.readouterr().err == ""
+
+
+def test_activate_features_unlock_free_region_does_not_warn(tmp_path, capsys):
+    """Does not warn for an extracted file that needs no unlock."""
+    features = [("fc_tpc/fc_tpc.fca", tmp_path / "fc_tpc" / "fc_tpc.fca")]
+
+    with mock.patch("featunlk.update_feature_unlock", return_value=False):
+        g3xdata._activate_features(tmp_path, features, 0xDEADBEEF, 0x123456789, False, lambda *_: None)
+
+    assert capsys.readouterr().err == ""

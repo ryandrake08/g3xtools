@@ -471,3 +471,49 @@ def test_dump_feature_unlock_filename_case_insensitive(tmp_path):
     feat_unlk_file.write_bytes(b"\x00" * 18000)
 
     assert featunlk.dump_feature_unlock(feat_unlk_file, "AVTN_DB.BIN") == 0
+
+
+@pytest.mark.parametrize('region_path', ['nav.bin', 'fc_tpc/fc_tpc.fca', '.System/AVTN/FliteCharts/fc_tpc.fca'])
+def test_is_unlock_free_for_files_jdmtool_does_not_unlock(region_path):
+    """TAW region files that jdmtool never unlocks are unlock-free, in any case."""
+    assert featunlk.is_unlock_free(region_path)
+    assert featunlk.is_unlock_free(region_path.upper())
+
+
+@pytest.mark.parametrize('region_path', ['terrain.odb', 'unknown/region.bin'])
+def test_is_unlock_free_false_for_feature_and_unknown_files(region_path):
+    """Files with a feature, and unknown files, are not unlock-free."""
+    assert not featunlk.is_unlock_free(region_path)
+
+
+def test_unlock_free_files_have_no_feature():
+    """No unlock-free filename is also mapped to a feature."""
+    assert not featunlk._UNLOCK_FREE_FILENAMES & featunlk._FILENAME_TO_FEATURE.keys()
+
+
+def test_main_update_mode_unlock_free_region_does_not_warn(tmp_path, monkeypatch, capsys):
+    """main() in update mode does not warn for a file that needs no unlock."""
+    test_file = tmp_path / "fc_tpc.fca"
+    test_file.write_bytes(b"\x00" * 104)
+
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        [
+            'featunlk.py',
+            str(test_file),
+            '-u',
+            '-o',
+            str(tmp_path),
+            '-r',
+            'fc_tpc/fc_tpc.fca',
+            '-N',
+            'DEADBEEF',
+            '-S',
+            '999999999',
+        ],
+    )
+
+    featunlk.main()
+
+    assert capsys.readouterr().err == ""

@@ -78,6 +78,7 @@ OTHER DB:
 # Public API
 __all__ = [
     'encode_volume_id',
+    'is_unlock_free',
     'update_feature_unlock',
     'dump_feature_unlock',
 ]
@@ -202,6 +203,9 @@ _FILENAME_TO_FEATURE: dict[str, _Feature] = {
     filename.lower(): feature for feature in _Feature for filename in feature.filenames
 }
 
+# TAW region files that jdmtool does not unlock, as lowercase filenames
+_UNLOCK_FREE_FILENAMES = {'nav.bin', 'fc_tpc/fc_tpc.fca', '.system/avtn/flitecharts/fc_tpc.fca'}
+
 _FEAT_UNLK_POLYNOMIAL_1 = 0x076DC419
 _FEAT_UNLK_POLYNOMIAL_2 = 0x77073096
 
@@ -243,6 +247,19 @@ def _feat_unlk_checksum(data: bytes, value: int = 0xFFFFFFFF) -> int:
         index = b ^ (value & 0xFF)
         value = __feat_unlk_lookup_table[index] ^ (value >> 8)
     return value
+
+
+def is_unlock_free(region_path: str) -> bool:
+    """
+    Returns whether a TAW region file is known to need no feature unlock.
+
+    Args:
+        region_path: TAW region path of the data file
+
+    Returns:
+        True for files that jdmtool does not unlock, False otherwise
+    """
+    return region_path.lower() in _UNLOCK_FREE_FILENAMES
 
 
 def update_feature_unlock(
@@ -844,7 +861,7 @@ Examples:
 
         if not update_feature_unlock(
             args.dest_dir, args.file_path, args.region_path, args.vol_id, args.system_id, args.check_crc
-        ):
+        ) and not is_unlock_free(args.region_path):
             print(
                 f"Warning: No feature is known for TAW region {args.region_path}, "
                 f"so {args.file_path} was not added to feat_unlk.dat",

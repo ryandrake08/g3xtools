@@ -189,8 +189,8 @@ def test_extract_taw_unknown_database_type(tmp_path):
     assert len(results) == 1
 
 
-def test_extract_taw_skip_unknown_regions(tmp_path):
-    """Skip unknown regions when flag is set."""
+def test_extract_taw_skip_unknown_regions(tmp_path, capsys):
+    """Skip unknown regions with a warning when flag is set."""
     # Create TAW with unknown region
     taw_file = tmp_path / "test.taw"
     with open(taw_file, 'wb') as f:
@@ -241,6 +241,7 @@ def test_extract_taw_skip_unknown_regions(tmp_path):
 
     # Should have no results (unknown region skipped)
     assert len(results) == 0
+    assert "Skipping unknown TAW region ff" in capsys.readouterr().err
 
 
 def test_extract_taw_include_unknown_regions(tmp_path):
