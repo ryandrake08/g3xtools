@@ -734,3 +734,17 @@ def test_main_detect_no_card_exits_nonzero():
         sdcard.main()
 
     assert exc_info.value.code == 1
+
+
+def test_get_vsn_from_cache_zero(tmp_path):
+    """Return a cached VSN of 00000000 rather than treating it as not cached."""
+    mount_point = '/media/sdcard'
+
+    with (
+        mock.patch('sdcard._get_vsn_cache_path', return_value=tmp_path / 'vsn_cache.json'),
+        mock.patch('sdcard._get_volume_label', return_value='GARMIN'),
+        mock.patch('shutil.disk_usage', return_value=(16 * 1024**3, 0, 0)),
+    ):
+        sdcard._cache_vsn(mount_point, 0)
+
+        assert sdcard.get_vsn(None, mount_point, verbose=False) == 0

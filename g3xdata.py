@@ -673,7 +673,7 @@ def _activate_features(
         check_crc: Verify the CRC of each data file while unlocking
         vprint: Verbose print function
     """
-    if not card_serial:
+    if card_serial is None:
         print(
             f"Warning: SD card volume serial number is unknown, so feat_unlk.dat was not written. "
             f"The data copied to {output_path} is not installable. Cache the VSN with sdcard.py or specify it with -N.",
@@ -1006,7 +1006,7 @@ def main() -> None:
 
         # Activate features on the sdcard
 
-        if card_serial:
+        if card_serial is not None:
             vprint(
                 f"Creating SD card (s/n: {card_serial:08X}) at {output_path}, installable on device {device_id} (s/n: {system_serial})"
             )

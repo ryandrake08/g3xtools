@@ -416,3 +416,15 @@ def test_invalid_explicit_vsn_results_in_feat_unlk_warning(tmp_path, capsys):
 
     mock_update.assert_not_called()
     assert "feat_unlk.dat was not written" in capsys.readouterr().err
+
+
+def test_activate_features_zero_vsn_writes_without_warning(tmp_path, capsys):
+    """A VSN of 00000000 is a valid serial number, so feat_unlk.dat and .evidf.dat are written."""
+    with mock.patch("featunlk.update_feature_unlock", return_value=True) as mock_update:
+        g3xdata._activate_features(
+            tmp_path, [("terrain.tdb", tmp_path / "terrain.tdb")], 0, 0x123456789, False, lambda *_: None
+        )
+
+    mock_update.assert_called_once()
+    assert (tmp_path / ".evidf.dat").exists()
+    assert capsys.readouterr().err == ""

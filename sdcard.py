@@ -452,7 +452,7 @@ def get_vsn(vsn_arg: Optional[str], output_arg: Optional[str], verbose: bool = F
         # Try to read from cache using output path (mount point)
         vprint(f"Checking VSN cache for {output_arg}")
         card_serial = _get_cached_vsn(output_arg)
-        if card_serial:
+        if card_serial is not None:
             vprint(f"Using cached VSN: {card_serial:08X}")
             return card_serial
         else:
