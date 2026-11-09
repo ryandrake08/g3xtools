@@ -1279,6 +1279,25 @@ python3 g3xlog.py /path/to/logs -o /output/path -v
 python3 g3xheaders.py /path/to/logs
 ```
 
+### Tracking jdmtool
+
+`featunlk.py` and `taw.py` are derived from [jdmtool](https://github.com/dimaryaz/jdmtool) (Apache-2.0), which is the reference for the feat_unlk and TAW formats. Each module's docstring names the jdmtool commit it was last reviewed against. `tests/fixtures/jdmtool_tables.json` is a snapshot of jdmtool's format constants and tables at that commit, and `tests/test_jdmtool_parity.py` checks ours against it, listing the intentional differences.
+
+To review newer jdmtool changes:
+
+```bash
+git clone https://github.com/dimaryaz/jdmtool.git /path/to/jdmtool
+
+# Show jdmtool changes since the reviewed commit
+git -C /path/to/jdmtool log -p 48ef8d4..HEAD -- src/jdmtool/featunlk.py src/jdmtool/taw.py src/jdmtool/checksum.py
+
+# Refresh the snapshot; failing parity tests show which tables changed
+python3 tests/update_jdmtool_fixture.py /path/to/jdmtool
+pytest tests/test_jdmtool_parity.py
+```
+
+Then update our tables, or add an intentional difference to the test, and update the commit in the `featunlk.py` and `taw.py` docstrings to the new snapshot's commit.
+
 ## File Structure
 
 ```

@@ -10,13 +10,15 @@ This tool can both analyze TAW file contents and extract files to directory
 structures suitable for SD card deployment to Garmin G3X systems.
 
 Example usage:
-    python3 taw.py archive.taw /output/path     # Extract archive
+    python3 taw.py archive.taw -o /output/path  # Extract archive
     python3 taw.py -i archive.taw               # Show contents only
 
 This module is used by g3xdata.py to extract navigation database files
 for SD card creation but can also be used standalone for TAW analysis.
 
-Upstream credit: https://github.com/dimaryaz/jdmtool/blob/main/src/jdmtool/taw.py
+Derived from jdmtool (https://github.com/dimaryaz/jdmtool, Apache-2.0) as of
+jdmtool commit 48ef8d4, with modifications. tests/test_jdmtool_parity.py checks the
+format constants and tables against jdmtool and lists the intentional differences.
 
 """
 
@@ -47,9 +49,10 @@ _TAW_DATABASE_TYPES = {
     0x02F0: "GPS175",
     0x0402: "GtnXi",
     0x0465: "GI275",
+    0x055E: "GTR225/GNC255",
     0x0618: "AERA 760",
     0x06BF: "G3X Touch",
-    0x0738: "GTR2X5",
+    0x0738: "GTR2X5/GNC215",
     0x07DC: "GTXi",
 }
 
@@ -73,6 +76,7 @@ _TAW_REGION_PATHS = {
     0x28: "terrain.adb",
     0x32: ".System/AVTN/avtn_db.bin",
     0x33: "Poi/air_sport.gpi",
+    0x34: ".System/AVTN/terrain.tdb",
     0x35: ".System/AVTN/Obstacle.odb",
     0x36: ".System/AVTN/safetaxi.img",
     0x39: ".System/AVTN/FliteCharts/fc_tpc.dat",

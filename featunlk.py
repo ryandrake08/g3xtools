@@ -12,13 +12,17 @@ SD card volume serial number, device serial number, file CRC, and feature-specif
 metadata.
 
 Example usage:
-    python3 featunlk.py -o /sdcard -f nav_data.bin -r "ldr_sys/avtn_db.bin" -N A1B2C3D4 -S 12345678
-    python3 featunlk.py -c -o /sdcard -f terrain.bin -r "terrain.gca" -N A1B2C3D4 -S 12345678
+    python3 featunlk.py /sdcard/feat_unlk.dat                  # Dump all features
+    python3 featunlk.py /sdcard/feat_unlk.dat -f NAVIGATION    # Dump one feature
+    python3 featunlk.py -u /sdcard/ldr_sys/avtn_db.bin -o /sdcard -r "ldr_sys/avtn_db.bin" -N A1B2C3D4 -S 12345678
 
 This module is used by g3xdata.py to generate unlock codes for downloaded
 aviation databases but can also be used standalone for manual unlock generation.
 
-Upstream credit: https://github.com/dimaryaz/jdmtool/blob/main/src/jdmtool/featunlk.py
+Derived from jdmtool (https://github.com/dimaryaz/jdmtool, Apache-2.0) as of
+jdmtool commit 48ef8d4, with modifications: features are unlocked from files already
+extracted to the SD card, and filenames are matched case-insensitively.
+tests/test_jdmtool_parity.py checks the format constants and tables against jdmtool.
 
 """
 
@@ -153,9 +157,10 @@ _DATABASE_TYPES = {
     0x02F0: "GPS175",
     0x0402: "GtnXi",
     0x0465: "GI275",
+    0x055E: "GTR225/GNC255",
     0x0618: "AERA 760",
     0x06BF: "G3X Touch",
-    0x0738: "GTR2X5",
+    0x0738: "GTR2X5/GNC215",
     0x07DC: "GTXi",
 }
 
